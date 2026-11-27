@@ -148,7 +148,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   assert.match(page.text, /&lt;b&gt;hi&lt;\/b&gt;/); // captions are escaped
   assert.doesNotMatch(page.text, /javascript:|Hidden one|<script>alert/);
   assert.match(page.text, /family=Cairo/);
-  assert.match(page.text, /store-head centered/);
+  assert.match(page.text, /sf-head centered/);
 
   // Custom pages: created from a template, shown in the menu, editable, reserved slugs refused.
   r = await merchant('POST', `${storeUrl}/pages`, { _csrf: csrf, template: 'about' });
