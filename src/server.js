@@ -6,8 +6,12 @@ const fs = require('fs');
 const { db, transaction } = require('./db');
 const auth = require('./auth');
 const uploads = require('./uploads');
+const limiter = require('./limiter');
+const mailer = require('./mailer');
 
 const app = express();
+// Behind one reverse proxy (Codespaces, Render, Railway...): use X-Forwarded-For for req.ip.
+app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -58,32 +62,112 @@ app.get('/', (req, res) => {
   res.render('home', { counts });
 });
 
+// Phone helpers. Local numbers starting with 0 get the default country code (Morocco unless configured).
+const COUNTRY_CODE = (process.env.COUNTRY_CODE || '212').replace(/\D/g, '');
+const cleanPhone = (v) => str(v, 30).replace(/[\s.\-()]/g, '');
+const validPhone = (p) => /^(\+|00)?\d{9,15}$/.test(p);
+function waNumber(phone) {
+  let d = String(phone || '').replace(/\D/g, '');
+  if (String(phone).trim().startsWith('00')) d = d.slice(2);
+  else if (d.startsWith('0')) d = COUNTRY_CODE + d.slice(1);
+  return d;
+}
+app.locals.waNumber = waNumber;
+
+const baseUrl = (req) => process.env.BASE_URL || `${req.get('x-forwarded-proto') || req.protocol}://${req.get('x-forwarded-host') || req.get('host')}`;
+const MIN = 60 * 1000;
+
 app.get('/signup', (req, res) => res.render('signup', { error: null, values: {} }));
 app.post('/signup', (req, res) => {
   const name = str(req.body.name, 100);
   const email = str(req.body.email, 200).toLowerCase();
   const password = String(req.body.password || '');
   let error = null;
-  if (!name || !email || !email.includes('@')) error = 'الرجاء إدخال الاسم والبريد الإلكتروني بشكل صحيح.';
+  if (!limiter.hit(`signup:${req.ip}`, 5, 60 * MIN)) error = 'محاولات كثيرة. حاول مرة أخرى بعد قليل.';
+  else if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) error = 'الرجاء إدخال الاسم والبريد الإلكتروني بشكل صحيح.';
   else if (password.length < 8) error = 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.';
   else if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) error = 'هذا البريد مسجل مسبقاً.';
   if (error) return res.status(400).render('signup', { error, values: { name, email } });
   const { lastInsertRowid } = db
     .prepare('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)')
     .run(name, email, auth.hashPassword(password));
-  auth.login(req, Number(lastInsertRowid));
+  auth.login(req, res, Number(lastInsertRowid));
   res.redirect('/dashboard');
 });
 
-app.get('/login', (req, res) => res.render('login', { error: null, values: {} }));
+// Login: max 5 failed attempts per email+IP and 20 per IP, per 15 minutes.
+const LOGIN_WINDOW = 15 * MIN;
+app.get('/login', (req, res) => res.render('login', { error: null, values: {}, notice: req.query.reset ? 'تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.' : null }));
 app.post('/login', (req, res) => {
   const email = str(req.body.email, 200).toLowerCase();
+  const keyUser = `login:${email}:${req.ip}`;
+  const keyIp = `login-ip:${req.ip}`;
+  if (limiter.count(keyUser, LOGIN_WINDOW) >= 5 || limiter.count(keyIp, LOGIN_WINDOW) >= 20) {
+    const wait = Math.max(limiter.retryAfterMin(keyUser, LOGIN_WINDOW), 1);
+    return res.status(429).render('login', { error: `محاولات دخول فاشلة كثيرة. حاول مرة أخرى بعد ${wait} دقيقة، أو استعمل «نسيت كلمة المرور».`, values: { email }, notice: null });
+  }
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user || !auth.verifyPassword(String(req.body.password || ''), user.password_hash)) {
-    return res.status(400).render('login', { error: 'البريد أو كلمة المرور غير صحيحة.', values: { email } });
+    limiter.hit(keyUser, Infinity, LOGIN_WINDOW);
+    limiter.hit(keyIp, Infinity, LOGIN_WINDOW);
+    const left = 5 - limiter.count(keyUser, LOGIN_WINDOW);
+    const error = 'البريد أو كلمة المرور غير صحيحة.' + (left <= 2 && left > 0 ? ` (تبقّت ${left} محاولة)` : '');
+    return res.status(400).render('login', { error, values: { email }, notice: null });
   }
-  auth.login(req, user.id);
+  limiter.reset(keyUser);
+  auth.login(req, res, user.id);
   res.redirect('/dashboard');
+});
+
+// Password reset: emailed link valid for 1 hour, single use. Only a hash of the token is stored.
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+app.get('/forgot', (req, res) => res.render('forgot', { error: null, sent: false, values: {} }));
+app.post('/forgot', async (req, res) => {
+  const email = str(req.body.email, 200).toLowerCase();
+  if (!limiter.hit(`forgot:${req.ip}`, 5, 60 * MIN) || !limiter.hit(`forgot:${email}`, 3, 60 * MIN)) {
+    return res.status(429).render('forgot', { error: 'طلبات كثيرة. حاول مرة أخرى بعد ساعة.', sent: false, values: { email } });
+  }
+  const user = db.prepare('SELECT id, name, email FROM users WHERE email = ?').get(email);
+  if (user) {
+    const token = crypto.randomBytes(32).toString('hex');
+    db.prepare('DELETE FROM password_resets WHERE user_id = ? OR expires_at < ?').run(user.id, Date.now());
+    db.prepare('INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(sha256(token), user.id, Date.now() + 60 * MIN);
+    const link = `${baseUrl(req)}/reset/${token}`;
+    await mailer.send({
+      to: user.email,
+      subject: 'إعادة تعيين كلمة المرور · YASSER',
+      text: `مرحباً ${user.name}،\n\nلإعادة تعيين كلمة المرور افتح هذا الرابط (صالح لمدة ساعة):\n${link}\n\nإذا لم تطلب ذلك، تجاهل هذه الرسالة.`,
+      html: mailer.layout('إعادة تعيين كلمة المرور', `<p>مرحباً ${mailer.esc(user.name)}،</p><p>اضغط الزر لاختيار كلمة مرور جديدة. الرابط صالح لمدة ساعة واحدة.</p>
+        <p><a href="${mailer.esc(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">تعيين كلمة مرور جديدة</a></p>
+        <p style="color:#667085;font-size:13px">إذا لم تطلب ذلك، تجاهل هذه الرسالة وستبقى كلمة مرورك كما هي.</p>`),
+    });
+  }
+  // Same answer whether or not the email exists, so accounts can't be enumerated.
+  res.render('forgot', { error: null, sent: true, values: { email } });
+});
+
+function findReset(token) {
+  const row = db.prepare('SELECT * FROM password_resets WHERE token_hash = ?').get(sha256(String(token || '')));
+  return row && !row.used && row.expires_at > Date.now() ? row : null;
+}
+app.get('/reset/:token', (req, res) => {
+  if (!findReset(req.params.token)) return res.status(400).render('reset', { error: null, invalid: true, token: '' });
+  res.render('reset', { error: null, invalid: false, token: req.params.token });
+});
+app.post('/reset/:token', (req, res) => {
+  const row = findReset(req.params.token);
+  if (!row) return res.status(400).render('reset', { error: null, invalid: true, token: '' });
+  const password = String(req.body.password || '');
+  if (password.length < 8) return res.status(400).render('reset', { error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.', invalid: false, token: req.params.token });
+  if (password !== req.body.password2) return res.status(400).render('reset', { error: 'كلمتا المرور غير متطابقتين.', invalid: false, token: req.params.token });
+  transaction(() => {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(auth.hashPassword(password), row.user_id);
+    db.prepare('UPDATE password_resets SET used = 1 WHERE token_hash = ?').run(row.token_hash);
+    auth.logoutEverywhere(row.user_id);
+  });
+  const user = db.prepare('SELECT email FROM users WHERE id = ?').get(row.user_id);
+  limiter.reset(`login:${user.email}:${req.ip}`);
+  res.redirect('/login?reset=1');
 });
 
 app.post('/logout', (req, res) => {
@@ -94,6 +178,23 @@ app.post('/logout', (req, res) => {
 // ---------- Merchant dashboard ----------
 const dash = express.Router();
 dash.use(auth.requireLogin);
+const pendingFor = (userId) =>
+  db.prepare(`SELECT COUNT(*) AS n FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ? AND o.status = 'new'`).get(userId).n;
+dash.use((req, res, next) => {
+  res.locals.pendingOrders = pendingFor(req.user.id);
+  next();
+});
+
+// Polled by the dashboard every 30s to alert the merchant about new orders.
+dash.get('/notifications', (req, res) => {
+  const latest = db
+    .prepare(
+      `SELECT o.id, o.store_id, o.customer_name, o.total, s.name AS store_name, s.currency
+       FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ? ORDER BY o.id DESC LIMIT 1`
+    )
+    .get(req.user.id);
+  res.json({ pending: res.locals.pendingOrders, latest: latest || null });
+});
 
 function ownStore(req, res, next) {
   const store = db.prepare('SELECT * FROM stores WHERE id = ? AND owner_id = ?').get(req.params.storeId, req.user.id);
@@ -351,7 +452,14 @@ dash.get('/stores/:storeId/orders/:orderId', ownStore, (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
   if (!order) return res.status(404).render('message', { title: 'غير موجود', message: 'الطلب غير موجود.' });
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-  res.render('dashboard/order', { order, items });
+  // This customer's history in this store (same phone), to spot fake/repeat-cancel orders.
+  const history = db
+    .prepare(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(status = 'delivered'), 0) AS delivered, COALESCE(SUM(status = 'cancelled'), 0) AS cancelled
+       FROM orders WHERE store_id = ? AND customer_phone = ? AND id != ?`
+    )
+    .get(req.store.id, order.customer_phone, order.id);
+  res.render('dashboard/order', { order, items, history });
 });
 dash.post('/stores/:storeId/orders/:orderId/status', ownStore, (req, res) => {
   const status = req.body.status;
@@ -505,21 +613,41 @@ shop.get('/checkout', (req, res) => {
 shop.post('/checkout', (req, res) => {
   const values = {
     customer_name: str(req.body.customer_name, 100),
-    customer_phone: str(req.body.customer_phone, 30),
+    customer_phone: cleanPhone(req.body.customer_phone),
     customer_address: str(req.body.customer_address, 500),
     note: str(req.body.note, 1000),
   };
   const cart = cartLines(req);
   if (!cart.lines.length) return res.redirect(`/s/${req.store.slug}/cart`);
-  if (!values.customer_name || !values.customer_phone || !values.customer_address) {
-    return res.status(400).render('store/checkout', { ...cart, error: 'الرجاء ملء الاسم والهاتف والعنوان.', values });
-  }
+  const fail = (error, status = 400) => res.status(status).render('store/checkout', { ...cart, error, values });
+
+  // Bots: a hidden field humans never fill, and a form submitted impossibly fast.
+  const startedAt = Number(req.body._t) || 0;
+  if (req.body.website || (startedAt && Date.now() - startedAt < 3000)) return fail('تعذّر إرسال الطلب، أعد المحاولة.');
+
+  if (values.customer_name.length < 3) return fail('الرجاء إدخال الاسم الكامل.');
+  if (!validPhone(values.customer_phone)) return fail('رقم الهاتف غير صحيح. مثال: 0612345678');
+  if (values.customer_address.length < 8) return fail('الرجاء إدخال العنوان الكامل (المدينة، الحي، الشارع).');
+
+  // Abuse limits: per IP and per phone number.
+  if (!limiter.hit(`order-ip:${req.ip}`, 5, 60 * MIN)) return fail('طلبات كثيرة من نفس الجهاز. حاول لاحقاً أو تواصل مع المتجر.', 429);
+  const recent = db
+    .prepare(
+      `SELECT id FROM orders WHERE store_id = ? AND customer_phone = ? AND status = 'new'
+         AND created_at >= datetime('now', '-30 minutes') ORDER BY id DESC LIMIT 1`
+    )
+    .get(req.store.id, values.customer_phone);
+  if (recent) return fail(`لديك طلب قيد المراجعة (رقم #${recent.id}). سيتصل بك المتجر قريباً لتأكيده. لتعديل طلبك تواصل مع المتجر.`, 409);
+  const today = db
+    .prepare(`SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND customer_phone = ? AND created_at >= datetime('now', '-1 day')`)
+    .get(req.store.id, values.customer_phone).n;
+  if (today >= 3) return fail('تجاوزت عدد الطلبات المسموح به اليوم لهذا الرقم. تواصل مع المتجر مباشرة.', 429);
   let orderId;
   try {
     orderId = transaction(() => {
       const { lastInsertRowid } = db
-        .prepare('INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, shipping, total) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.shipping, cart.total);
+        .prepare('INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, shipping, total, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.shipping, cart.total, req.ip || '');
       const take = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
       const addItem = db.prepare('INSERT INTO order_items (order_id, product_id, name, price, quantity) VALUES (?, ?, ?, ?, ?)');
       for (const l of cart.lines) {
@@ -534,6 +662,7 @@ shop.post('/checkout', (req, res) => {
   }
   delete req.cart[req.store.id];
   auth.saveCart(req);
+  notifyNewOrder(req, orderId); // fire and forget
   res.redirect(`/s/${req.store.slug}/thanks/${orderId}`);
 });
 
@@ -542,6 +671,33 @@ shop.get('/thanks/:orderId', (req, res) => {
   if (!order) return res.redirect(`/s/${req.store.slug}`);
   res.render('store/thanks', { order });
 });
+
+// Email the merchant about a new order (account email + store contact email).
+function notifyNewOrder(req, orderId) {
+  const store = req.store;
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
+  const owner = db.prepare('SELECT email, name FROM users WHERE id = ?').get(store.owner_id);
+  const to = [...new Set([owner?.email, store.email].filter(Boolean))].join(', ');
+  const money = app.locals.money;
+  const link = `${baseUrl(req)}/dashboard/stores/${store.id}/orders/${orderId}`;
+  const lines = items.map((i) => `• ${i.name} × ${i.quantity} — ${money(i.price * i.quantity, store.currency)}`).join('\n');
+  const e = mailer.esc;
+  mailer.send({
+    to,
+    subject: `🛒 طلب جديد #${orderId} — ${money(order.total, store.currency)} · ${store.name}`,
+    text: `طلب جديد في متجر ${store.name}\n\nالعميل: ${order.customer_name}\nالهاتف: ${order.customer_phone}\nالعنوان: ${order.customer_address}\n\n${lines}\n\nالإجمالي: ${money(order.total, store.currency)}\n\nعرض الطلب: ${link}`,
+    html: mailer.layout(`طلب جديد #${orderId}`, `
+      <p>وصلك طلب جديد في متجر <strong>${e(store.name)}</strong> 🎉</p>
+      <table style="width:100%;border-collapse:collapse;margin:12px 0">
+        ${items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${e(i.name)} × ${i.quantity}</td><td style="text-align:left;border-bottom:1px solid #eee">${e(money(i.price * i.quantity, store.currency))}</td></tr>`).join('')}
+        ${order.shipping ? `<tr><td style="padding:6px 0">التوصيل</td><td style="text-align:left">${e(money(order.shipping, store.currency))}</td></tr>` : ''}
+        <tr><td style="padding:8px 0"><strong>الإجمالي</strong></td><td style="text-align:left"><strong>${e(money(order.total, store.currency))}</strong></td></tr>
+      </table>
+      <p><strong>العميل:</strong> ${e(order.customer_name)}<br><strong>الهاتف:</strong> <span dir="ltr">${e(order.customer_phone)}</span><br><strong>العنوان:</strong> ${e(order.customer_address)}</p>
+      <p><a href="${e(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">عرض الطلب وتأكيده</a></p>`),
+  });
+}
 
 app.use('/s/:slug', shop);
 

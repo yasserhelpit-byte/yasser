@@ -394,3 +394,18 @@ img.shop-logo { object-fit: cover; padding: 0; background: #fff; }
 .opt-pick input:checked + span { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, var(--card)); color: var(--brand); font-weight: 700; }
 .opt-pick input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
 .variant { display: inline-block; font-size: 0.8rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; margin: 2px 0; }
+
+/* Orders: confirmation + alerts */
+.confirm-box { display: grid; gap: 12px; border: 2px solid #25d366; margin-bottom: 16px; }
+.confirm-box h3 { margin: 0; }
+.confirm-box p { margin: 4px 0 0; }
+.quick-status { border-top: 1px solid var(--line); padding-top: 12px; }
+.danger-btn { color: var(--danger); border-color: var(--danger); }
+.history { display: flex; gap: 16px; flex-wrap: wrap; }
+.note { background: var(--bg); padding: 8px 12px; border-radius: 8px; }
+h4 { margin: 0 0 8px; }
+.pending { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: #dc2626; color: #fff; font-size: 0.75rem; }
+.toast { position: fixed; bottom: 20px; right: 20px; z-index: 50; background: #111827; color: #fff; padding: 14px 18px; border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / 30%); animation: slide-in .3s ease-out; max-width: calc(100vw - 40px); }
+.toast a { color: #fff; font-weight: 700; }
+@keyframes slide-in { from { transform: translateY(20px); opacity: 0; } }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }

@@ -1,0 +1,19 @@
+<%- include('partials/header', { title: 'كلمة مرور جديدة' }) %>
+<section class="card narrow">
+  <% if (invalid) { %>
+    <h1>⚠️ الرابط غير صالح</h1>
+    <p class="muted">هذا الرابط منتهي الصلاحية أو تم استعماله من قبل.</p>
+    <a href="/forgot" class="btn">طلب رابط جديد</a>
+  <% } else { %>
+    <h1>🔒 كلمة مرور جديدة</h1>
+    <%- include('partials/errors') %>
+    <form method="post" action="/reset/<%= token %>" class="form">
+      <%- include('partials/csrf') %>
+      <label>كلمة المرور الجديدة<input name="password" type="password" required minlength="8" dir="ltr" autocomplete="new-password"></label>
+      <label>تأكيد كلمة المرور<input name="password2" type="password" required minlength="8" dir="ltr" autocomplete="new-password"></label>
+      <button class="btn">حفظ كلمة المرور</button>
+    </form>
+    <p class="muted small">سيتم تسجيل خروجك من كل الأجهزة الأخرى.</p>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

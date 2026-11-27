@@ -5,8 +5,10 @@
     <%- include('../partials/errors') %>
     <form method="post" action="/s/<%= store.slug %>/checkout" class="form">
       <%- include('../partials/csrf') %>
+      <input type="hidden" name="_t" value="<%= Date.now() %>">
+      <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
       <label>الاسم الكامل<input name="customer_name" required value="<%= values.customer_name || '' %>"></label>
-      <label>رقم الهاتف<input name="customer_phone" type="tel" required dir="ltr" value="<%= values.customer_phone || '' %>"></label>
+      <label>رقم الهاتف<input name="customer_phone" type="tel" required dir="ltr" inputmode="tel" placeholder="06XXXXXXXX" pattern="[+0-9 .\-()]{9,20}" value="<%= values.customer_phone || '' %>"></label>
       <label>العنوان الكامل (المدينة، الحي، الشارع)<textarea name="customer_address" rows="3" required><%= values.customer_address || '' %></textarea></label>
       <label>ملاحظة (اختياري)<textarea name="note" rows="2"><%= values.note || '' %></textarea></label>
       <div class="pay-box">💵 <div><strong>الدفع عند الاستلام</strong><small class="muted">ادفع نقداً عند وصول طلبك</small></div></div>

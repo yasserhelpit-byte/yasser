@@ -1,4 +1,55 @@
 </main>
 <footer class="foot wrap">صُنع بـ <a href="/">YASSER</a> — منصة المتاجر الإلكترونية</footer>
+<% if (user && typeof pendingOrders !== 'undefined') { %>
+<div id="toast" class="toast" hidden></div>
+<script>
+// New-order alerts: poll every 30s, show a toast + browser notification + sound for orders we haven't seen.
+(function () {
+  const KEY = 'yasser:lastOrderId';
+  const get = () => { try { return Number(localStorage.getItem(KEY)) || 0; } catch { return 0; } };
+  const set = (v) => { try { localStorage.setItem(KEY, v); } catch {} };
+  const baseTitle = document.title.replace(/^\(\d+\) /, '');
+  function beep() {
+    try { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination);
+      o.frequency.value = 880; g.gain.setValueAtTime(0.15, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.6); o.start(); o.stop(c.currentTime + 0.6); } catch {}
+  }
+  function show(o) {
+    const t = document.getElementById('toast');
+    t.innerHTML = '';
+    const a = document.createElement('a');
+    a.href = '/dashboard/stores/' + o.store_id + '/orders/' + o.id;
+    a.textContent = '🛒 طلب جديد #' + o.id + ' من ' + o.customer_name + ' — ' + Number(o.total).toFixed(2) + ' ' + o.currency;
+    t.appendChild(a); t.hidden = false;
+    setTimeout(() => (t.hidden = true), 15000);
+    beep();
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const n = new Notification('طلب جديد · ' + o.store_name, { body: a.textContent });
+      n.onclick = () => { window.focus(); location.href = a.href; };
+    }
+  }
+  async function poll(first) {
+    try {
+      const r = await fetch('/dashboard/notifications', { headers: { accept: 'application/json' } });
+      if (!r.ok) return;
+      const d = await r.json();
+      document.title = (d.pending ? '(' + d.pending + ') ' : '') + baseTitle;
+      const badge = document.getElementById('pending-badge');
+      if (badge) badge.textContent = d.pending;
+      if (d.latest) {
+        if (!first && d.latest.id > get()) show(d.latest);
+        if (first && !get()) set(d.latest.id);
+        if (!first) set(d.latest.id);
+      }
+    } catch {}
+  }
+  poll(true);
+  setInterval(() => poll(false), 30000);
+  // Ask once for browser notification permission, on the first click anywhere.
+  if ('Notification' in window && Notification.permission === 'default') {
+    document.addEventListener('click', () => Notification.requestPermission(), { once: true });
+  }
+})();
+</script>
+<% } %>
 </body>
 </html>

@@ -1,11 +1,12 @@
 <%- include('partials/header', { title: 'تسجيل الدخول' }) %>
 <section class="card narrow">
   <h1>تسجيل الدخول</h1>
+  <% if (typeof notice !== 'undefined' && notice) { %><div class="alert ok"><%= notice %></div><% } %>
   <%- include('partials/errors') %>
   <form method="post" action="/login" class="form">
     <%- include('partials/csrf') %>
     <label>البريد الإلكتروني<input name="email" type="email" required dir="ltr" value="<%= values.email || '' %>"></label>
-    <label>كلمة المرور<input name="password" type="password" required dir="ltr"></label>
+    <label><span class="row between">كلمة المرور <a href="/forgot" class="small">نسيت كلمة المرور؟</a></span><input name="password" type="password" required dir="ltr" autocomplete="current-password"></label>
     <button class="btn">دخول</button>
   </form>
   <p class="muted">ليس لديك حساب؟ <a href="/signup">أنشئ حساباً</a></p>

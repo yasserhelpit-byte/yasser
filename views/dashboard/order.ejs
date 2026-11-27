@@ -1,16 +1,62 @@
 <%- include('../partials/header', { title: 'طلب #' + order.id }) %>
+<%
+  const cur = store.currency;
+  const lines = items.map(i => `• ${i.name} × ${i.quantity}`).join('\n');
+  const confirmMsg = `مرحباً ${order.customer_name} 👋\nشكراً لطلبك من متجر ${store.name}.\n\nطلبك رقم #${order.id}:\n${lines}\n\nالإجمالي: ${money(order.total, cur)} (الدفع عند الاستلام)\nالعنوان: ${order.customer_address}\n\nهل تؤكد الطلب؟ ردّ بـ «نعم» للتأكيد ✅`;
+  const wa = `https://wa.me/${waNumber(order.customer_phone)}?text=${encodeURIComponent(confirmMsg)}`;
+  const risky = history.cancelled > 0;
+  const trusted = history.delivered > 0 && !risky;
+%>
 <p><a href="/dashboard/stores/<%= store.id %>/orders">← الطلبات</a></p>
-<h1>طلب #<%= order.id %> <span class="badge s-<%= order.status %>"><%= STATUSES[order.status] %></span></h1>
+<div class="row between">
+  <h1>طلب #<%= order.id %> <span class="badge s-<%= order.status %>"><%= STATUSES[order.status] %></span></h1>
+  <span class="muted"><%= order.created_at %></span>
+</div>
+
+<% if (order.status === 'new') { %>
+<section class="card confirm-box">
+  <div>
+    <h3>📞 أكّد الطلب مع العميل قبل الشحن</h3>
+    <p class="muted">اتصل بالعميل أو أرسل له رسالة واتساب جاهزة، ثم حدّث حالة الطلب.</p>
+  </div>
+  <div class="row">
+    <a class="btn wa" href="<%= wa %>" target="_blank" rel="noopener">💬 تأكيد عبر واتساب</a>
+    <a class="btn ghost" href="tel:<%= order.customer_phone %>">📞 اتصال</a>
+  </div>
+  <div class="row quick-status">
+    <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/status" class="inline">
+      <%- include('../partials/csrf') %><input type="hidden" name="status" value="confirmed"><button class="btn">✓ العميل أكّد</button>
+    </form>
+    <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/status" class="inline" onsubmit="return confirm('إلغاء الطلب وإرجاع المخزون؟')">
+      <%- include('../partials/csrf') %><input type="hidden" name="status" value="cancelled"><button class="btn ghost danger-btn">✕ إلغاء (لم يرد / وهمي)</button>
+    </form>
+  </div>
+</section>
+<% } %>
+
 <section class="grid two">
   <div class="card">
-    <h3>العميل</h3>
+    <h3>👤 العميل</h3>
     <p><strong><%= order.customer_name %></strong></p>
-    <p dir="ltr" class="right"><%= order.customer_phone %></p>
-    <p><%= order.customer_address %></p>
-    <% if (order.note) { %><p class="muted">ملاحظة: <%= order.note %></p><% } %>
+    <p><a href="tel:<%= order.customer_phone %>" dir="ltr">📞 <%= order.customer_phone %></a> · <a href="https://wa.me/<%= waNumber(order.customer_phone) %>" target="_blank" rel="noopener">واتساب</a></p>
+    <p>📍 <%= order.customer_address %></p>
+    <% if (order.note) { %><p class="note">📝 <%= order.note %></p><% } %>
+    <hr>
+    <h4>سجلّ هذا العميل في متجرك</h4>
+    <% if (!history.total) { %>
+      <p class="muted">🆕 أول طلب من هذا الرقم.</p>
+    <% } else { %>
+      <div class="history">
+        <span><strong><%= history.total %></strong> طلب سابق</span>
+        <span class="ok-text"><strong><%= history.delivered %></strong> تم تسليمه</span>
+        <span class="<%= risky ? 'danger' : 'muted' %>"><strong><%= history.cancelled %></strong> ملغى</span>
+      </div>
+    <% } %>
+    <% if (risky) { %><div class="alert">⚠️ لهذا الرقم طلبات ملغاة سابقاً. تأكّد جيداً قبل الشحن.</div><% } %>
+    <% if (trusted) { %><div class="alert ok">⭐ عميل موثوق: استلم طلبات سابقة.</div><% } %>
   </div>
   <div class="card">
-    <h3>تحديث الحالة</h3>
+    <h3>🔄 حالة الطلب</h3>
     <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/status" class="form">
       <%- include('../partials/csrf') %>
       <select name="status">
@@ -18,12 +64,14 @@
       </select>
       <button class="btn">حفظ</button>
     </form>
+    <p class="muted small">عند الإلغاء تعود الكميات إلى المخزون تلقائياً.</p>
   </div>
 </section>
+
 <div class="table-wrap"><table>
   <tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>المجموع</th></tr>
-  <% items.forEach(i => { %><tr><td><%= i.name %></td><td><%= money(i.price, store.currency) %></td><td><%= i.quantity %></td><td><%= money(i.price * i.quantity, store.currency) %></td></tr><% }) %>
-  <% if (order.shipping) { %><tr><td colspan="3">التوصيل</td><td><%= money(order.shipping, store.currency) %></td></tr><% } %>
-  <tr><th colspan="3">الإجمالي</th><th><%= money(order.total, store.currency) %></th></tr>
+  <% items.forEach(i => { %><tr><td><%= i.name %></td><td><%= money(i.price, cur) %></td><td><%= i.quantity %></td><td><%= money(i.price * i.quantity, cur) %></td></tr><% }) %>
+  <% if (order.shipping) { %><tr><td colspan="3">التوصيل</td><td><%= money(order.shipping, cur) %></td></tr><% } %>
+  <tr><th colspan="3">الإجمالي</th><th><%= money(order.total, cur) %></th></tr>
 </table></div>
 <%- include('../partials/footer') %>

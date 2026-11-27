@@ -4,7 +4,7 @@
     <a href="/" class="logo">YASSER</a>
     <nav class="row">
       <% if (user) { %>
-        <a href="/dashboard">لوحة التحكم</a>
+        <a href="/dashboard" class="nav-orders">لوحة التحكم<% if (typeof pendingOrders !== 'undefined' && pendingOrders) { %> <b class="pending" id="pending-badge" title="طلبات جديدة"><%= pendingOrders %></b><% } %></a>
         <form method="post" action="/logout" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">خروج</button></form>
       <% } else { %>
         <a href="/login">دخول</a>

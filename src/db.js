@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 `);
 
+db.exec(`
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(store_id, customer_phone);
+`);
+
 // Lightweight migrations: add columns introduced after the first release.
 function addColumn(table, column, definition) {
   const exists = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
@@ -90,6 +100,7 @@ addColumn('products', 'images', "TEXT NOT NULL DEFAULT '[]'");
 addColumn('products', 'options', "TEXT NOT NULL DEFAULT '[]'");
 addColumn('products', 'sku', "TEXT NOT NULL DEFAULT ''");
 addColumn('products', 'cost_price', 'REAL NOT NULL DEFAULT 0');
+addColumn('orders', 'ip', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
 
 function transaction(fn) {
