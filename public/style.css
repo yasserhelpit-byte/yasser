@@ -1149,3 +1149,6 @@ a.prod-cell { color: var(--text); } a.prod-cell:hover { text-decoration: none; }
     linear-gradient(225deg, color-mix(in srgb, var(--brand) 80%, #fff), color-mix(in srgb, var(--brand) 40%, #000));
   background-size: auto, auto, 22px 22px, auto;
 }
+/* Cart icon: mirrored so the basket opens toward the reading direction in RTL */
+[dir="rtl"] .cart-ic { transform: scaleX(-1); }
+.icon-btn .count { top: 0; left: 0; box-shadow: 0 0 0 2px var(--card); font-weight: 700; }
