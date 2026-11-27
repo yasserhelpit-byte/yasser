@@ -106,6 +106,10 @@ for (const [col, def] of [
   ['shipping_fee', 'REAL NOT NULL DEFAULT 0'],
   ['free_shipping_over', 'REAL NOT NULL DEFAULT 0'],
 ]) addColumn('stores', col, def);
+addColumn('users', 'role', "TEXT NOT NULL DEFAULT 'merchant'");
+addColumn('users', 'suspended', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('stores', 'suspended', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('stores', 'suspend_reason', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'home_sections', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'font', "TEXT NOT NULL DEFAULT 'tajawal'");
 addColumn('stores', 'radius', "TEXT NOT NULL DEFAULT 'soft'");

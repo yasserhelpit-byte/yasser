@@ -205,3 +205,59 @@ test('login lockout and password reset', async (t) => {
   r = await a('POST', '/login', { _csrf: csrf, email: 'r@example.com', password: 'newpassword' });
   assert.strictEqual(r.location, '/dashboard');
 });
+
+test('admin sees all stores; merchants only their own', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { db } = require('../src/db');
+  require('../src/limiter').clear(); // earlier tests used up the signup limit for 127.0.0.1
+
+  const signup = async (name, email) => {
+    const c = client(base);
+    await c('POST', '/signup', { _csrf: csrfOf((await c('GET', '/signup')).text), name, email, password: 'password123' });
+    c.csrf = csrfOf((await c('GET', '/dashboard/stores/new')).text);
+    return c;
+  };
+  const m1 = await signup('Merchant One', 'm1@example.com');
+  const m2 = await signup('Merchant Two', 'm2@example.com');
+  await m1('POST', '/dashboard/stores', { _csrf: m1.csrf, name: 'Shop One', slug: 'shop-one' });
+  const r2 = await m2('POST', '/dashboard/stores', { _csrf: m2.csrf, name: 'Shop Two', slug: 'shop-two' });
+  const shop2Id = r2.location.match(/\d+$/)[0];
+
+  // Merchants: own stores only, no admin panel.
+  const d1 = (await m1('GET', '/dashboard')).text;
+  assert.match(d1, /Shop One/);
+  assert.doesNotMatch(d1, /Shop Two/);
+  assert.strictEqual((await m1('GET', '/admin')).status, 404);
+  assert.strictEqual((await m1('GET', `/dashboard/stores/${shop2Id}`)).status, 404);
+
+  // Promote an admin (what `npm run make-admin` does).
+  const adm = await signup('Boss', 'boss@example.com');
+  db.prepare("UPDATE users SET role = 'admin' WHERE email = ?").run('boss@example.com');
+  const panel = (await adm('GET', '/admin')).text;
+  assert.match(panel, /Shop One/);
+  assert.match(panel, /Shop Two/);
+  assert.match((await adm('GET', '/admin/merchants')).text, /m2@example\.com/);
+  // Admin can open any store's dashboard, with a clear banner.
+  assert.match((await adm('GET', `/dashboard/stores/${shop2Id}`)).text, /بصفتك مسؤولاً/);
+
+  // Suspending a store hides it from customers but not from its owner.
+  const acsrf = csrfOf(panel);
+  await adm('POST', `/admin/stores/${shop2Id}/suspend`, { _csrf: acsrf, suspend: '1', reason: 'test' });
+  assert.strictEqual((await client(base)('GET', '/s/shop-two')).status, 503);
+  assert.strictEqual((await m2('GET', '/s/shop-two')).status, 200);
+  await adm('POST', `/admin/stores/${shop2Id}/suspend`, { _csrf: acsrf, suspend: '0' });
+  assert.strictEqual((await client(base)('GET', '/s/shop-two')).status, 200);
+
+  // Suspending a merchant signs them out and blocks login.
+  const m2id = db.prepare('SELECT id FROM users WHERE email = ?').get('m2@example.com').id;
+  await adm('POST', `/admin/merchants/${m2id}/suspend`, { _csrf: acsrf, suspend: '1' });
+  assert.strictEqual((await m2('GET', '/dashboard')).location, '/login');
+  const again = client(base);
+  const lc = csrfOf((await again('GET', '/login')).text);
+  assert.strictEqual((await again('POST', '/login', { _csrf: lc, email: 'm2@example.com', password: 'password123' })).status, 403);
+  // Admins can't be suspended.
+  const admId = db.prepare('SELECT id FROM users WHERE email = ?').get('boss@example.com').id;
+  assert.strictEqual((await adm('POST', `/admin/merchants/${admId}/suspend`, { _csrf: acsrf, suspend: '1' })).status, 400);
+});

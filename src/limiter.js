@@ -32,4 +32,9 @@ setInterval(() => {
   for (const [k, list] of buckets) if (!list.some((t) => now - t < 24 * 3600 * 1000)) buckets.delete(k);
 }, 10 * 60 * 1000).unref();
 
-module.exports = { hit, count, reset, retryAfterMin };
+// Clear everything (used by tests).
+function clear() {
+  buckets.clear();
+}
+
+module.exports = { hit, count, reset, retryAfterMin, clear };

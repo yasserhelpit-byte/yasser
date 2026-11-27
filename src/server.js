@@ -129,9 +129,10 @@ app.post('/login', (req, res) => {
     const error = 'البريد أو كلمة المرور غير صحيحة.' + (left <= 2 && left > 0 ? ` (تبقّت ${left} محاولة)` : '');
     return res.status(400).render('login', { error, values: { email }, notice: null });
   }
+  if (user.suspended) return res.status(403).render('login', { error: 'هذا الحساب موقوف. تواصل مع إدارة المنصة.', values: { email }, notice: null });
   limiter.reset(keyUser);
   auth.login(req, res, user.id);
-  res.redirect('/dashboard');
+  res.redirect(user.role === 'admin' ? '/admin' : '/dashboard');
 });
 
 // Password reset: emailed link valid for 1 hour, single use. Only a hash of the token is stored.
@@ -212,10 +213,16 @@ dash.get('/notifications', (req, res) => {
 });
 
 function ownStore(req, res, next) {
-  const store = db.prepare('SELECT * FROM stores WHERE id = ? AND owner_id = ?').get(req.params.storeId, req.user.id);
+  const store = req.user.isAdmin
+    ? db.prepare('SELECT * FROM stores WHERE id = ?').get(req.params.storeId)
+    : db.prepare('SELECT * FROM stores WHERE id = ? AND owner_id = ?').get(req.params.storeId, req.user.id);
   if (!store) return res.status(404).render('message', { title: 'غير موجود', message: 'المتجر غير موجود.' });
   req.store = store;
   res.locals.store = store;
+  // An admin working inside someone else's store sees a clear banner.
+  if (store.owner_id !== req.user.id) {
+    res.locals.actingAs = db.prepare('SELECT name, email FROM users WHERE id = ?').get(store.owner_id);
+  }
   next();
 }
 
@@ -608,11 +615,77 @@ dash.post('/stores/:storeId/uploads', ownStore, (req, res) => {
 
 app.use('/dashboard', dash);
 
+// ---------- Platform admin ----------
+const admin = express.Router();
+admin.use(auth.requireAdmin);
+
+admin.get('/', (req, res) => {
+  const q = str(req.query.q, 100);
+  const filter = ['active', 'suspended', 'empty'].includes(req.query.f) ? req.query.f : 'all';
+  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
+  const totals = db.prepare(
+    `SELECT (SELECT COUNT(*) FROM users WHERE role != 'admin') AS merchants,
+            (SELECT COUNT(*) FROM stores) AS stores,
+            (SELECT COUNT(*) FROM stores WHERE suspended = 1) AS suspended,
+            (SELECT COUNT(*) FROM products) AS products,
+            (SELECT COUNT(*) FROM orders) AS orders,
+            (SELECT COUNT(*) FROM orders WHERE created_at >= datetime('now', '-7 days')) AS orders7,
+            (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled') AS gmv,
+            (SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')) AS signups7`
+  ).get();
+  const stores = db.prepare(
+    `SELECT s.*, u.name AS owner_name, u.email AS owner_email,
+       (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) AS product_count,
+       (SELECT COUNT(*) FROM orders o WHERE o.store_id = s.id) AS order_count,
+       (SELECT COALESCE(SUM(total), 0) FROM orders o WHERE o.store_id = s.id AND o.status != 'cancelled') AS revenue,
+       (SELECT MAX(created_at) FROM orders o WHERE o.store_id = s.id) AS last_order
+     FROM stores s JOIN users u ON u.id = s.owner_id
+     WHERE (? = '' OR s.name LIKE ? ESCAPE '\\' OR s.slug LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')
+       AND (? = 'all' OR (? = 'active' AND s.suspended = 0) OR (? = 'suspended' AND s.suspended = 1)
+            OR (? = 'empty' AND NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id)))
+     ORDER BY s.id DESC LIMIT 200`
+  ).all(q, like, like, like, like, filter, filter, filter, filter);
+  res.render('admin/index', { totals, stores, q, filter });
+});
+
+admin.get('/merchants', (req, res) => {
+  const merchants = db.prepare(
+    `SELECT u.id, u.name, u.email, u.role, u.suspended, u.created_at,
+       (SELECT COUNT(*) FROM stores s WHERE s.owner_id = u.id) AS store_count,
+       (SELECT COUNT(*) FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = u.id) AS order_count,
+       (SELECT MAX(created_at) FROM sessions se WHERE se.user_id = u.id) AS last_seen
+     FROM users u ORDER BY u.id DESC LIMIT 500`
+  ).all();
+  res.render('admin/merchants', { merchants });
+});
+
+admin.post('/stores/:id/suspend', (req, res) => {
+  const on = req.body.suspend === '1' ? 1 : 0;
+  db.prepare('UPDATE stores SET suspended = ?, suspend_reason = ? WHERE id = ?').run(on, on ? str(req.body.reason, 200) : '', req.params.id);
+  res.redirect(req.get('referer')?.includes('/admin') ? req.get('referer') : '/admin');
+});
+
+admin.post('/merchants/:id/suspend', (req, res) => {
+  const target = db.prepare('SELECT id, role FROM users WHERE id = ?').get(req.params.id);
+  if (!target || target.role === 'admin') return res.status(400).render('message', { title: 'خطأ', message: 'لا يمكن إيقاف هذا الحساب.' });
+  const on = req.body.suspend === '1' ? 1 : 0;
+  transaction(() => {
+    db.prepare('UPDATE users SET suspended = ? WHERE id = ?').run(on, target.id);
+    if (on) auth.logoutEverywhere(target.id);
+  });
+  res.redirect('/admin/merchants');
+});
+
+app.use('/admin', admin);
+
 // ---------- Storefront ----------
 const shop = express.Router({ mergeParams: true });
 shop.use((req, res, next) => {
   const store = db.prepare('SELECT * FROM stores WHERE slug = ?').get(req.params.slug);
   if (!store) return res.status(404).render('message', { title: 'غير موجود', message: 'المتجر غير موجود.' });
+  const canSee = req.user && (req.user.id === store.owner_id || req.user.isAdmin);
+  if (store.suspended && !canSee) return res.status(503).render('message', { title: 'غير متاح', message: 'هذا المتجر غير متاح حالياً.' });
+  if (store.suspended && req.method === 'POST') return res.status(503).render('message', { title: 'غير متاح', message: 'هذا المتجر موقوف ولا يستقبل طلبات.' });
   req.store = store;
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);

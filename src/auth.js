@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { db } = require('./db');
 
 const COOKIE = 'yasser_sid';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -28,8 +29,19 @@ function sessionMiddleware(req, res, next) {
   req.session = session;
   req.cart = JSON.parse(session.cart || '{}');
   req.user = session.user_id
-    ? db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(session.user_id)
+    ? db.prepare('SELECT id, name, email, role, suspended FROM users WHERE id = ?').get(session.user_id)
     : null;
+  // Admins listed in ADMIN_EMAILS are promoted automatically on their next request.
+  if (req.user && req.user.role !== 'admin' && ADMIN_EMAILS.includes(req.user.email)) {
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(req.user.id);
+    req.user.role = 'admin';
+  }
+  // A suspended account is signed out.
+  if (req.user?.suspended) {
+    db.prepare('UPDATE sessions SET user_id = NULL WHERE token = ?').run(session.token);
+    req.user = null;
+  }
+  if (req.user) req.user.isAdmin = req.user.role === 'admin';
   res.locals.user = req.user;
   next();
 }
@@ -69,4 +81,10 @@ function requireLogin(req, res, next) {
   next();
 }
 
-module.exports = { hashPassword, verifyPassword, sessionMiddleware, saveCart, login, logout, logoutEverywhere, requireLogin };
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.redirect('/login');
+  if (!req.user.isAdmin) return res.status(404).render('message', { title: 'غير موجود', message: 'الصفحة غير موجودة.' });
+  next();
+}
+
+module.exports = { hashPassword, verifyPassword, sessionMiddleware, saveCart, login, logout, logoutEverywhere, requireLogin, requireAdmin };

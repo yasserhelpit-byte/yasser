@@ -4,6 +4,7 @@
     <a href="/" class="logo">YASSER</a>
     <nav class="row">
       <% if (user) { %>
+        <% if (user.isAdmin) { %><a href="/admin" class="admin-link">🛡️ لوحة المسؤول</a><% } %>
         <a href="/dashboard" class="nav-orders">لوحة التحكم<% if (typeof pendingOrders !== 'undefined' && pendingOrders) { %> <b class="pending" id="pending-badge" title="طلبات جديدة"><%= pendingOrders %></b><% } %></a>
         <form method="post" action="/logout" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">خروج</button></form>
       <% } else { %>
@@ -13,4 +14,10 @@
     </nav>
   </div>
 </header>
+<% if (typeof actingAs !== 'undefined' && actingAs) { %>
+<div class="acting-bar"><div class="wrap">🛡️ أنت تدير متجر التاجر <strong><%= actingAs.name %></strong> (<span dir="ltr"><%= actingAs.email %></span>) بصفتك مسؤولاً. أي تعديل هنا يغيّر متجره. <a href="/admin">← لوحة المسؤول</a></div></div>
+<% } %>
+<% if (typeof store !== 'undefined' && store && store.suspended) { %>
+<div class="acting-bar off"><div class="wrap">⛔ هذا المتجر موقوف من إدارة المنصة ولا يظهر للعملاء. تواصل مع الإدارة لمعرفة السبب.</div></div>
+<% } %>
 <main class="wrap">

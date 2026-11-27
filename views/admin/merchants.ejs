@@ -1,0 +1,24 @@
+<%- include('../partials/header', { title: 'التجار' }) %>
+<%- include('nav', { heading: 'التجار', tab: 'merchants' }) %>
+<p class="muted"><%= merchants.length %> حساب</p>
+<div class="table-wrap"><table class="admin-table">
+  <tr><th>الاسم</th><th>البريد</th><th>المتاجر</th><th>الطلبات</th><th>تاريخ التسجيل</th><th>آخر دخول</th><th>الحالة</th><th></th></tr>
+  <% merchants.forEach(m => { %>
+  <tr class="<%= m.suspended ? 'row-off' : '' %>">
+    <td><strong><%= m.name %></strong><% if (m.role === 'admin') { %> <span class="badge s-new">مسؤول</span><% } %></td>
+    <td dir="ltr" class="small"><%= m.email %></td>
+    <td><%= m.store_count %></td>
+    <td><%= m.order_count %></td>
+    <td class="muted small"><%= m.created_at.slice(0, 10) %></td>
+    <td class="muted small"><%= m.last_seen ? m.last_seen.slice(0, 10) : '—' %></td>
+    <td><span class="badge <%= m.suspended ? 's-cancelled' : 's-delivered' %>"><%= m.suspended ? 'موقوف' : 'نشط' %></span></td>
+    <td><% if (m.role !== 'admin') { %>
+      <form method="post" action="/admin/merchants/<%= m.id %>/suspend" class="inline" <% if (!m.suspended) { %>onsubmit="return confirm('إيقاف حساب <%= m.name.replace(/['"\\<>]/g, '') %>؟ سيتم تسجيل خروجه ولن يستطيع الدخول.')"<% } %>>
+        <%- include('../partials/csrf') %><input type="hidden" name="suspend" value="<%= m.suspended ? 0 : 1 %>">
+        <button class="link <%= m.suspended ? '' : 'danger' %>"><%= m.suspended ? 'إعادة تفعيل' : 'إيقاف الحساب' %></button>
+      </form>
+    <% } %></td>
+  </tr>
+  <% }) %>
+</table></div>
+<%- include('../partials/footer') %>
