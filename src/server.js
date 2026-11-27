@@ -100,7 +100,39 @@ dash.get('/', (req, res) => {
        FROM stores s WHERE owner_id = ? ORDER BY id`
     )
     .all(req.user.id);
-  res.render('dashboard/index', { stores });
+  const totals = db
+    .prepare(
+      `SELECT COUNT(o.id) AS orders,
+              COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total END), 0) AS revenue,
+              COALESCE(SUM(o.status = 'new'), 0) AS pending,
+              COUNT(DISTINCT o.customer_phone) AS customers
+       FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ?`
+    )
+    .get(req.user.id);
+  const recentOrders = db
+    .prepare(
+      `SELECT o.*, s.name AS store_name, s.currency, s.color
+       FROM orders o JOIN stores s ON s.id = o.store_id
+       WHERE s.owner_id = ? ORDER BY o.id DESC LIMIT 8`
+    )
+    .all(req.user.id);
+  const lowStock = db
+    .prepare(
+      `SELECT p.id, p.name, p.stock, s.id AS store_id, s.name AS store_name
+       FROM products p JOIN stores s ON s.id = p.store_id
+       WHERE s.owner_id = ? AND p.active = 1 AND p.stock <= 3 ORDER BY p.stock LIMIT 5`
+    )
+    .all(req.user.id);
+  // Currency shown on totals: the first store's (mixed currencies are summed as-is).
+  const currency = stores[0]?.currency || 'MAD';
+  const first = stores[0];
+  const steps = [
+    { done: stores.length > 0, label: 'أنشئ متجرك', href: '/dashboard/stores/new' },
+    { done: stores.some((s) => s.product_count > 0), label: 'أضف أول منتج', href: first ? `/dashboard/stores/${first.id}/products/new` : '/dashboard/stores/new' },
+    { done: stores.some((s) => s.description), label: 'أضف وصفاً لمتجرك', href: first ? `/dashboard/stores/${first.id}/settings` : '/dashboard/stores/new' },
+    { done: totals.orders > 0, label: 'شارك رابط متجرك واستقبل أول طلب', href: first ? `/s/${first.slug}` : '/dashboard/stores/new' },
+  ];
+  res.render('dashboard/index', { stores, totals, recentOrders, lowStock, currency, steps });
 });
 
 dash.get('/stores/new', (req, res) => res.render('dashboard/store-form', { error: null, values: {}, action: '/dashboard/stores' }));
