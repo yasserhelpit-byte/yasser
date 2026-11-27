@@ -1030,6 +1030,9 @@ shop.use((req, res, next) => {
   }
   Object.assign(res.locals, storefrontLocals(store, !!req.customDomain));
   req.base = res.locals.base;
+  // Absolute URLs for link previews (og:image must be absolute).
+  const origin = req.customDomain ? `https://${req.customDomain}` : baseUrl(req);
+  res.locals.abs = (u) => (!u ? '' : /^https?:\/\//.test(u) ? u : origin + u);
   next();
 });
 

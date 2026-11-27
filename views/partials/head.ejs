@@ -3,7 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><%= typeof title !== 'undefined' && title ? title + ' · ' : '' %><%= typeof font !== 'undefined' && store ? store.name : 'YASSER' %></title>
+  <title><%= (typeof title !== 'undefined' && title ? title + ' · ' : '') + (typeof font !== 'undefined' && typeof store !== 'undefined' && store ? store.name : 'YASSER') %></title>
+<%
+  const isStore = typeof font !== 'undefined' && typeof store !== 'undefined' && store;
+  const metaTitle = (typeof title !== 'undefined' && title ? title + ' · ' : '') + (isStore ? store.name : 'YASSER');
+  const metaDesc = typeof description !== 'undefined' && description ? description
+    : isStore ? (store.description || store.tagline || 'تسوّق من ' + store.name)
+    : 'YASSER: أنشئ متجرك الإلكتروني في دقائق. منصة عربية لإطلاق متجر احترافي، إدارة المنتجات والطلبات، والدفع عند الاستلام.';
+  const toAbs = typeof abs === 'function' ? abs : (u) => u;
+  const metaImage = typeof ogImage !== 'undefined' && ogImage ? ogImage : isStore ? toAbs(store.banner_url || store.logo_url || '') : '';
+  const iconColor = isStore ? store.color : '#0f766e';
+  const iconLetter = isStore ? store.name.trim().charAt(0).toUpperCase() : 'Y';
+%>
+  <meta name="description" content="<%= metaDesc %>">
+  <meta name="theme-color" content="<%= iconColor %>">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="<%= metaTitle %>">
+  <meta property="og:description" content="<%= metaDesc %>">
+  <meta property="og:locale" content="ar_AR">
+  <% if (metaImage) { %><meta property="og:image" content="<%= metaImage %>"><meta name="twitter:card" content="summary_large_image"><% } %>
+  <link rel="icon" href="data:image/svg+xml,<%= encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='${iconColor}'/><text x='32' y='44' font-size='36' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'>${iconLetter.replace(/[<>&'"]/g, '')}</text></svg>`) %>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800<% if (typeof font !== 'undefined' && font.g !== 'Tajawal:wght@400;500;700;800') { %>&family=<%= font.g %><% } %>&display=swap" rel="stylesheet">

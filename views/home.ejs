@@ -1,92 +1,162 @@
-<%- include('partials/head', { title: 'أنشئ متجرك الإلكتروني' }) %>
-<% const cta = user ? '/dashboard' : '/signup'; %>
+<%- include('partials/head', { title: 'أنشئ متجرك الإلكتروني في دقائق' }) %>
+<% const cta = user ? (user.isAdmin ? '/admin' : '/dashboard') : '/signup'; const ctaLabel = user ? 'لوحة التحكم' : 'أنشئ متجرك مجاناً'; %>
 <header class="topbar landing-bar">
-  <div class="wrap row between">
+  <div class="wrap lp-nav">
     <a href="/" class="logo">YASSER</a>
-    <nav class="row landing-nav">
+    <nav class="landing-nav">
       <a href="#features">المزايا</a>
+      <a href="#design">التصميم</a>
       <a href="#how">كيف تعمل</a>
       <a href="#pricing">الأسعار</a>
       <a href="#faq">الأسئلة الشائعة</a>
     </nav>
-    <div class="row">
-      <% if (user) { %>
-        <a href="/dashboard" class="btn small">لوحة التحكم</a>
-      <% } else { %>
-        <a href="/login">دخول</a>
-        <a href="/signup" class="btn small">أنشئ متجرك</a>
-      <% } %>
+    <div class="row lp-nav-cta">
+      <% if (!user) { %><a href="/login" class="lp-login">دخول</a><% } %>
+      <a href="<%= cta %>" class="btn small"><%= ctaLabel %></a>
+      <details class="mnav lp-mnav">
+        <summary aria-label="القائمة"><span></span><span></span><span></span></summary>
+        <nav>
+          <a href="#features">المزايا</a><a href="#design">التصميم</a><a href="#how">كيف تعمل</a><a href="#pricing">الأسعار</a><a href="#faq">الأسئلة الشائعة</a>
+          <% if (!user) { %><a href="/login">دخول</a><% } %>
+        </nav>
+      </details>
     </div>
   </div>
 </header>
 
-<section class="l-hero">
-  <div class="wrap l-hero-grid">
-    <div>
+<!-- Hero -->
+<section class="lp-hero">
+  <div class="wrap lp-hero-grid">
+    <div class="lp-hero-text">
       <span class="pill">🚀 منصة عربية للتجارة الإلكترونية</span>
       <h1>متجرك الإلكتروني<br><span class="hl">جاهز في 5 دقائق</span></h1>
-      <p>أنشئ متجراً احترافياً، أضف منتجاتك، وابدأ باستقبال الطلبات مع الدفع عند الاستلام. لا برمجة، لا استضافة، لا تعقيد.</p>
-      <div class="row">
-        <a href="<%= cta %>" class="btn big">ابدأ مجاناً الآن</a>
+      <p>صمّم متجراً احترافياً بدون برمجة، أضف منتجاتك بالصور، واستقبل الطلبات مع الدفع عند الاستلام. كل ما تحتاجه لتبيع أونلاين في مكان واحد.</p>
+      <div class="row lp-ctas">
+        <a href="<%= cta %>" class="btn big"><%= ctaLabel %> ←</a>
         <a href="#how" class="btn big ghost">كيف تعمل؟</a>
       </div>
       <ul class="checks">
         <li>✓ بدون بطاقة بنكية</li>
-        <li>✓ واجهة عربية بالكامل</li>
+        <li>✓ عربي بالكامل</li>
         <li>✓ يعمل على الهاتف</li>
       </ul>
     </div>
 
-    <div class="mock" aria-hidden="true">
-      <div class="mock-bar"><i></i><i></i><i></i><span>yasser.shop/s/my-store</span></div>
-      <div class="mock-hero"><b>م</b><strong>متجري</strong><small>أفضل المنتجات بأفضل الأسعار</small></div>
-      <div class="mock-grid">
-        <div><span style="background:#fde68a">👕</span><em>قميص</em><b>120 MAD</b></div>
-        <div><span style="background:#bfdbfe">👟</span><em>حذاء</em><b>350 MAD</b></div>
-        <div><span style="background:#fbcfe8">⌚</span><em>ساعة</em><b>499 MAD</b></div>
+    <div class="lp-visual" aria-hidden="true">
+      <div class="mock lp-mock-main">
+        <div class="mock-bar"><i></i><i></i><i></i><span>myshop.com</span></div>
+        <div class="mock-nav"><b>متجري</b><span></span><span></span><span></span></div>
+        <div class="mock-hero"><strong>تشكيلة الموسم الجديد</strong><small>أناقة تليق بك</small><em>تسوّق الآن</em></div>
+        <div class="mock-grid">
+          <div><span style="background: linear-gradient(135deg, #fde68a, #f59e0b)">👕</span><em>قميص قطني</em><b>149 MAD</b></div>
+          <div><span style="background: linear-gradient(135deg, #bfdbfe, #3b82f6)">👟</span><em>حذاء رياضي</em><b>350 MAD</b></div>
+          <div><span style="background: linear-gradient(135deg, #fbcfe8, #db2777)">⌚</span><em>ساعة يد</em><b>499 MAD</b></div>
+        </div>
       </div>
-      <div class="mock-toast">🛒 طلب جديد #1024 — 499 MAD</div>
+      <div class="lp-float lp-toast-order"><span>🛒</span><div><strong>طلب جديد #1024</strong><small>سارة · الدار البيضاء · 499 MAD</small></div></div>
+      <div class="lp-float lp-toast-chat"><span>💬</span><div><strong>هل التوصيل متوفر لطنجة؟</strong><small>رسالة جديدة من عميل</small></div></div>
     </div>
   </div>
 </section>
 
-<% if (counts.stores) { %>
-<section class="wrap l-stats">
-  <div><strong><%= counts.stores %></strong><span>متجر تم إنشاؤه</span></div>
-  <div><strong><%= counts.products %></strong><span>منتج معروض</span></div>
-  <div><strong><%= counts.orders %></strong><span>طلب تمت معالجته</span></div>
+<!-- Quick facts -->
+<section class="wrap lp-facts">
+  <div><strong>0 <small>درهم</small></strong><span>للبدء، بدون اشتراك</span></div>
+  <div><strong>5 <small>دقائق</small></strong><span>لإطلاق متجرك</span></div>
+  <div><strong>12</strong><span>نوع قسم لتصميم متجرك</span></div>
+  <div><strong>100%</strong><span>واجهة عربية</span></div>
 </section>
-<% } %>
 
 <main class="wrap">
+<!-- Features -->
 <section id="features" class="l-section">
   <div class="l-head">
     <span class="pill">المزايا</span>
     <h2>كل ما تحتاجه لتبيع عبر الإنترنت</h2>
     <p class="muted">أدوات بسيطة وقوية تجعل إدارة متجرك سهلة من أول يوم.</p>
   </div>
-  <div class="grid three">
-    <div class="card feat"><span>🏪</span><h3>متجر باسمك</h3><p class="muted">رابط خاص، شعار، ولون يعبّر عن علامتك التجارية.</p></div>
-    <div class="card feat"><span>📦</span><h3>إدارة المنتجات</h3><p class="muted">أضف المنتجات بالصور والأسعار، وأخفِها أو انشرها بنقرة.</p></div>
-    <div class="card feat"><span>📊</span><h3>تتبّع المخزون</h3><p class="muted">يُخصم المخزون تلقائياً مع كل طلب، مع تنبيه عند قرب النفاد.</p></div>
-    <div class="card feat"><span>🧾</span><h3>إدارة الطلبات</h3><p class="muted">تابع كل طلب من «جديد» حتى «تم التسليم» في مكان واحد.</p></div>
-    <div class="card feat"><span>💵</span><h3>الدفع عند الاستلام</h3><p class="muted">الطريقة المفضلة لدى عملائك، بدون حسابات بنكية أو عمولات دفع.</p></div>
-    <div class="card feat"><span>📱</span><h3>متوافق مع الهاتف</h3><p class="muted">متجرك ولوحة تحكمك يعملان بشكل ممتاز على كل الشاشات.</p></div>
+  <div class="lp-features">
+    <% [
+      ['🎨', 'تصميم بدون برمجة', 'محرر بمعاينة مباشرة: سلايدر صور، بانرات، معرض صور، آراء العملاء وأكثر.'],
+      ['📦', 'منتجات احترافية', 'حتى 8 صور لكل منتج، مقاسات وألوان، أسعار تخفيض، وتتبّع المخزون تلقائياً.'],
+      ['💵', 'الدفع عند الاستلام', 'الطريقة المفضلة لعملائك، مع حساب التوصيل والتوصيل المجاني فوق مبلغ معيّن.'],
+      ['🛡️', 'حماية من الطلبات الوهمية', 'تحقق من الهاتف، منع الطلبات المكررة، وسجلّ كل عميل: كم استلم وكم ألغى.'],
+      ['💬', 'دردشة مباشرة', 'عملاؤك يكتبون لك من المتجر وأنت ترد من لوحتك، مع خيار التحويل إلى واتساب.'],
+      ['✅', 'تأكيد عبر واتساب', 'رسالة تأكيد جاهزة بتفاصيل الطلب، تُرسل للعميل بضغطة واحدة.'],
+      ['🌐', 'نطاقك الخاص', 'اربط نطاقك مثل myshop.com ليظهر متجرك باسم علامتك التجارية.'],
+      ['📄', 'صفحات متعددة', 'من نحن، سياسة الإرجاع، الأسئلة الشائعة… بقوالب جاهزة وصور.'],
+      ['🔔', 'إشعارات فورية', 'تنبيه وصوت وبريد مع كل طلب أو رسالة جديدة، ولوحة إحصائيات واضحة.'],
+    ].forEach(([ic, t, d]) => { %>
+      <div class="lp-feat"><span class="lp-feat-ic"><%= ic %></span><h3><%= t %></h3><p><%= d %></p></div>
+    <% }) %>
   </div>
 </section>
 
+<!-- Highlight: designer -->
+<section id="design" class="lp-split">
+  <div class="lp-split-text">
+    <span class="pill">التصميم</span>
+    <h2>صمّم متجرك كما تتخيّله</h2>
+    <p class="muted">اختر قالباً جاهزاً ثم عدّل كل شيء: الألوان، الخطوط، الصور والنصوص. ترى التغيير مباشرة قبل أن تحفظ.</p>
+    <ul class="lp-bullets">
+      <li>3 قوالب جاهزة: كلاسيكي، أزياء، بوتيك</li>
+      <li>6 خطوط عربية و12 نوعاً من الأقسام</li>
+      <li>معاينة على الحاسوب والهاتف</li>
+      <li>رفع الصور بالسحب والإفلات</li>
+    </ul>
+  </div>
+  <div class="lp-split-visual" aria-hidden="true">
+    <div class="mock lp-editor">
+      <div class="lp-ed-panel">
+        <div class="lp-ed-tabs"><b>الأقسام</b><span>الأسلوب</span></div>
+        <% ['🎞️ سلايدر صور', '🗂️ التصنيفات', '🛍️ منتجات', '💬 آراء العملاء'].forEach((x, i) => { %><div class="lp-ed-item <%= i === 0 ? 'on' : '' %>"><%= x %></div><% }) %>
+        <div class="lp-ed-swatches"><i style="background:#0f766e"></i><i style="background:#111827"></i><i style="background:#9d174d"></i><i style="background:#6d28d9"></i></div>
+      </div>
+      <div class="lp-ed-preview">
+        <div class="lp-ed-hero">جودة تستحقها</div>
+        <div class="lp-ed-cards"><i></i><i></i><i></i></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Highlight: orders -->
+<section class="lp-split reverse">
+  <div class="lp-split-text">
+    <span class="pill">الطلبات</span>
+    <h2>طلبات حقيقية، لا طلبات وهمية</h2>
+    <p class="muted">في الدفع عند الاستلام، كل طلب وهمي يكلّفك توصيلاً ضائعاً. YASSER يساعدك على تجنّبها.</p>
+    <ul class="lp-bullets">
+      <li>منع الطلبات المكررة والروبوتات تلقائياً</li>
+      <li>سجلّ كل عميل: طلباته المستلمة والملغاة</li>
+      <li>تأكيد الطلب عبر واتساب بضغطة</li>
+      <li>إرجاع المخزون تلقائياً عند الإلغاء</li>
+    </ul>
+  </div>
+  <div class="lp-split-visual" aria-hidden="true">
+    <div class="mock lp-order">
+      <div class="lp-order-head"><strong>طلب #1024</strong><span class="badge s-new">جديد</span></div>
+      <div class="lp-order-row"><span>👤 سارة · الدار البيضاء</span><b>499 MAD</b></div>
+      <div class="lp-order-hist"><span>⭐ عميل موثوق</span><small>3 طلبات مستلمة · 0 ملغاة</small></div>
+      <div class="lp-order-btns"><em class="wa">💬 تأكيد عبر واتساب</em><em>📞 اتصال</em></div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
 <section id="how" class="l-section">
   <div class="l-head">
     <span class="pill">كيف تعمل</span>
     <h2>ثلاث خطوات وتبدأ البيع</h2>
   </div>
-  <div class="grid three steps-l">
-    <div class="card"><b>1</b><h3>أنشئ حسابك</h3><p class="muted">سجّل بالبريد الإلكتروني خلال أقل من دقيقة.</p></div>
-    <div class="card"><b>2</b><h3>أضف منتجاتك</h3><p class="muted">اختر اسم متجرك ولونه، ثم أضف منتجاتك بالأسعار والصور.</p></div>
-    <div class="card"><b>3</b><h3>شارك الرابط</h3><p class="muted">انشر رابط متجرك على واتساب وإنستغرام وفيسبوك واستقبل الطلبات.</p></div>
+  <div class="lp-steps">
+    <div><b>1</b><h3>أنشئ حسابك</h3><p class="muted">سجّل بالبريد الإلكتروني خلال أقل من دقيقة.</p></div>
+    <div><b>2</b><h3>صمّم متجرك وأضف منتجاتك</h3><p class="muted">اختر قالباً، ارفع صورك، وأضف منتجاتك بأسعارها.</p></div>
+    <div><b>3</b><h3>شارك الرابط وابدأ البيع</h3><p class="muted">انشر رابط متجرك على واتساب وإنستغرام وتيك توك واستقبل الطلبات.</p></div>
   </div>
 </section>
 
+<!-- Pricing -->
 <section id="pricing" class="l-section">
   <div class="l-head">
     <span class="pill">الأسعار</span>
@@ -94,49 +164,70 @@
     <p class="muted">كل المزايا متاحة لك بدون أي رسوم.</p>
   </div>
   <div class="price-card card">
-    <h3>الباقة المجانية</h3>
+    <div class="row between"><h3>الباقة المجانية</h3><span class="badge s-delivered">كل المزايا</span></div>
     <div class="amount">0 <small>درهم / شهرياً</small></div>
     <ul class="checks col">
-      <li>✓ عدد غير محدود من المنتجات</li>
-      <li>✓ عدد غير محدود من الطلبات</li>
+      <li>✓ منتجات وطلبات بلا حدود</li>
       <li>✓ أكثر من متجر في حساب واحد</li>
-      <li>✓ لوحة تحكم وإحصائيات</li>
-      <li>✓ تنبيهات المخزون</li>
+      <li>✓ محرر التصميم والقوالب الجاهزة</li>
+      <li>✓ الدردشة المباشرة والصفحات المتعددة</li>
+      <li>✓ ربط نطاقك الخاص</li>
+      <li>✓ الحماية من الطلبات الوهمية</li>
     </ul>
-    <a href="<%= cta %>" class="btn big full">أنشئ متجرك الآن</a>
+    <a href="<%= cta %>" class="btn big full"><%= ctaLabel %></a>
   </div>
 </section>
 
+<!-- FAQ -->
 <section id="faq" class="l-section">
   <div class="l-head">
     <span class="pill">الأسئلة الشائعة</span>
     <h2>لديك سؤال؟</h2>
   </div>
   <div class="faq">
-    <details><summary>هل أحتاج خبرة في البرمجة؟</summary><p>لا. كل شيء يتم من لوحة التحكم بنقرات بسيطة، بدون أي سطر برمجي.</p></details>
-    <details><summary>كيف يدفع العملاء؟</summary><p>حالياً الدفع عند الاستلام: يطلب العميل من متجرك، وتتواصل معه لتأكيد الطلب، ثم يدفع عند وصوله.</p></details>
-    <details><summary>هل يمكنني إنشاء أكثر من متجر؟</summary><p>نعم، يمكنك إدارة عدة متاجر من حساب واحد، ولكل متجر رابطه ومنتجاته وطلباته.</p></details>
-    <details><summary>كيف أشارك متجري مع العملاء؟</summary><p>لكل متجر رابط خاص يمكنك نشره على واتساب وإنستغرام وفيسبوك أو أي مكان آخر.</p></details>
+    <details><summary>هل أحتاج خبرة في البرمجة أو التصميم؟</summary><p>لا. اختر قالباً جاهزاً، ارفع صورك واكتب نصوصك، وترى النتيجة مباشرة. كل شيء بنقرات.</p></details>
+    <details><summary>كيف يدفع العملاء؟</summary><p>حالياً الدفع عند الاستلام: يطلب العميل من متجرك، تؤكّد معه الطلب (بضغطة عبر واتساب)، ثم يدفع عند الوصول.</p></details>
+    <details><summary>كيف تحمونني من الطلبات الوهمية؟</summary><p>نتحقق من رقم الهاتف، نمنع الطلبات المكررة والروبوتات، ونعرض لك سجلّ كل عميل في متجرك (كم طلباً استلم وكم ألغى) قبل أن تشحن.</p></details>
+    <details><summary>هل يمكنني استعمال نطاقي الخاص؟</summary><p>نعم. اربط نطاقاً مثل myshop.com من لوحة متجرك، وسنرشدك خطوة بخطوة لإعداد سجلات DNS.</p></details>
+    <details><summary>هل يمكنني إنشاء أكثر من متجر؟</summary><p>نعم، يمكنك إدارة عدة متاجر من حساب واحد، ولكل متجر تصميمه ومنتجاته وطلباته.</p></details>
     <details><summary>هل يعمل المتجر على الهاتف؟</summary><p>نعم، المتجر ولوحة التحكم مصممان ليعملا بشكل ممتاز على الهاتف والحاسوب.</p></details>
   </div>
 </section>
 
 <section class="l-cta">
   <h2>جاهز لإطلاق متجرك؟</h2>
-  <p>انضم الآن وابدأ ببيع منتجاتك اليوم.</p>
-  <a href="<%= cta %>" class="btn big light">ابدأ مجاناً</a>
+  <p>انضم الآن وابدأ ببيع منتجاتك اليوم. مجاناً.</p>
+  <a href="<%= cta %>" class="btn big light"><%= ctaLabel %> ←</a>
 </section>
 </main>
 
 <footer class="l-foot">
-  <div class="wrap row between">
-    <div><a href="/" class="logo">YASSER</a><p class="muted">منصة عربية لإنشاء المتاجر الإلكترونية.</p></div>
-    <nav class="row">
-      <a href="#features">المزايا</a><a href="#pricing">الأسعار</a><a href="#faq">الأسئلة الشائعة</a>
-      <a href="<%= user ? '/dashboard' : '/login' %>"><%= user ? 'لوحة التحكم' : 'دخول' %></a>
-    </nav>
+  <div class="wrap lp-foot-grid">
+    <div>
+      <a href="/" class="logo">YASSER</a>
+      <p class="muted">منصة عربية لإنشاء المتاجر الإلكترونية وإدارتها بسهولة.</p>
+    </div>
+    <div>
+      <strong>المنصة</strong>
+      <a href="#features">المزايا</a><a href="#design">التصميم</a><a href="#pricing">الأسعار</a>
+    </div>
+    <div>
+      <strong>ابدأ</strong>
+      <a href="/signup">إنشاء حساب</a><a href="/login">تسجيل الدخول</a><a href="#faq">الأسئلة الشائعة</a>
+    </div>
+    <% if (platform.support_whatsapp || platform.support_email) { %>
+    <div>
+      <strong>تواصل معنا</strong>
+      <% if (platform.support_whatsapp) { %><a href="https://wa.me/<%= platform.support_whatsapp %>" target="_blank" rel="noopener">💬 واتساب</a><% } %>
+      <% if (platform.support_email) { %><a href="mailto:<%= platform.support_email %>" dir="ltr">✉️ <%= platform.support_email %></a><% } %>
+    </div>
+    <% } %>
   </div>
-  <p class="wrap muted small">© <%= new Date().getFullYear() %> YASSER. جميع الحقوق محفوظة.</p>
+  <p class="wrap muted small lp-copy">© <%= new Date().getFullYear() %> YASSER. جميع الحقوق محفوظة.</p>
 </footer>
+<script>
+// Close the mobile menu after picking a section.
+document.querySelectorAll('.lp-mnav nav a').forEach((a) => a.addEventListener('click', () => a.closest('details').removeAttribute('open')));
+</script>
 </body>
 </html>
