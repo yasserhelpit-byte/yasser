@@ -29,7 +29,14 @@ h1, h2, h3 { line-height: 1.3; margin: 0.6em 0 0.4em; }
 
 .topbar { background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 0; margin-bottom: 24px; }
 .topbar .wrap { justify-content: space-between; }
-.logo { font-weight: 800; font-size: 1.4rem; color: var(--brand); letter-spacing: 1px; }
+.logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.4rem; color: #0f172a; line-height: 1; text-decoration: none; }
+.logo:hover { text-decoration: none; }
+.logo-mark { width: 34px; height: 34px; flex: none; border-radius: 9px; box-shadow: 0 4px 12px -4px rgba(15,118,110,.55); }
+.logo-word { font-family: 'Tajawal', system-ui, sans-serif; letter-spacing: .07em; }
+.logo-word b { color: #0f766e; font-weight: 800; }
+.logo.big .logo-mark { width: 52px; height: 52px; border-radius: 13px; }
+.logo.big { font-size: 1.9rem; gap: 12px; }
+.auth-logo { display: flex; justify-content: center; margin: 8px 0 18px; }
 .store-bar { border-bottom: 3px solid var(--brand); }
 .foot { color: var(--muted); text-align: center; padding: 40px 16px; font-size: 0.9rem; }
 
@@ -673,7 +680,9 @@ h4 { margin: 0 0 8px; }
 .app { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: #0f1d1b; color: #cbd5d1; display: flex; flex-direction: column; gap: 6px; padding: 16px 12px; }
 .sidebar a { color: #cbd5d1; }
-.sidebar .logo { color: #fff; font-size: 1.45rem; padding: 4px 10px; }
+.sidebar .logo { color: #fff; font-size: 1.3rem; padding: 4px 6px; }
+.sidebar .logo-word b { color: #2dd4bf; }
+.sidebar .logo-mark { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 6px 14px -6px rgba(20,184,166,.6); }
 .side-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .side-close { display: none; background: none; border: 0; color: #fff; font-size: 1.2rem; cursor: pointer; }
 .side-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .08em; color: #6f8a84; padding: 14px 12px 4px; font-weight: 700; }

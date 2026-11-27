@@ -8,7 +8,7 @@
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="side-top">
-      <a href="/dashboard" class="logo">YASSER</a>
+      <%- include('logo', { href: '/dashboard' }) %>
       <span class="side-bell"><%- include('bell') %></span>
       <button type="button" class="side-close" onclick="document.body.classList.remove('side-open')" aria-label="إغلاق">✕</button>
     </div>
@@ -70,7 +70,7 @@
   <div class="app-main">
     <header class="app-top">
       <button type="button" class="burger" onclick="document.body.classList.add('side-open')" aria-label="القائمة"><span></span><span></span><span></span></button>
-      <a href="/dashboard" class="logo">YASSER</a>
+      <%- include('logo', { href: '/dashboard' }) %>
       <span class="top-bell"><%- include('bell') %></span>
     </header>
     <% if (platform.notice) { %>
@@ -90,7 +90,7 @@
 <% } else { %>
 <header class="topbar">
   <div class="wrap row">
-    <a href="/" class="logo">YASSER</a>
+    <%- include('logo', { href: '/' }) %>
     <nav class="row">
       <% if (user) { %>
         <a href="<%= user.isAdmin ? '/admin' : '/dashboard' %>">لوحة التحكم</a>

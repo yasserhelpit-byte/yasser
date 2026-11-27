@@ -1,5 +1,6 @@
 <%- include('partials/header', { title: 'تسجيل الدخول' }) %>
 <section class="card narrow">
+  <div class="auth-logo"><%- include('partials/logo', { href: '/', cls: 'big' }) %></div>
   <h1>تسجيل الدخول</h1>
   <% if (typeof notice !== 'undefined' && notice) { %><div class="alert ok"><%= notice %></div><% } %>
   <%- include('partials/errors') %>

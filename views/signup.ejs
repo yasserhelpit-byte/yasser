@@ -1,5 +1,6 @@
 <%- include('partials/header', { title: 'إنشاء حساب' }) %>
 <section class="card narrow">
+  <div class="auth-logo"><%- include('partials/logo', { href: '/', cls: 'big' }) %></div>
   <h1>إنشاء حساب تاجر</h1>
   <% if (platform.signups_open !== '1') { %>
     <div class="alert">التسجيل مغلق حالياً. عد لاحقاً<% if (platform.support_email) { %> أو راسلنا على <span dir="ltr"><%= platform.support_email %></span><% } %>.</div>

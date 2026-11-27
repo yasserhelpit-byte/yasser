@@ -2,7 +2,7 @@
 <% const cta = user ? (user.isAdmin ? '/admin' : '/dashboard') : '/signup'; const ctaLabel = user ? 'لوحة التحكم' : 'أنشئ متجرك مجاناً'; %>
 <header class="topbar landing-bar">
   <div class="wrap lp-nav">
-    <a href="/" class="logo">YASSER</a>
+    <%- include('partials/logo', { href: '/' }) %>
     <nav class="landing-nav">
       <a href="#features">المزايا</a>
       <a href="#design">التصميم</a>
@@ -204,7 +204,7 @@
 <footer class="l-foot">
   <div class="wrap lp-foot-grid">
     <div>
-      <a href="/" class="logo">YASSER</a>
+      <%- include('partials/logo', { href: '/' }) %>
       <p class="muted">منصة عربية لإنشاء المتاجر الإلكترونية وإدارتها بسهولة.</p>
     </div>
     <div>

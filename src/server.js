@@ -154,7 +154,7 @@ const iconCache = {};
 app.get(/^\/icon-(192|512)\.png$/, async (req, res) => {
   const size = Number(req.params[0]);
   if (!iconCache[size] && sharpLib) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#0f766e"/><text x="256" y="345" font-size="300" font-family="Arial, sans-serif" font-weight="bold" fill="#fff" text-anchor="middle">Y</text></svg>`;
+    const svg = fs.readFileSync(path.join(__dirname, '..', 'public', 'logo-mark.svg')).toString().replace('viewBox="0 0 64 64"', 'viewBox="0 0 64 64" width="512" height="512"');
     iconCache[size] = await sharpLib(Buffer.from(svg)).resize(size, size).png().toBuffer();
   }
   if (!iconCache[size]) return res.status(404).end();

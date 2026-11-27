@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="YASSER">
+  <defs>
+    <linearGradient id="yb" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14b8a6"/>
+      <stop offset=".55" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#0b4f4a"/>
+    </linearGradient>
+    <linearGradient id="ys" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- tile -->
+  <rect width="64" height="64" rx="15" fill="url(#yb)"/>
+  <rect width="64" height="32" rx="15" fill="url(#ys)"/>
+  <!-- bag handle -->
+  <path d="M24.5 23.5v-2.2a7.5 7.5 0 0 1 15 0v2.2" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>
+  <!-- bag body -->
+  <path d="M17.6 22.5h28.8a2.6 2.6 0 0 1 2.6 2.45l1.25 21.9A5 5 0 0 1 45.26 52H18.74a5 5 0 0 1-4.99-5.15L15 24.95a2.6 2.6 0 0 1 2.6-2.45Z" fill="#fff"/>
+  <!-- Y -->
+  <path d="M25.2 30.4 32 38.2l6.8-7.8M32 38.2v7.4" fill="none" stroke="#0f766e" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- spark (smart / AI) -->
+  <path d="M51.5 7.5c.5 2.9 1.7 4.1 4.6 4.6-2.9.5-4.1 1.7-4.6 4.6-.5-2.9-1.7-4.1-4.6-4.6 2.9-.5 4.1-1.7 4.6-4.6Z" fill="#fbbf24"/>
+</svg>
