@@ -58,6 +58,15 @@
   </section>
 
   <section class="card form">
+    <h3>📊 التتبّع (Pixel)</h3>
+    <p class="muted small">يخبر فيسبوك وتيك توك بمن زار متجرك ومن طلب، فتصل إعلاناتك لمن يشتري فعلاً. لا يعمل عندما تزور متجرك بنفسك.</p>
+    <label>Facebook / Instagram Pixel ID<input name="fb_pixel_id" dir="ltr" inputmode="numeric" placeholder="123456789012345" value="<%= v.fb_pixel_id || '' %>"></label>
+    <details class="ios-help"><summary>أين أجد رقم Pixel فيسبوك؟</summary><ol><li>افتح <a href="https://business.facebook.com/events_manager" target="_blank" rel="noopener">Events Manager</a> في فيسبوك.</li><li>اختر «ربط مصادر البيانات» ← «الويب» وأنشئ Pixel.</li><li>انسخ الرقم (حوالي 15 رقماً) والصقه هنا.</li></ol></details>
+    <label>TikTok Pixel ID<input name="tiktok_pixel_id" dir="ltr" placeholder="C4XXXXXXXXXXXXXXXXXX" value="<%= v.tiktok_pixel_id || '' %>"></label>
+    <details class="ios-help"><summary>أين أجد رقم Pixel تيك توك؟</summary><ol><li>افتح TikTok Ads Manager ← Tools ← Events.</li><li>أنشئ «Web Events» ← TikTok Pixel.</li><li>انسخ رقم Pixel والصقه هنا.</li></ol></details>
+  </section>
+
+  <section class="card form">
     <h3>📣 الإعلانات</h3>
     <p class="muted small">يستعملها Claude عند الضغط على «🚀 أطلق إعلاناً».</p>
     <label>لغة الإعلانات

@@ -12,6 +12,8 @@
       <label>العنوان الكامل (المدينة، الحي، الشارع)<textarea name="customer_address" rows="3" required><%= values.customer_address || '' %></textarea></label>
       <label>ملاحظة (اختياري)<textarea name="note" rows="2"><%= values.note || '' %></textarea></label>
       <div class="pay-box">💵 <div><strong>الدفع عند الاستلام</strong><small class="muted">ادفع نقداً عند وصول طلبك</small></div></div>
+      <% const priv = menuPages.find(p => p.slug === 'privacy' || p.title.includes('الخصوصية')); %>
+      <p class="muted small">بتأكيد الطلب، توافق على استعمال معلوماتك لتوصيل طلبك والتواصل معك بشأنه (<a href="<%= priv ? base + '/page/' + priv.slug : '/privacy' %>" target="_blank">سياسة الخصوصية</a>).</p>
       <button class="btn big">تأكيد الطلب · <%= money(total, store.currency) %></button>
     </form>
   </div>
@@ -22,4 +24,6 @@
     <%- include('../partials/totals') %>
   </div>
 </section>
+<% const track = (ev, data, id) => (typeof pixels !== 'undefined' && pixels) ? `<script>window.yTrack && yTrack(${js(ev)}, ${js(data)}${id ? ', ' + js(id) : ''});</script>` : ''; %>
+<%- track('InitiateCheckout', { value: total, currency: store.currency, contents: lines.map(l => ({ id: l.product.id, quantity: l.quantity, price: l.product.price })) }) %>
 <%- include('../partials/store-footer') %>

@@ -4,6 +4,13 @@
 <form method="post" class="settings">
   <%- include('../partials/csrf') %>
   <section class="card form">
+    <h3>⚖️ البيانات القانونية</h3>
+    <p class="muted small">تظهر في <a href="/terms" target="_blank">شروط الاستخدام</a> و<a href="/privacy" target="_blank">سياسة الخصوصية</a>. ⚠️ النصوص نموذج أولي: راجعها مع مختص قبل الإطلاق.</p>
+    <label>الاسم القانوني (الشركة أو المقاول الذاتي)<input name="legal_name" maxlength="120" placeholder="YASSER" value="<%= platform.legal_name %>"></label>
+    <label>العنوان<input name="legal_address" maxlength="300" placeholder="المدينة، العنوان" value="<%= platform.legal_address %>"></label>
+    <label class="check"><input type="checkbox" name="legal_bump" value="1"> تحديث «آخر تحديث» إلى تاريخ اليوم</label>
+  </section>
+  <section class="card form">
     <h3>👤 التسجيل</h3>
     <label class="switch"><input type="checkbox" name="signups_open" value="1" <%= platform.signups_open === '1' ? 'checked' : '' %>><span class="slider"></span> السماح بتسجيل تجار جدد</label>
     <p class="muted small">عند الإغلاق تظهر صفحة التسجيل برسالة «التسجيل مغلق حالياً»، ويبقى التجار الحاليون قادرين على الدخول.</p>

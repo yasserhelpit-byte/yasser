@@ -193,6 +193,8 @@ addColumn('stores', 'chat_enabled', 'INTEGER NOT NULL DEFAULT 1');
 addColumn('stores', 'chat_greeting', "TEXT NOT NULL DEFAULT ''");
 addColumn('sessions', 'last_seen', 'TEXT');
 addColumn('users', 'notify_prefs', "TEXT NOT NULL DEFAULT '{}'");
+addColumn('stores', 'fb_pixel_id', "TEXT NOT NULL DEFAULT ''");
+addColumn('stores', 'tiktok_pixel_id', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'ad_language', "TEXT NOT NULL DEFAULT 'darija'");
 addColumn('stores', 'ad_daily_budget', 'REAL NOT NULL DEFAULT 50');
 addColumn('stores', 'ad_days', 'INTEGER NOT NULL DEFAULT 5');
@@ -210,7 +212,7 @@ addColumn('orders', 'ip', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
 
 // Platform-wide settings (key/value).
-const SETTING_DEFAULTS = { ai_enabled: '1', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '' };
+const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '1', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '' };
 function getSettings() {
   const out = { ...SETTING_DEFAULTS };
   for (const r of db.prepare('SELECT key, value FROM settings').all()) out[r.key] = r.value;

@@ -37,7 +37,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   const merchant = client(base);
   let page = await merchant('GET', '/signup');
   let csrf = csrfOf(page.text);
-  let r = await merchant('POST', '/signup', { _csrf: csrf, name: 'Yasser', email: 'm@example.com', password: 'password123' });
+  let r = await merchant('POST', '/signup', { _csrf: csrf, name: 'Yasser', email: 'm@example.com', password: 'password123' , accept_terms: '1' });
   assert.strictEqual(r.location, '/dashboard');
   csrf = csrfOf((await merchant('GET', '/dashboard/stores/new')).text); // session rotates on login
 
@@ -182,7 +182,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   // Another merchant cannot see the store.
   const other = client(base);
   const ocsrf = csrfOf((await other('GET', '/signup')).text);
-  await other('POST', '/signup', { _csrf: ocsrf, name: 'O', email: 'o@example.com', password: 'password123' });
+  await other('POST', '/signup', { _csrf: ocsrf, name: 'O', email: 'o@example.com', password: 'password123' , accept_terms: '1' });
   r = await other('GET', storeUrl);
   assert.strictEqual(r.status, 404);
 });
@@ -193,7 +193,7 @@ test('login lockout and password reset', async (t) => {
   const base = `http://127.0.0.1:${server.address().port}`;
   const u = client(base);
   let csrf = csrfOf((await u('GET', '/signup')).text);
-  await u('POST', '/signup', { _csrf: csrf, name: 'Reset Me', email: 'r@example.com', password: 'oldpassword' });
+  await u('POST', '/signup', { _csrf: csrf, name: 'Reset Me', email: 'r@example.com', password: 'oldpassword' , accept_terms: '1' });
   await u('POST', '/logout', { _csrf: csrfOf((await u('GET', '/dashboard')).text) });
 
   const a = client(base);
@@ -231,7 +231,7 @@ test('admin sees all stores; merchants only their own', async (t) => {
 
   const signup = async (name, email) => {
     const c = client(base);
-    await c('POST', '/signup', { _csrf: csrfOf((await c('GET', '/signup')).text), name, email, password: 'password123' });
+    await c('POST', '/signup', { _csrf: csrfOf((await c('GET', '/signup')).text), name, email, password: 'password123' , accept_terms: '1' });
     c.csrf = csrfOf((await c('GET', '/dashboard/stores/new')).text);
     return c;
   };
@@ -286,7 +286,7 @@ test('custom domains serve the store at the root', async (t) => {
   require('../src/limiter').clear();
 
   const m = client(base);
-  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Dom', email: 'dom@example.com', password: 'password123' });
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Dom', email: 'dom@example.com', password: 'password123' , accept_terms: '1' });
   let csrf = csrfOf((await m('GET', '/dashboard/stores/new')).text);
   const r = await m('POST', '/dashboard/stores', { _csrf: csrf, name: 'Dom Shop', slug: 'dom-shop' });
   const sid = r.location.match(/\d+$/)[0];
@@ -321,7 +321,7 @@ test('custom domains serve the store at the root', async (t) => {
   assert.match(await (await fetch(base + '/s/dom-shop')).text(), /Dom Shop/);
   // Another store can't claim the same domain.
   const m2 = client(base);
-  await m2('POST', '/signup', { _csrf: csrfOf((await m2('GET', '/signup')).text), name: 'Other', email: 'other2@example.com', password: 'password123' });
+  await m2('POST', '/signup', { _csrf: csrfOf((await m2('GET', '/signup')).text), name: 'Other', email: 'other2@example.com', password: 'password123' , accept_terms: '1' });
   const c2 = csrfOf((await m2('GET', '/dashboard/stores/new')).text);
   const r2 = await m2('POST', '/dashboard/stores', { _csrf: c2, name: 'Other Shop', slug: 'other-shop' });
   const sid2 = r2.location.match(/\d+$/)[0];
@@ -335,7 +335,7 @@ test('storefront chat: visitor writes, merchant replies in the inbox', async (t)
   require('../src/limiter').clear();
 
   const m = client(base);
-  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Chat Owner', email: 'chat@example.com', password: 'password123' });
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Chat Owner', email: 'chat@example.com', password: 'password123' , accept_terms: '1' });
   const mc = csrfOf((await m('GET', '/dashboard/stores/new')).text);
   const sid = (await m('POST', '/dashboard/stores', { _csrf: mc, name: 'Chat Shop', slug: 'chat-shop' })).location.match(/\d+$/)[0];
 
@@ -372,7 +372,7 @@ test('storefront chat: visitor writes, merchant replies in the inbox', async (t)
   const stranger = await (await fetch(base + '/s/chat-shop/chat')).json();
   assert.strictEqual(stranger.messages.length, 0);
   const o = client(base);
-  await o('POST', '/signup', { _csrf: csrfOf((await o('GET', '/signup')).text), name: 'Nosy', email: 'nosy@example.com', password: 'password123' });
+  await o('POST', '/signup', { _csrf: csrfOf((await o('GET', '/signup')).text), name: 'Nosy', email: 'nosy@example.com', password: 'password123' , accept_terms: '1' });
   assert.strictEqual((await o('GET', `/dashboard/stores/${sid}/inbox/${cid}`)).status, 404);
 
   // Disabling chat hides the widget and refuses messages.
@@ -390,7 +390,7 @@ test('admin v2: overview, store/merchant pages, reset link, settings, delete', a
 
   const signup = async (name, email) => {
     const c = client(base);
-    await c('POST', '/signup', { _csrf: csrfOf((await c('GET', '/signup')).text), name, email, password: 'password123' });
+    await c('POST', '/signup', { _csrf: csrfOf((await c('GET', '/signup')).text), name, email, password: 'password123' , accept_terms: '1' });
     c.csrf = csrfOf((await c('GET', '/dashboard/stores/new')).text);
     return c;
   };
@@ -429,7 +429,7 @@ test('admin v2: overview, store/merchant pages, reset link, settings, delete', a
   const closed = client(base);
   const cc = csrfOf((await closed('GET', '/login')).text); // the closed signup page has no form
   assert.match((await closed('GET', '/signup')).text, /التسجيل مغلق حالياً/);
-  assert.strictEqual((await closed('POST', '/signup', { _csrf: cc, name: 'Late', email: 'late@example.com', password: 'password123' })).status, 403);
+  assert.strictEqual((await closed('POST', '/signup', { _csrf: cc, name: 'Late', email: 'late@example.com', password: 'password123' , accept_terms: '1' })).status, 403);
   assert.ok(!db.prepare('SELECT 1 FROM users WHERE email = ?').get('late@example.com'));
   await boss('POST', '/admin/settings', { _csrf: boss.csrf, signups_open: '1' }); // reopen for other tests
 
@@ -449,7 +449,7 @@ test('landing page: product hero + direct COD order', async (t) => {
   require('../src/limiter').clear();
 
   const m = client(base);
-  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Lander', email: 'lander@example.com', password: 'password123' });
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Lander', email: 'lander@example.com', password: 'password123' , accept_terms: '1' });
   const c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
   const sid = (await m('POST', '/dashboard/stores', { _csrf: c, name: 'Gadget', slug: 'gadget' })).location.match(/\d+$/)[0];
   await m('POST', `/dashboard/stores/${sid}/settings`, { _csrf: c, name: 'Gadget', slug: 'gadget', shipping_fee: '25', free_shipping_over: '300' });
@@ -508,7 +508,7 @@ test('AI ads: one button builds the ad + landing page, with limits', async (t) =
   setSetting('ai_enabled', '1'); setSetting('ai_cap_usd_month', '20'); setSetting('ai_per_store_month', '10');
 
   const m = client(base);
-  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Adder', email: 'adder@example.com', password: 'password123' });
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Adder', email: 'adder@example.com', password: 'password123' , accept_terms: '1' });
   const c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
   const sid = (await m('POST', '/dashboard/stores', { _csrf: c, name: 'Ad Shop', slug: 'ad-shop' })).location.match(/\d+$/)[0];
   await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Desk Lamp', price: '120', stock: '9', active: '1' });
@@ -530,7 +530,7 @@ test('AI ads: one button builds the ad + landing page, with limits', async (t) =
   // Hidden products can't be advertised; other merchants can't see the ad.
   assert.strictEqual((await m('POST', `/dashboard/stores/${sid}/products/${hidden}/ad`, { _csrf: c })).status, 400);
   const o = client(base);
-  await o('POST', '/signup', { _csrf: csrfOf((await o('GET', '/signup')).text), name: 'Spy', email: 'spy@example.com', password: 'password123' });
+  await o('POST', '/signup', { _csrf: csrfOf((await o('GET', '/signup')).text), name: 'Spy', email: 'spy@example.com', password: 'password123' , accept_terms: '1' });
   assert.strictEqual((await o('GET', r.location)).status, 404);
 
   // "Configured" mode with a stubbed Claude: usage is recorded and the per-store limit applies.
@@ -638,7 +638,7 @@ test('notifications: bell, phone push, preferences, admin alerts', async (t) => 
 
   // An admin, to receive platform alerts.
   const boss = client(base);
-  await boss('POST', '/signup', { _csrf: csrfOf((await boss('GET', '/signup')).text), name: 'Boss3', email: 'boss3@example.com', password: 'password123' });
+  await boss('POST', '/signup', { _csrf: csrfOf((await boss('GET', '/signup')).text), name: 'Boss3', email: 'boss3@example.com', password: 'password123' , accept_terms: '1' });
   db.prepare("UPDATE users SET role = 'admin' WHERE email = 'boss3@example.com'").run();
   const bc = csrfOf((await boss('GET', '/dashboard/stores/new')).text);
   const bpost = (url, body) => fetch(base + url, { method: 'POST', body: new URLSearchParams(body), headers: { cookie: boss.cookie(), 'x-csrf-token': bc, accept: 'application/json' } });
@@ -646,7 +646,7 @@ test('notifications: bell, phone push, preferences, admin alerts', async (t) => 
 
   // A merchant signs up -> the admin gets a bell entry and a push.
   const m = client(base);
-  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Notif Shop Owner', email: 'notif@example.com', password: 'password123' });
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Notif Shop Owner', email: 'notif@example.com', password: 'password123' , accept_terms: '1' });
   assert.ok(pushes.some((p) => p.endpoint.endsWith('/boss') && /تاجر جديد/.test(p.title)));
   const bossNotes = await (await fetch(base + '/dashboard/notes', { headers: { cookie: boss.cookie() } })).json();
   assert.ok(bossNotes.unread >= 1);
@@ -713,4 +713,53 @@ test('notifications: bell, phone push, preferences, admin alerts', async (t) => 
   assert.strictEqual((await fetch(base + '/sw.js')).status, 200);
   assert.strictEqual((await (await fetch(base + '/manifest.webmanifest')).json()).start_url, '/dashboard');
   assert.strictEqual((await fetch(base + '/icon-192.png')).headers.get('content-type'), 'image/png');
+});
+
+test('ad pixels: only for customers, only valid IDs, CSP widened only when used', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { db } = require('../src/db');
+  require('../src/limiter').clear();
+  const m = client(base);
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Pix', email: 'pix@example.com', password: 'password123' , accept_terms: '1' });
+  const c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = (await m('POST', '/dashboard/stores', { _csrf: c, name: 'Pix Shop', slug: 'pix-shop' })).location.match(/\d+$/)[0];
+  // Without pixels: plain CSP, no tracking code.
+  let r = await fetch(base + '/s/pix-shop');
+  assert.doesNotMatch(r.headers.get('content-security-policy'), /facebook/);
+  assert.doesNotMatch(await r.text(), /fbevents\.js/);
+  // Invalid IDs are dropped; valid ones saved (TikTok upper-cased).
+  await m('POST', `/dashboard/stores/${sid}/settings`, { _csrf: c, name: 'Pix Shop', slug: 'pix-shop', fb_pixel_id: '12ab<script>', tiktok_pixel_id: 'x' });
+  assert.deepStrictEqual({ ...db.prepare('SELECT fb_pixel_id, tiktok_pixel_id FROM stores WHERE id = ?').get(sid) }, { fb_pixel_id: '', tiktok_pixel_id: '' });
+  await m('POST', `/dashboard/stores/${sid}/settings`, { _csrf: c, name: 'Pix Shop', slug: 'pix-shop', fb_pixel_id: '987654321098765', tiktok_pixel_id: 'c4abcdef123456789xyz' });
+  assert.strictEqual(db.prepare('SELECT tiktok_pixel_id FROM stores WHERE id = ?').get(sid).tiktok_pixel_id, 'C4ABCDEF123456789XYZ');
+  // Customers get the pixels (and the wider CSP); the owner browsing the store doesn't.
+  r = await fetch(base + '/s/pix-shop');
+  const html = await r.text();
+  assert.match(r.headers.get('content-security-policy'), /connect\.facebook\.net/);
+  assert.match(html, /fbq\('init', "987654321098765"\)/);
+  assert.match(html, /ttq\.load\("C4ABCDEF123456789XYZ"\)/);
+  assert.doesNotMatch((await m('GET', '/s/pix-shop')).text, /fbevents\.js/);
+  // Not in the design editor preview either.
+  assert.doesNotMatch((await m('POST', `/dashboard/stores/${sid}/design/preview`, { _csrf: c, sections: '[]' })).text, /fbevents\.js/);
+});
+
+test('legal pages and signup consent', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const terms = await (await fetch(base + '/terms')).text();
+  assert.match(terms, /شروط الاستخدام/);
+  assert.match(terms, /للقانون المغربي/);
+  const privacy = await (await fetch(base + '/privacy')).text();
+  assert.match(privacy, /id="data-deletion"/); // Meta asks for data-deletion instructions
+  assert.match(privacy, /09-08/);
+  const u = client(base);
+  const c = csrfOf((await u('GET', '/signup')).text);
+  const r = await u('POST', '/signup', { _csrf: c, name: 'NoConsent', email: 'noconsent@example.com', password: 'password123' });
+  assert.strictEqual(r.status, 400);
+  assert.match(r.text, /الموافقة على شروط الاستخدام/);
+  assert.match((await fetch(base + '/')).ok ? await (await fetch(base + '/')).text() : '', /href="\/privacy"/);
 });

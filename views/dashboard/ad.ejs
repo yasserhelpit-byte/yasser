@@ -45,6 +45,13 @@
       </details>
     </section>
 
+    <% if (!store.fb_pixel_id) { %>
+    <section class="card pixel-tip">
+      <strong>📊 أضف Facebook Pixel قبل النشر</strong>
+      <p class="muted small">بدونه لا يعرف فيسبوك من اشترى، فلا يستطيع تحسين إعلانك. يكفي لصق رقمه مرة واحدة.</p>
+      <a class="btn small ghost" href="/dashboard/stores/<%= store.id %>/settings">إضافة Pixel</a>
+    </section>
+    <% } %>
     <section class="card">
       <h3>🎯 الجمهور المقترح</h3>
       <div class="chips-row">

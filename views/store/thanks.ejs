@@ -9,4 +9,14 @@
     <% if (store.whatsapp) { %><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/<%= store.whatsapp %>?text=<%= encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + order.id) %>">تواصل عبر واتساب</a><% } %>
   </div>
 </section>
+<% if (typeof pixels !== 'undefined' && pixels) { %>
+<script>
+// Purchase: once per order (a reload of this page must not count it again).
+(function () {
+  const key = 'yasser:purchased:' + <%- js(order.id) %>;
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (e) {}
+  window.yTrack && yTrack('Purchase', <%- js({ value: order.total, currency: store.currency, contents: items.map(i => ({ id: i.product_id, quantity: i.quantity, price: i.price })) }) %>, <%- js('order-' + order.id) %>);
+})();
+</script>
+<% } %>
 <%- include('../partials/store-footer') %>

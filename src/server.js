@@ -21,20 +21,26 @@ app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
 // Security headers. Inline scripts/styles are allowed (the views use them); everything else is locked down.
-const CSP = [
+const cspWith = (extra = {}) => [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${extra.script || ''}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' https: data: blob:",
   "media-src 'self' https:",
   "frame-src https://www.youtube-nocookie.com",
-  "connect-src 'self'",
+  `connect-src 'self'${extra.connect || ''}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'self'",
 ].join('; ');
+const CSP = cspWith();
+// Storefronts that use ad pixels also load Meta's / TikTok's tracking scripts.
+const PIXEL_CSP = cspWith({
+  script: ' https://connect.facebook.net https://analytics.tiktok.com',
+  connect: ' https://www.facebook.com https://connect.facebook.net https://analytics.tiktok.com https://*.tiktok.com https://*.tiktokw.us',
+});
 app.use((req, res, next) => {
   res.set({
     'Content-Security-Policy': CSP,
@@ -162,6 +168,15 @@ app.get('/manifest.webmanifest', (req, res) => {
   });
 });
 
+// ---------- Legal pages ----------
+app.get(['/terms', '/privacy'], (req, res) => {
+  const st = res.locals.platform;
+  res.render(`legal/${req.path.slice(1)}`, {
+    legalName: st.legal_name || 'YASSER', legalAddress: st.legal_address, updated: st.legal_updated || '2026-11-27',
+    title: req.path === '/terms' ? 'شروط الاستخدام' : 'سياسة الخصوصية',
+  });
+});
+
 // ---------- Public pages ----------
 app.get('/', (req, res) => {
   const counts = db
@@ -199,6 +214,7 @@ app.post('/signup', (req, res) => {
   if (!limiter.hit(`signup:${req.ip}`, 5, 60 * MIN)) error = 'محاولات كثيرة. حاول مرة أخرى بعد قليل.';
   else if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) error = 'الرجاء إدخال الاسم والبريد الإلكتروني بشكل صحيح.';
   else if (password.length < 8) error = 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.';
+  else if (!req.body.accept_terms) error = 'يجب الموافقة على شروط الاستخدام وسياسة الخصوصية.';
   else if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) error = 'هذا البريد مسجل مسبقاً.';
   if (error) return res.status(400).render('signup', { error, values: { name, email } });
   const { lastInsertRowid } = db
@@ -450,7 +466,7 @@ dash.post('/stores', (req, res) => {
   res.redirect(`/dashboard/stores/${lastInsertRowid}`);
 });
 
-const STORE_FIELDS = 'name, slug, description, color, currency, logo_url, banner_url, tagline, announcement, whatsapp, phone, email, instagram, facebook, tiktok, city, shipping_fee, free_shipping_over, ad_language, ad_daily_budget, ad_days'.split(', ');
+const STORE_FIELDS = 'name, slug, description, color, currency, logo_url, banner_url, tagline, announcement, whatsapp, phone, email, instagram, facebook, tiktok, city, shipping_fee, free_shipping_over, fb_pixel_id, tiktok_pixel_id, ad_language, ad_daily_budget, ad_days'.split(', ');
 const url = (v) => (/^https?:\/\//i.test(str(v, 1000)) ? str(v, 1000) : '');
 const money0 = (v) => Math.max(0, Number(v) || 0);
 // Accept a full profile URL or just a username for social links.
@@ -480,6 +496,9 @@ function readStoreForm(body) {
     city: str(body.city, 100),
     shipping_fee: money0(body.shipping_fee),
     free_shipping_over: money0(body.free_shipping_over),
+    // Pixel IDs: Meta = digits; TikTok = letters and digits.
+    fb_pixel_id: (str(body.fb_pixel_id, 40).match(/^\d{8,20}$/) || [''])[0],
+    tiktok_pixel_id: (str(body.tiktok_pixel_id, 40).toUpperCase().match(/^[A-Z0-9]{10,32}$/) || [''])[0],
     ad_language: aiAds.LANGUAGES[body.ad_language] ? body.ad_language : 'darija',
     ad_daily_budget: Math.min(Math.max(10, Number(body.ad_daily_budget) || 50), 100000),
     ad_days: Math.min(Math.max(1, parseInt(body.ad_days, 10) || 5), 60),
@@ -939,6 +958,9 @@ const PAGE_TEMPLATES = {
     { type: 'faq', title: 'الأسئلة الشائعة', items: [{ q: 'كم يستغرق التوصيل؟', a: 'من 24 إلى 72 ساعة حسب مدينتك.' }, { q: 'كيف أدفع؟', a: 'الدفع نقداً عند الاستلام.' }, { q: 'هل يمكنني استبدال المنتج؟', a: 'نعم، خلال 7 أيام.' }] },
   ] },
 };
+PAGE_TEMPLATES.privacy = { title: 'سياسة الخصوصية', sections: [
+  { type: 'text', title: 'سياسة الخصوصية', text: 'نحترم خصوصيتك. توضّح هذه الصفحة كيف نستعمل معلوماتك عند الطلب من متجرنا.\n\nما نجمعه: اسمك، رقم هاتفك، وعنوانك عند الطلب، والرسائل التي ترسلها لنا عبر الدردشة.\n\nلماذا: لتأكيد طلبك وتوصيله والتواصل معك بشأنه فقط. لا نبيع بياناتك لأي جهة.\n\nمع من نشاركها: شركة التوصيل (الاسم والهاتف والعنوان فقط) لإيصال طلبك. وقد نستعمل أدوات قياس الإعلانات (مثل Facebook Pixel) لقياس فعالية إعلاناتنا.\n\nحقوقك: يمكنك طلب الاطلاع على بياناتك أو تصحيحها أو حذفها في أي وقت بالتواصل معنا.\n\n(نموذج: عدّله ليناسب متجرك.)' },
+] };
 PAGE_TEMPLATES.landing = { title: 'عرض خاص', sections: sections.PRESETS.landing.sections };
 const pageSlug = (s) => str(s, 60).trim().toLowerCase().replace(/[^a-z0-9\u0600-\u06ff-]+/g, '-').replace(/^-+|-+$/g, '');
 const RESERVED = new Set(['products', 'cart', 'checkout', 'thanks', 'p', 'page']);
@@ -1238,6 +1260,9 @@ admin.get('/settings', (req, res) => res.render('admin/settings', { saved: !!req
 admin.post('/settings', (req, res) => {
   setSetting('signups_open', req.body.signups_open ? '1' : '0');
   setSetting('ai_enabled', req.body.ai_enabled ? '1' : '0');
+  setSetting('legal_name', str(req.body.legal_name, 120));
+  setSetting('legal_address', str(req.body.legal_address, 300));
+  if (req.body.legal_bump) setSetting('legal_updated', new Date().toISOString().slice(0, 10));
   setSetting('ai_per_store_month', String(Math.min(Math.max(0, parseInt(req.body.ai_per_store_month, 10) || 0), 1000)));
   setSetting('ai_cap_usd_month', String(Math.min(Math.max(0, Number(req.body.ai_cap_usd_month) || 0), 100000)));
   setSetting('notice', str(req.body.notice, 400));
@@ -1282,6 +1307,10 @@ shop.use((req, res, next) => {
   req.base = res.locals.base;
   res.locals.orderError = str(req.query.order_error, 300);
   res.locals.pagePath = `${req.base}${req.path === '/' ? '' : req.path}`;
+  // Ad pixels: not for the owner browsing their own store (keeps ad data clean).
+  res.locals.pixels = !res.locals.isOwner && (store.fb_pixel_id || store.tiktok_pixel_id)
+    ? { fb: store.fb_pixel_id, tt: store.tiktok_pixel_id } : null;
+  if (res.locals.pixels) res.set('Content-Security-Policy', PIXEL_CSP);
   // Absolute URLs for link previews (og:image must be absolute).
   const origin = req.customDomain ? `https://${req.customDomain}` : baseUrl(req);
   res.locals.abs = (u) => (!u ? '' : /^https?:\/\//.test(u) ? u : origin + u);
@@ -1527,7 +1556,8 @@ shop.post('/quick-order', (req, res) => {
 shop.get('/thanks/:orderId', (req, res) => {
   const order = db.prepare('SELECT id, total FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
   if (!order) return res.redirect(req.base || '/');
-  res.render('store/thanks', { order });
+  const items = db.prepare('SELECT product_id, quantity, price FROM order_items WHERE order_id = ?').all(order.id);
+  res.render('store/thanks', { order, items });
 });
 
 // ----- Storefront live chat -----

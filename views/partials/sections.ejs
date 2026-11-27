@@ -223,6 +223,15 @@ addEventListener('message', (e) => {
 document.addEventListener('click', (e) => { if (e.target.closest('a, button[type=submit], form button')) e.preventDefault(); }, true);
 </script>
 <% } %>
+<% if (typeof pixels !== 'undefined' && pixels && !(typeof preview !== 'undefined' && preview)) { const hero = blocks.find(b => (b.type === 'product_hero' || b.type === 'order_form') && b.product); if (hero) { %>
+<script>
+window.yTrack && yTrack('ViewContent', <%- js({ value: hero.product.price, currency: store.currency, name: hero.product.name, contents: [{ id: hero.product.id, quantity: 1, price: hero.product.price }] }) %>);
+document.querySelectorAll('.lo-form').forEach((f) => f.addEventListener('focusin', function once() {
+  f.removeEventListener('focusin', once);
+  window.yTrack && yTrack('InitiateCheckout', { value: Number(f.dataset.price), currency: f.dataset.cur, contents: [{ id: f.querySelector('[name=product_id]').value, quantity: 1, price: Number(f.dataset.price) }] });
+}));
+</script>
+<% } } %>
 <script>
 // Landing pages: gallery thumbnails, quantity stepper, live total, ajax order, countdown.
 document.querySelectorAll('.sec-ph .thumbs button').forEach((b) => b.addEventListener('click', () => {

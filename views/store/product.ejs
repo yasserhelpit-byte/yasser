@@ -16,7 +16,7 @@
     <div class="price-row big"><%- include('../partials/price', { p: product }) %></div>
     <% if (product.stock > 0) { %>
       <p class="<%= product.stock <= 3 ? 'warn-text' : 'ok-text' %>"><%= product.stock <= 3 ? '🔥 بقي ' + product.stock + ' فقط في المخزون' : '✓ متوفر' %></p>
-      <form method="post" action="<%= base %>/cart" class="buy">
+      <form method="post" action="<%= base %>/cart" class="buy" data-atc="<%= product.id %>" data-price="<%= product.price %>" data-cur="<%= store.currency %>">
         <%- include('../partials/csrf') %>
         <input type="hidden" name="product_id" value="<%= product.id %>">
         <% opts.forEach((o, i) => { %>
@@ -44,4 +44,6 @@
     <% if (product.description) { %><h3>الوصف</h3><p class="pre"><%= product.description %></p><% } %>
   </div>
 </section>
+<% const track = (ev, data, id) => (typeof pixels !== 'undefined' && pixels) ? `<script>window.yTrack && yTrack(${js(ev)}, ${js(data)}${id ? ', ' + js(id) : ''});</script>` : ''; %>
+<%- track('ViewContent', { value: product.price, currency: store.currency, name: product.name, contents: [{ id: product.id, quantity: 1, price: product.price }] }) %>
 <%- include('../partials/store-footer') %>

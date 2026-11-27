@@ -17,7 +17,7 @@
   <% if (p.stock && hasOpts) { %>
     <a href="<%= base %>/p/<%= p.id %>" class="pcard-btn">اختر الخيارات</a>
   <% } else if (p.stock) { %>
-    <form method="post" action="<%= base %>/cart">
+    <form method="post" action="<%= base %>/cart" data-atc="<%= p.id %>" data-price="<%= p.price %>" data-cur="<%= store.currency %>">
       <%- include('csrf') %>
       <input type="hidden" name="product_id" value="<%= p.id %>"><input type="hidden" name="quantity" value="1">
       <button class="pcard-btn">أضف إلى السلة</button>
