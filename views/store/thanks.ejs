@@ -1,8 +1,12 @@
 <%- include('../partials/store-header', { title: 'شكراً' }) %>
-<section class="card center">
-  <h1>✅ تم استلام طلبك</h1>
+<section class="card center empty">
+  <div class="big-icon">✅</div>
+  <h1>تم استلام طلبك</h1>
   <p>رقم الطلب <strong>#<%= order.id %></strong> — الإجمالي <%= money(order.total, store.currency) %></p>
-  <p class="muted">سيتواصل معك المتجر لتأكيد الطلب.</p>
-  <a href="/s/<%= store.slug %>" class="btn">العودة إلى المتجر</a>
+  <p class="muted">سنتواصل معك قريباً لتأكيد الطلب. الدفع عند الاستلام.</p>
+  <div class="row" style="justify-content:center">
+    <a href="/s/<%= store.slug %>" class="btn">العودة إلى المتجر</a>
+    <% if (store.whatsapp) { %><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/<%= store.whatsapp %>?text=<%= encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + order.id) %>">تواصل عبر واتساب</a><% } %>
+  </div>
 </section>
-<%- include('../partials/footer') %>
+<%- include('../partials/store-footer') %>

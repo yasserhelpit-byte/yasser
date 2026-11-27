@@ -1,9 +1,10 @@
 <%- include('../partials/store-header', { title: store.name }) %>
 </main>
-<section class="shop-hero">
+<section class="shop-hero <%= store.banner_url ? 'has-banner' : '' %>" <% if (store.banner_url) { %>style="background-image: linear-gradient(rgb(0 0 0 / 45%), rgb(0 0 0 / 55%)), url('<%= store.banner_url.replace(/'/g, '%27') %>')"<% } %>>
   <div class="wrap">
-    <span class="shop-logo"><%= store.name.trim().charAt(0).toUpperCase() %></span>
-    <h1><%= store.name %></h1>
+    <% if (store.logo_url) { %><img class="shop-logo img" src="<%= store.logo_url %>" alt="<%= store.name %>">
+    <% } else { %><span class="shop-logo"><%= store.name.trim().charAt(0).toUpperCase() %></span><% } %>
+    <h1><%= store.tagline || store.name %></h1>
     <p><%= store.description || 'مرحباً بك في متجرنا! تصفح منتجاتنا واطلب بسهولة.' %></p>
     <a href="#products" class="btn light big">تسوّق الآن ↓</a>
   </div>
@@ -12,12 +13,23 @@
 <main class="wrap">
 <section class="trust">
   <div><span>💵</span><div><strong>الدفع عند الاستلام</strong><small>ادفع عندما يصلك طلبك</small></div></div>
-  <div><span>🚚</span><div><strong>توصيل سريع</strong><small>نوصل طلبك إلى باب منزلك</small></div></div>
+  <div><span>🚚</span><div><strong><%= store.free_shipping_over > 0 ? 'توصيل مجاني' : store.shipping_fee > 0 ? 'التوصيل ' + money(store.shipping_fee, store.currency) : 'توصيل مجاني' %></strong>
+    <small><%= store.free_shipping_over > 0 ? 'للطلبات فوق ' + money(store.free_shipping_over, store.currency) : (store.city ? 'من ' + store.city + ' إلى باب منزلك' : 'إلى باب منزلك') %></small></div></div>
   <div><span>📞</span><div><strong>تأكيد بالهاتف</strong><small>نتصل بك لتأكيد الطلب</small></div></div>
 </section>
 
 <section id="products">
+  <% if (categories.length) { %>
+  <nav class="chips">
+    <a href="/s/<%= store.slug %>?sort=<%= sort %>#products" class="<%= c ? '' : 'on' %>">الكل <small><%= total %></small></a>
+    <% categories.forEach(cat => { %>
+      <a href="/s/<%= store.slug %>?c=<%= encodeURIComponent(cat.name) %>&sort=<%= sort %>#products" class="<%= c === cat.name ? 'on' : '' %>"><%= cat.name %> <small><%= cat.n %></small></a>
+    <% }) %>
+  </nav>
+  <% } %>
+
   <form class="shop-tools" method="get" action="/s/<%= store.slug %>#products">
+    <% if (c) { %><input type="hidden" name="c" value="<%= c %>"><% } %>
     <input type="search" name="q" value="<%= q %>" placeholder="🔍 ابحث عن منتج...">
     <select name="sort" onchange="this.form.submit()">
       <option value="new" <%= sort === 'new' ? 'selected' : '' %>>الأحدث</option>
@@ -28,14 +40,23 @@
   </form>
 
   <p class="muted">
-    <% if (q) { %><%= products.length %> نتيجة لـ «<%= q %>» · <a href="/s/<%= store.slug %>#products">عرض الكل</a>
+    <% if (q || c) { %><%= products.length %> منتج<%= q ? ' لـ «' + q + '»' : '' %><%= c ? ' في ' + c : '' %> · <a href="/s/<%= store.slug %>#products">عرض الكل</a>
     <% } else { %><%= total %> منتج<% } %>
   </p>
 
   <% if (!products.length) { %>
     <div class="card center empty">
-      <div class="big-icon"><%= q ? '🔎' : '🛍️' %></div>
-      <p class="muted"><%= q ? 'لا توجد منتجات مطابقة لبحثك.' : 'لا توجد منتجات حالياً، عد قريباً!' %></p>
+      <div class="big-icon"><%= q || c ? '🔎' : '🛍️' %></div>
+      <% if (q || c) { %>
+        <p class="muted">لا توجد منتجات مطابقة.</p>
+      <% } else if (isOwner) { %>
+        <h3>متجرك جاهز، بقي أن تضيف منتجاتك!</h3>
+        <p class="muted">هذه الرسالة تظهر لك فقط. العملاء يرون «عد قريباً».</p>
+        <a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">+ أضف أول منتج</a>
+      <% } else { %>
+        <p class="muted">لا توجد منتجات حالياً، عد قريباً!</p>
+        <% if (store.whatsapp) { %><a class="btn wa" href="https://wa.me/<%= store.whatsapp %>" target="_blank" rel="noopener">تواصل معنا على واتساب</a><% } %>
+      <% } %>
     </div>
   <% } %>
 
@@ -45,11 +66,13 @@
         <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="img">
           <% if (p.image_url) { %><img src="<%= p.image_url %>" alt="<%= p.name %>" loading="lazy"><% } else { %><span><%= p.name.trim().charAt(0) %></span><% } %>
           <% if (!p.stock) { %><em class="tag out">نفدت الكمية</em>
+          <% } else if (p.compare_price > p.price) { %><em class="tag sale">تخفيض</em>
           <% } else if (p.id === newest) { %><em class="tag">جديد</em>
           <% } else if (p.stock <= 3) { %><em class="tag warn">بقي <%= p.stock %> فقط</em><% } %>
         </a>
+        <% if (p.category) { %><small class="muted"><%= p.category %></small><% } %>
         <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="name"><%= p.name %></a>
-        <p class="price"><%= money(p.price, store.currency) %></p>
+        <div class="price-row"><%- include('../partials/price', { p }) %></div>
         <% if (p.stock) { %>
           <form method="post" action="/s/<%= store.slug %>/cart">
             <%- include('../partials/csrf') %>
@@ -64,16 +87,4 @@
     <% }) %>
   </div>
 </section>
-</main>
-
-<footer class="shop-foot">
-  <div class="wrap row between">
-    <div>
-      <strong><%= store.name %></strong>
-      <p class="muted"><%= store.description %></p>
-    </div>
-    <div class="muted small">مدعوم بـ <a href="/">YASSER</a></div>
-  </div>
-</footer>
-</body>
-</html>
+<%- include('../partials/store-footer') %>

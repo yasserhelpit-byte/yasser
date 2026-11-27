@@ -64,6 +64,30 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 `);
 
+// Lightweight migrations: add columns introduced after the first release.
+function addColumn(table, column, definition) {
+  const exists = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+for (const [col, def] of [
+  ['logo_url', "TEXT NOT NULL DEFAULT ''"],
+  ['banner_url', "TEXT NOT NULL DEFAULT ''"],
+  ['tagline', "TEXT NOT NULL DEFAULT ''"],
+  ['announcement', "TEXT NOT NULL DEFAULT ''"],
+  ['whatsapp', "TEXT NOT NULL DEFAULT ''"],
+  ['phone', "TEXT NOT NULL DEFAULT ''"],
+  ['email', "TEXT NOT NULL DEFAULT ''"],
+  ['instagram', "TEXT NOT NULL DEFAULT ''"],
+  ['facebook', "TEXT NOT NULL DEFAULT ''"],
+  ['tiktok', "TEXT NOT NULL DEFAULT ''"],
+  ['city', "TEXT NOT NULL DEFAULT ''"],
+  ['shipping_fee', 'REAL NOT NULL DEFAULT 0'],
+  ['free_shipping_over', 'REAL NOT NULL DEFAULT 0'],
+]) addColumn('stores', col, def);
+addColumn('products', 'category', "TEXT NOT NULL DEFAULT ''");
+addColumn('products', 'compare_price', 'REAL NOT NULL DEFAULT 0');
+addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
+
 function transaction(fn) {
   db.exec('BEGIN');
   try {

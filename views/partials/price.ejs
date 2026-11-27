@@ -1,0 +1,5 @@
+<span class="price"><%= money(p.price, store.currency) %></span>
+<% if (p.compare_price > p.price) { %>
+  <s class="muted compare"><%= money(p.compare_price, store.currency) %></s>
+  <span class="badge sale" dir="ltr">-<%= Math.round((1 - p.price / p.compare_price) * 100) %>%</span>
+<% } %>

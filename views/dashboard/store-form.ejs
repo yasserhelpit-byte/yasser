@@ -1,17 +1,64 @@
 <%- include('../partials/header', { title: 'إعدادات المتجر' }) %>
-<section class="card narrow">
-  <h1><%= values.id ? 'إعدادات المتجر' : 'متجر جديد' %></h1>
-  <%- include('../partials/errors') %>
-  <form method="post" action="<%= action %>" class="form">
-    <%- include('../partials/csrf') %>
-    <label>اسم المتجر<input name="name" required value="<%= values.name || '' %>"></label>
-    <label>رابط المتجر (أحرف إنجليزية)<input name="slug" dir="ltr" placeholder="my-shop" value="<%= values.slug || '' %>"></label>
-    <label>الوصف<textarea name="description" rows="3"><%= values.description || '' %></textarea></label>
+<% const v = values; const editing = !!(typeof store !== 'undefined' && store); %>
+<% if (editing) { %><p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p><% } %>
+<div class="row between">
+  <h1><%= editing ? '🎨 تخصيص المتجر' : 'متجر جديد' %></h1>
+  <% if (editing) { %><a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">معاينة المتجر ↗</a><% } %>
+</div>
+<%- include('../partials/errors') %>
+<form method="post" action="<%= action %>" class="settings">
+  <%- include('../partials/csrf') %>
+
+  <section class="card form">
+    <h3>📝 المعلومات الأساسية</h3>
+    <label>اسم المتجر<input name="name" required maxlength="100" value="<%= v.name || '' %>"></label>
+    <label>رابط المتجر (أحرف إنجليزية وأرقام و -)
+      <div class="prefix-input" dir="ltr"><span>/s/</span><input name="slug" placeholder="my-shop" value="<%= v.slug || '' %>"></div>
+    </label>
+    <label>شعار قصير يظهر في أعلى المتجر<input name="tagline" maxlength="120" placeholder="مثال: أجود المنتجات التقليدية المغربية" value="<%= v.tagline || '' %>"></label>
+    <label>وصف المتجر<textarea name="description" rows="3" placeholder="عرّف عملاءك بمتجرك ومنتجاتك"><%= v.description || '' %></textarea></label>
+  </section>
+
+  <section class="card form">
+    <h3>🎨 المظهر</h3>
     <div class="row">
-      <label>اللون<input name="color" type="color" value="<%= values.color || '#0f766e' %>"></label>
-      <label>العملة<input name="currency" dir="ltr" maxlength="5" value="<%= values.currency || 'MAD' %>"></label>
+      <label>لون المتجر<input name="color" type="color" value="<%= v.color || '#0f766e' %>"></label>
+      <label>العملة<input name="currency" dir="ltr" maxlength="5" value="<%= v.currency || 'MAD' %>"></label>
     </div>
-    <button class="btn">حفظ</button>
-  </form>
-</section>
+    <label>رابط صورة الشعار (اللوغو)<input name="logo_url" type="url" dir="ltr" placeholder="https://..." value="<%= v.logo_url || '' %>"></label>
+    <label>رابط صورة الغلاف (البانر)<input name="banner_url" type="url" dir="ltr" placeholder="https://..." value="<%= v.banner_url || '' %>"></label>
+    <label>شريط الإعلانات أعلى المتجر<input name="announcement" maxlength="200" placeholder="مثال: 🎉 خصم 20% على كل المنتجات هذا الأسبوع" value="<%= v.announcement || '' %>"></label>
+    <p class="muted small">💡 لاستخدام صورة من جهازك: ارفعها على موقع مثل imgbb.com ثم انسخ رابطها المباشر.</p>
+  </section>
+
+  <section class="card form">
+    <h3>🚚 التوصيل</h3>
+    <div class="row">
+      <label>سعر التوصيل (<%= v.currency || 'MAD' %>)<input name="shipping_fee" type="number" min="0" step="0.01" value="<%= v.shipping_fee || 0 %>"></label>
+      <label>توصيل مجاني للطلبات فوق<input name="free_shipping_over" type="number" min="0" step="0.01" value="<%= v.free_shipping_over || 0 %>"></label>
+    </div>
+    <p class="muted small">اترك سعر التوصيل 0 إذا كان التوصيل مجانياً دائماً. واترك الحد 0 إذا لم يكن هناك توصيل مجاني.</p>
+    <label>المدينة<input name="city" maxlength="100" placeholder="مثال: الدار البيضاء" value="<%= v.city || '' %>"></label>
+  </section>
+
+  <section class="card form">
+    <h3>📞 التواصل</h3>
+    <label>رقم واتساب (مع رمز الدولة)<input name="whatsapp" dir="ltr" placeholder="212600000000" value="<%= v.whatsapp || '' %>"></label>
+    <p class="muted small">يظهر زر واتساب عائم في متجرك، وزر «اطلب عبر واتساب» في صفحة كل منتج.</p>
+    <div class="row">
+      <label>رقم الهاتف<input name="phone" type="tel" dir="ltr" value="<%= v.phone || '' %>"></label>
+      <label>البريد الإلكتروني<input name="email" type="email" dir="ltr" value="<%= v.email || '' %>"></label>
+    </div>
+  </section>
+
+  <section class="card form">
+    <h3>📱 مواقع التواصل الاجتماعي</h3>
+    <p class="muted small">اكتب اسم المستخدم أو الرابط الكامل.</p>
+    <label>Instagram<input name="instagram" dir="ltr" placeholder="@myshop" value="<%= v.instagram || '' %>"></label>
+    <label>Facebook<input name="facebook" dir="ltr" placeholder="myshop" value="<%= v.facebook || '' %>"></label>
+    <label>TikTok<input name="tiktok" dir="ltr" placeholder="@myshop" value="<%= v.tiktok || '' %>"></label>
+  </section>
+
+  <div class="save-bar"><button class="btn big">💾 حفظ</button></div>
+</form>
 <%- include('../partials/footer') %>

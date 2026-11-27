@@ -1,7 +1,23 @@
 <%- include('head') %>
+<% if (isOwner) { %>
+<div class="owner-bar">
+  <div class="wrap row between">
+    <span>👁️ أنت تشاهد متجرك كما يراه العملاء</span>
+    <span class="row">
+      <a href="/dashboard/stores/<%= store.id %>">لوحة المتجر</a>
+      <a href="/dashboard/stores/<%= store.id %>/settings">🎨 تخصيص المتجر</a>
+      <a href="/dashboard/stores/<%= store.id %>/products/new">+ منتج</a>
+    </span>
+  </div>
+</div>
+<% } %>
+<% if (store.announcement) { %><div class="announce"><%= store.announcement %></div><% } %>
 <header class="topbar store-bar">
   <div class="wrap row between">
-    <a href="/s/<%= store.slug %>" class="logo"><%= store.name %></a>
+    <a href="/s/<%= store.slug %>" class="logo store-logo">
+      <% if (store.logo_url) { %><img src="<%= store.logo_url %>" alt=""><% } %>
+      <span><%= store.name %></span>
+    </a>
     <a href="/s/<%= store.slug %>/cart" class="cart-btn" aria-label="السلة">
       🛒 <span>السلة</span>
       <% if (cartCount) { %><b class="count"><%= cartCount %></b><% } %>

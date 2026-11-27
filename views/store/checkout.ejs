@@ -1,22 +1,23 @@
 <%- include('../partials/store-header', { title: 'إتمام الطلب' }) %>
 <h1>إتمام الطلب</h1>
-<section class="grid two">
+<section class="grid side">
   <div class="card">
     <%- include('../partials/errors') %>
     <form method="post" action="/s/<%= store.slug %>/checkout" class="form">
       <%- include('../partials/csrf') %>
       <label>الاسم الكامل<input name="customer_name" required value="<%= values.customer_name || '' %>"></label>
       <label>رقم الهاتف<input name="customer_phone" type="tel" required dir="ltr" value="<%= values.customer_phone || '' %>"></label>
-      <label>العنوان<textarea name="customer_address" rows="3" required><%= values.customer_address || '' %></textarea></label>
+      <label>العنوان الكامل (المدينة، الحي، الشارع)<textarea name="customer_address" rows="3" required><%= values.customer_address || '' %></textarea></label>
       <label>ملاحظة (اختياري)<textarea name="note" rows="2"><%= values.note || '' %></textarea></label>
-      <p class="muted">💵 الدفع عند الاستلام</p>
-      <button class="btn big">تأكيد الطلب</button>
+      <div class="pay-box">💵 <div><strong>الدفع عند الاستلام</strong><small class="muted">ادفع نقداً عند وصول طلبك</small></div></div>
+      <button class="btn big">تأكيد الطلب · <%= money(total, store.currency) %></button>
     </form>
   </div>
   <div class="card">
     <h3>ملخص الطلب</h3>
     <% lines.forEach(l => { %><p class="row between"><span><%= l.product.name %> × <%= l.quantity %></span><span><%= money(l.subtotal, store.currency) %></span></p><% }) %>
-    <hr><p class="row between"><strong>الإجمالي</strong><strong><%= money(total, store.currency) %></strong></p>
+    <hr>
+    <%- include('../partials/totals') %>
   </div>
 </section>
-<%- include('../partials/footer') %>
+<%- include('../partials/store-footer') %>

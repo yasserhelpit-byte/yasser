@@ -1,0 +1,9 @@
+<p class="row between"><span>المجموع الفرعي</span><span><%= money(subtotal, store.currency) %></span></p>
+<p class="row between"><span>التوصيل</span><span><%= shipping ? money(shipping, store.currency) : 'مجاني' %></span></p>
+<% if (store.free_shipping_over > 0 && subtotal < store.free_shipping_over) { %>
+  <div class="free-ship">
+    أضف <strong><%= money(store.free_shipping_over - subtotal, store.currency) %></strong> للحصول على توصيل مجاني
+    <div class="progress"><span style="width: <%= Math.round(subtotal / store.free_shipping_over * 100) %>%"></span></div>
+  </div>
+<% } %>
+<hr><p class="row between total-line"><strong>الإجمالي</strong><strong><%= money(total, store.currency) %></strong></p>

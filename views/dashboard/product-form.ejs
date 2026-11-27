@@ -6,11 +6,14 @@
   <form method="post" action="<%= action %>" class="form">
     <%- include('../partials/csrf') %>
     <label>الاسم<input name="name" required value="<%= values.name || '' %>"></label>
+    <label>التصنيف (اختياري)<input name="category" list="cats" maxlength="60" placeholder="مثال: ملابس، أحذية، إكسسوارات" value="<%= values.category || '' %>"></label>
+    <datalist id="cats"><% (categories || []).forEach(c => { %><option value="<%= c %>"><% }) %></datalist>
     <label>الوصف<textarea name="description" rows="4"><%= values.description || '' %></textarea></label>
     <div class="row">
       <label>السعر (<%= store.currency %>)<input name="price" type="number" step="0.01" min="0" required value="<%= values.price ?? '' %>"></label>
-      <label>المخزون<input name="stock" type="number" min="0" value="<%= values.stock ?? 0 %>"></label>
+      <label>السعر قبل التخفيض (اختياري)<input name="compare_price" type="number" step="0.01" min="0" value="<%= values.compare_price || '' %>"></label>
     </div>
+    <label>المخزون<input name="stock" type="number" min="0" value="<%= values.stock ?? 0 %>"></label>
     <label>رابط الصورة<input name="image_url" type="url" dir="ltr" placeholder="https://..." value="<%= values.image_url || '' %>"></label>
     <label class="check"><input type="checkbox" name="active" value="1" <%= values.active ? 'checked' : '' %>> منشور في المتجر</label>
     <button class="btn">حفظ</button>

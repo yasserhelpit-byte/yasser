@@ -23,6 +23,7 @@
 <div class="table-wrap"><table>
   <tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>المجموع</th></tr>
   <% items.forEach(i => { %><tr><td><%= i.name %></td><td><%= money(i.price, store.currency) %></td><td><%= i.quantity %></td><td><%= money(i.price * i.quantity, store.currency) %></td></tr><% }) %>
+  <% if (order.shipping) { %><tr><td colspan="3">التوصيل</td><td><%= money(order.shipping, store.currency) %></td></tr><% } %>
   <tr><th colspan="3">الإجمالي</th><th><%= money(order.total, store.currency) %></th></tr>
 </table></div>
 <%- include('../partials/footer') %>

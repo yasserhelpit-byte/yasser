@@ -147,10 +147,20 @@ dash.post('/stores', (req, res) => {
   const error = validateStore(values);
   if (error) return res.status(400).render('dashboard/store-form', { error, values, action: '/dashboard/stores' });
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO stores (owner_id, name, slug, description, color, currency) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(req.user.id, values.name, values.slug, values.description, values.color, values.currency);
+    .prepare(`INSERT INTO stores (owner_id, ${STORE_FIELDS.join(', ')}) VALUES (?, ${STORE_FIELDS.map(() => '?').join(', ')})`)
+    .run(req.user.id, ...STORE_FIELDS.map((f) => values[f]));
   res.redirect(`/dashboard/stores/${lastInsertRowid}`);
 });
+
+const STORE_FIELDS = 'name, slug, description, color, currency, logo_url, banner_url, tagline, announcement, whatsapp, phone, email, instagram, facebook, tiktok, city, shipping_fee, free_shipping_over'.split(', ');
+const url = (v) => (/^https?:\/\//i.test(str(v, 1000)) ? str(v, 1000) : '');
+const money0 = (v) => Math.max(0, Number(v) || 0);
+// Accept a full profile URL or just a username for social links.
+const social = (v, base) => {
+  const s = str(v, 300).replace(/^@/, '');
+  if (!s) return '';
+  return /^https?:\/\//i.test(s) ? s : base + encodeURIComponent(s);
+};
 
 function readStoreForm(body) {
   return {
@@ -159,6 +169,19 @@ function readStoreForm(body) {
     description: str(body.description, 1000),
     color: /^#[0-9a-fA-F]{6}$/.test(body.color) ? body.color : '#0f766e',
     currency: str(body.currency, 5).toUpperCase() || 'MAD',
+    logo_url: url(body.logo_url),
+    banner_url: url(body.banner_url),
+    tagline: str(body.tagline, 120),
+    announcement: str(body.announcement, 200),
+    whatsapp: str(body.whatsapp, 20).replace(/[^0-9]/g, ''),
+    phone: str(body.phone, 30),
+    email: str(body.email, 200),
+    instagram: social(body.instagram, 'https://instagram.com/'),
+    facebook: social(body.facebook, 'https://facebook.com/'),
+    tiktok: social(body.tiktok, 'https://www.tiktok.com/@'),
+    city: str(body.city, 100),
+    shipping_fee: money0(body.shipping_fee),
+    free_shipping_over: money0(body.free_shipping_over),
   };
 }
 
@@ -219,8 +242,8 @@ dash.post('/stores/:storeId/settings', ownStore, (req, res) => {
   const error = validateStore(values, req.store.id);
   const action = `/dashboard/stores/${req.store.id}/settings`;
   if (error) return res.status(400).render('dashboard/store-form', { error, values, action });
-  db.prepare('UPDATE stores SET name = ?, slug = ?, description = ?, color = ?, currency = ? WHERE id = ?').run(
-    values.name, values.slug, values.description, values.color, values.currency, req.store.id
+  db.prepare(`UPDATE stores SET ${STORE_FIELDS.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`).run(
+    ...STORE_FIELDS.map((f) => values[f]), req.store.id
   );
   res.redirect(`/dashboard/stores/${req.store.id}`);
 });
@@ -231,7 +254,9 @@ function readProductForm(body) {
     description: str(body.description, 3000),
     price: Number(body.price),
     stock: Math.max(0, parseInt(body.stock, 10) || 0),
-    image_url: /^https?:\/\//.test(str(body.image_url)) ? str(body.image_url, 1000) : '',
+    image_url: url(body.image_url),
+    category: str(body.category, 60),
+    compare_price: money0(body.compare_price),
     active: body.active ? 1 : 0,
   };
 }
@@ -241,6 +266,15 @@ function validateProduct(p) {
   return null;
 }
 
+// Existing categories, offered as suggestions in the product form.
+function storeCategories(req, res, next) {
+  res.locals.categories = db
+    .prepare("SELECT DISTINCT category FROM products WHERE store_id = ? AND category != '' ORDER BY category")
+    .all(req.store.id).map((r) => r.category);
+  next();
+}
+dash.use('/stores/:storeId/products', ownStore, storeCategories);
+
 dash.get('/stores/:storeId/products/new', ownStore, (req, res) =>
   res.render('dashboard/product-form', { error: null, values: { active: 1 }, action: `/dashboard/stores/${req.store.id}/products` })
 );
@@ -248,8 +282,8 @@ dash.post('/stores/:storeId/products', ownStore, (req, res) => {
   const p = readProductForm(req.body);
   const error = validateProduct(p);
   if (error) return res.status(400).render('dashboard/product-form', { error, values: p, action: req.originalUrl });
-  db.prepare('INSERT INTO products (store_id, name, description, price, stock, image_url, active) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-    req.store.id, p.name, p.description, p.price, p.stock, p.image_url, p.active
+  db.prepare('INSERT INTO products (store_id, name, description, price, stock, image_url, category, compare_price, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    req.store.id, p.name, p.description, p.price, p.stock, p.image_url, p.category, p.compare_price, p.active
   );
   res.redirect(`/dashboard/stores/${req.store.id}`);
 });
@@ -268,8 +302,8 @@ dash.post('/stores/:storeId/products/:productId', ownStore, ownProduct, (req, re
   const p = readProductForm(req.body);
   const error = validateProduct(p);
   if (error) return res.status(400).render('dashboard/product-form', { error, values: p, action: req.originalUrl });
-  db.prepare('UPDATE products SET name = ?, description = ?, price = ?, stock = ?, image_url = ?, active = ? WHERE id = ?').run(
-    p.name, p.description, p.price, p.stock, p.image_url, p.active, req.product.id
+  db.prepare('UPDATE products SET name = ?, description = ?, price = ?, stock = ?, image_url = ?, category = ?, compare_price = ?, active = ? WHERE id = ?').run(
+    p.name, p.description, p.price, p.stock, p.image_url, p.category, p.compare_price, p.active, req.product.id
   );
   res.redirect(`/dashboard/stores/${req.store.id}`);
 });
@@ -318,13 +352,14 @@ shop.use((req, res, next) => {
   req.store = store;
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);
+  res.locals.isOwner = !!req.user && req.user.id === store.owner_id;
   next();
 });
 
 function cartLines(req) {
   const items = req.cart[req.store.id] || {};
   const ids = Object.keys(items);
-  if (!ids.length) return { lines: [], total: 0 };
+  if (!ids.length) return { lines: [], subtotal: 0, shipping: 0, total: 0 };
   const products = db
     .prepare(`SELECT * FROM products WHERE store_id = ? AND active = 1 AND id IN (${ids.map(() => '?').join(',')})`)
     .all(req.store.id, ...ids);
@@ -332,7 +367,10 @@ function cartLines(req) {
     const quantity = Math.min(items[p.id], p.stock);
     return { product: p, quantity, subtotal: quantity * p.price };
   }).filter((l) => l.quantity > 0);
-  return { lines, total: lines.reduce((a, l) => a + l.subtotal, 0) };
+  const subtotal = lines.reduce((a, l) => a + l.subtotal, 0);
+  const { shipping_fee: fee, free_shipping_over: freeOver } = req.store;
+  const shipping = !lines.length || (freeOver > 0 && subtotal >= freeOver) ? 0 : fee;
+  return { lines, subtotal, shipping, total: subtotal + shipping };
 }
 
 const SORTS = {
@@ -342,6 +380,7 @@ const SORTS = {
 };
 shop.get('/', (req, res) => {
   const q = str(req.query.q, 100);
+  const c = str(req.query.c, 60);
   const sort = SORTS[req.query.sort] ? req.query.sort : 'new';
   const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
   // In-stock products first, then the chosen order.
@@ -349,12 +388,19 @@ shop.get('/', (req, res) => {
     .prepare(
       `SELECT * FROM products WHERE store_id = ? AND active = 1
          AND (? = '' OR name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')
+         AND (? = '' OR category = ?)
        ORDER BY (stock = 0), ${SORTS[sort]}`
     )
-    .all(req.store.id, q, like, like);
+    .all(req.store.id, q, like, like, c, c);
   const total = db.prepare('SELECT COUNT(*) AS n FROM products WHERE store_id = ? AND active = 1').get(req.store.id).n;
   const newest = db.prepare('SELECT MAX(id) AS id FROM products WHERE store_id = ? AND active = 1').get(req.store.id).id;
-  res.render('store/index', { products, q, sort, total, newest });
+  const categories = db
+    .prepare(
+      `SELECT category AS name, COUNT(*) AS n FROM products
+       WHERE store_id = ? AND active = 1 AND category != '' GROUP BY category ORDER BY category`
+    )
+    .all(req.store.id);
+  res.render('store/index', { products, q, c, sort, total, newest, categories });
 });
 
 shop.get('/p/:productId', (req, res) => {
@@ -400,8 +446,8 @@ shop.post('/checkout', (req, res) => {
   try {
     orderId = transaction(() => {
       const { lastInsertRowid } = db
-        .prepare('INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, total) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.total);
+        .prepare('INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, shipping, total) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.shipping, cart.total);
       const take = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
       const addItem = db.prepare('INSERT INTO order_items (order_id, product_id, name, price, quantity) VALUES (?, ?, ?, ?, ?)');
       for (const l of cart.lines) {

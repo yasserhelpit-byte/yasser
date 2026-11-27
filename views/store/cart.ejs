@@ -1,27 +1,33 @@
 <%- include('../partials/store-header', { title: 'السلة' }) %>
 <h1>سلة التسوق</h1>
 <% if (!lines.length) { %>
-  <section class="card center"><p>السلة فارغة.</p><a href="/s/<%= store.slug %>" class="btn">تصفح المنتجات</a></section>
+  <section class="card center empty"><div class="big-icon">🛒</div><p>السلة فارغة.</p><a href="/s/<%= store.slug %>" class="btn">تصفح المنتجات</a></section>
 <% } else { %>
-<div class="table-wrap"><table>
-  <tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>المجموع</th></tr>
-  <% lines.forEach(l => { %>
-  <tr>
-    <td><%= l.product.name %></td>
-    <td><%= money(l.product.price, store.currency) %></td>
-    <td>
-      <form method="post" action="/s/<%= store.slug %>/cart" class="row">
-        <%- include('../partials/csrf') %>
-        <input type="hidden" name="product_id" value="<%= l.product.id %>"><input type="hidden" name="mode" value="set">
-        <input type="number" name="quantity" value="<%= l.quantity %>" min="0" max="<%= l.product.stock %>" class="qty">
-        <button class="link">تحديث</button>
-      </form>
-    </td>
-    <td><%= money(l.subtotal, store.currency) %></td>
-  </tr>
-  <% }) %>
-  <tr><th colspan="3">الإجمالي</th><th><%= money(total, store.currency) %></th></tr>
-</table></div>
-<p class="row between"><a href="/s/<%= store.slug %>">← متابعة التسوق</a><a href="/s/<%= store.slug %>/checkout" class="btn big">إتمام الطلب</a></p>
+<section class="grid side">
+  <div class="card cart-list">
+    <% lines.forEach(l => { %>
+    <div class="cart-line">
+      <span class="thumb big"><% if (l.product.image_url) { %><img src="<%= l.product.image_url %>" alt=""><% } else { %><%= l.product.name.trim().charAt(0) %><% } %></span>
+      <div class="grow">
+        <a href="/s/<%= store.slug %>/p/<%= l.product.id %>"><strong><%= l.product.name %></strong></a>
+        <div class="muted small"><%= money(l.product.price, store.currency) %></div>
+        <form method="post" action="/s/<%= store.slug %>/cart" class="row qty-form">
+          <%- include('../partials/csrf') %>
+          <input type="hidden" name="product_id" value="<%= l.product.id %>"><input type="hidden" name="mode" value="set">
+          <input type="number" name="quantity" value="<%= l.quantity %>" min="0" max="<%= l.product.stock %>" class="qty" onchange="this.form.submit()" aria-label="الكمية">
+          <button class="link danger" name="quantity" value="0">إزالة</button>
+        </form>
+      </div>
+      <strong><%= money(l.subtotal, store.currency) %></strong>
+    </div>
+    <% }) %>
+  </div>
+  <div class="card">
+    <h3>ملخص الطلب</h3>
+    <%- include('../partials/totals') %>
+    <a href="/s/<%= store.slug %>/checkout" class="btn big full">إتمام الطلب</a>
+    <p class="center"><a href="/s/<%= store.slug %>">← متابعة التسوق</a></p>
+  </div>
+</section>
 <% } %>
-<%- include('../partials/footer') %>
+<%- include('../partials/store-footer') %>

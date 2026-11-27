@@ -261,3 +261,60 @@ html { scroll-behavior: smooth; }
 .thumb { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--brand) 12%, var(--bg)); color: var(--brand); font-weight: 800; display: grid; place-items: center; flex: none; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
 h2 small { font-size: 0.9rem; font-weight: 500; }
+
+/* Storefront customization */
+.owner-bar { background: #1f2937; color: #e5e7eb; font-size: 0.85rem; padding: 6px 0; }
+.owner-bar a { color: #fff; font-weight: 700; }
+.announce { background: var(--brand); color: #fff; text-align: center; padding: 8px 16px; font-weight: 700; font-size: 0.9rem; }
+.store-logo { display: inline-flex; align-items: center; gap: 10px; }
+.store-logo img { height: 36px; width: 36px; object-fit: cover; border-radius: 8px; }
+.shop-hero.has-banner { background-size: cover; background-position: center; padding: 80px 0 88px; }
+.shop-hero h1, .shop-hero p { text-shadow: 0 1px 8px rgb(0 0 0 / 25%); }
+img.shop-logo { object-fit: cover; padding: 0; background: #fff; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
+.chips a { white-space: nowrap; padding: 6px 16px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-weight: 500; }
+.chips a small { color: var(--muted); }
+.chips a.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.chips a.on small { color: rgb(255 255 255 / 80%); }
+.chips a:hover { text-decoration: none; border-color: var(--brand); }
+.price-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.price-row .price { margin: 0; }
+.price-row.big .price { font-size: 1.8rem; }
+.compare { font-size: 0.9rem; }
+.badge.sale, .tag.sale { background: #dc2626; color: #fff; }
+.crumbs { font-size: 0.9rem; margin-top: 16px; }
+.product-page h1 { margin-top: 8px; }
+.product-img span { font-size: 5rem; color: var(--brand); font-weight: 800; }
+.product-img { background: color-mix(in srgb, var(--brand) 10%, var(--bg)); padding: 0; }
+.buy { display: flex; gap: 10px; margin: 16px 0 10px; }
+.buy .btn { flex: 1; }
+.buy .qty { width: 90px; }
+.ok-text { color: #15803d; font-weight: 700; }
+.warn-text { color: #d97706; font-weight: 700; }
+.perks { list-style: none; padding: 16px; margin: 16px 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); display: grid; gap: 8px; }
+.cart-list { padding: 8px 20px; }
+.cart-line { display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.cart-line:last-child { border-bottom: 0; }
+.grow { flex: 1; min-width: 0; }
+.thumb.big { width: 72px; height: 72px; font-size: 1.6rem; }
+.qty-form { margin-top: 6px; gap: 10px; }
+.qty-form .qty { width: 70px; padding: 4px 8px; }
+.free-ship { background: color-mix(in srgb, var(--brand) 8%, var(--bg)); padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+.free-ship .progress { margin: 8px 0 0; background: var(--card); }
+.total-line { font-size: 1.2rem; }
+.pay-box { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 2px solid var(--brand); border-radius: 10px; font-size: 1.4rem; }
+.pay-box small { display: block; font-size: 0.85rem; }
+.foot-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 24px; }
+@media (max-width: 700px) { .foot-grid { grid-template-columns: 1fr; } }
+.foot-grid p { margin: 6px 0; }
+.foot-name { font-size: 1.2rem; }
+.socials { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.foot-bottom { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 14px; }
+.wa-float { position: fixed; bottom: 20px; left: 20px; width: 56px; height: 56px; border-radius: 50%; background: #25d366; display: grid; place-items: center; box-shadow: 0 6px 20px rgb(0 0 0 / 25%); z-index: 20; }
+.wa-float:hover { transform: scale(1.06); }
+.settings { display: grid; gap: 16px; max-width: 760px; }
+.settings h3 { margin: 0; }
+.prefix-input { display: flex; align-items: stretch; }
+.prefix-input span { padding: 10px 12px; background: var(--line); border-radius: 8px 0 0 8px; color: var(--muted); }
+.prefix-input input { border-radius: 0 8px 8px 0; }
+.save-bar { position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 40%); }
