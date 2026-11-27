@@ -1,6 +1,10 @@
 <%- include('partials/header', { title: 'إنشاء حساب' }) %>
 <section class="card narrow">
   <h1>إنشاء حساب تاجر</h1>
+  <% if (platform.signups_open !== '1') { %>
+    <div class="alert">التسجيل مغلق حالياً. عد لاحقاً<% if (platform.support_email) { %> أو راسلنا على <span dir="ltr"><%= platform.support_email %></span><% } %>.</div>
+    <p class="muted">لديك حساب؟ <a href="/login">سجّل الدخول</a></p>
+  <% } else { %>
   <%- include('partials/errors') %>
   <form method="post" action="/signup" class="form">
     <%- include('partials/csrf') %>
@@ -10,5 +14,6 @@
     <button class="btn">إنشاء الحساب</button>
   </form>
   <p class="muted">لديك حساب؟ <a href="/login">سجّل الدخول</a></p>
+  <% } %>
 </section>
 <%- include('partials/footer') %>

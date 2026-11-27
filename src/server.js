@@ -3,7 +3,7 @@ const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-const { db, transaction } = require('./db');
+const { db, transaction, getSettings, setSetting } = require('./db');
 const auth = require('./auth');
 const uploads = require('./uploads');
 const limiter = require('./limiter');
@@ -62,6 +62,11 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  res.locals.platform = getSettings();
+  next();
+});
+
 const STATUSES = {
   new: 'جديد',
   confirmed: 'مؤكد',
@@ -87,6 +92,8 @@ app.locals.SCHEMA = sections.SCHEMA;
 // Safe for embedding inside <script>: no "</script>" breakout.
 app.locals.js = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
 app.locals.json = (v, fallback = []) => { try { return JSON.parse(v); } catch { return fallback; } };
+// Short stable hash, e.g. so a dismissed announcement reappears when its text changes.
+app.locals.require_hash = (v) => crypto.createHash('sha1').update(String(v)).digest('hex').slice(0, 12);
 app.locals.money = (n, cur) => `${Number(n).toFixed(2)} ${cur || ''}`.trim();
 
 const str = (v, max = 500) => String(v ?? '').trim().slice(0, max);
@@ -122,6 +129,7 @@ const MIN = 60 * 1000;
 
 app.get('/signup', (req, res) => res.render('signup', { error: null, values: {} }));
 app.post('/signup', (req, res) => {
+  if (res.locals.platform.signups_open !== '1') return res.status(403).render('signup', { error: null, values: {} });
   const name = str(req.body.name, 100);
   const email = str(req.body.email, 200).toLowerCase();
   const password = String(req.body.password || '');
@@ -786,23 +794,72 @@ admin.use(auth.requireAdmin);
 admin.use(shell);
 admin.use((req, res, next) => {
   res.locals.pendingOrders = pendingFor(req.user.id);
+  res.locals.unreadChats = unreadChatsFor(req.user.id);
   next();
 });
+const likeOf = (q) => `%${q.replace(/[%_\\]/g, '\\$&')}%`;
 
+// Last N days as YYYY-MM-DD (UTC), oldest first.
+function lastDays(n) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) out.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+  return out;
+}
+function series(sql, days) {
+  const rows = Object.fromEntries(db.prepare(sql).all().map((r) => [r.day, r.v]));
+  return days.map((d) => ({ day: d, v: rows[d] || 0 }));
+}
+
+// ----- Overview -----
 admin.get('/', (req, res) => {
-  const q = str(req.query.q, 100);
-  const filter = ['active', 'suspended', 'empty'].includes(req.query.f) ? req.query.f : 'all';
-  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
   const totals = db.prepare(
-    `SELECT (SELECT COUNT(*) FROM users WHERE role != 'admin') AS merchants,
+    `SELECT (SELECT COUNT(*) FROM users) AS users,
+            (SELECT COUNT(*) FROM users WHERE date(created_at) = date('now')) AS users_today,
             (SELECT COUNT(*) FROM stores) AS stores,
+            (SELECT COUNT(*) FROM stores WHERE date(created_at) = date('now')) AS stores_today,
             (SELECT COUNT(*) FROM stores WHERE suspended = 1) AS suspended,
+            (SELECT COUNT(*) FROM stores s WHERE EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id AND p.active = 1)) AS live_stores,
             (SELECT COUNT(*) FROM products) AS products,
             (SELECT COUNT(*) FROM orders) AS orders,
-            (SELECT COUNT(*) FROM orders WHERE created_at >= datetime('now', '-7 days')) AS orders7,
+            (SELECT COUNT(*) FROM orders WHERE date(created_at) = date('now')) AS orders_today,
             (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled') AS gmv,
-            (SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')) AS signups7`
+            (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled' AND created_at >= datetime('now', '-30 days')) AS gmv30,
+            (SELECT COUNT(*) FROM orders WHERE status = 'cancelled') AS cancelled,
+            (SELECT COUNT(*) FROM stores WHERE custom_domain IS NOT NULL AND domain_verified = 0) AS domains_pending`
   ).get();
+  const days = lastDays(30);
+  const charts = {
+    orders: series(`SELECT date(created_at) AS day, COUNT(*) AS v FROM orders WHERE created_at >= date('now', '-29 days') GROUP BY day`, days),
+    gmv: series(`SELECT date(created_at) AS day, SUM(total) AS v FROM orders WHERE status != 'cancelled' AND created_at >= date('now', '-29 days') GROUP BY day`, days),
+    signups: series(`SELECT date(created_at) AS day, COUNT(*) AS v FROM users WHERE created_at >= date('now', '-29 days') GROUP BY day`, days),
+  };
+  const topStores = db.prepare(
+    `SELECT s.id, s.name, s.slug, s.color, s.logo_url, s.currency, COUNT(o.id) AS orders, COALESCE(SUM(o.total), 0) AS revenue
+     FROM stores s JOIN orders o ON o.store_id = s.id AND o.status != 'cancelled' AND o.created_at >= datetime('now', '-30 days')
+     GROUP BY s.id ORDER BY revenue DESC LIMIT 5`
+  ).all();
+  // Recent activity across the platform.
+  const activity = db.prepare(
+    `SELECT * FROM (
+       SELECT 'signup' AS kind, u.created_at AS at, u.name AS title, u.email AS detail, u.id AS ref, NULL AS store_id FROM users u
+       UNION ALL
+       SELECT 'store', s.created_at, s.name, u.name, s.id, s.id FROM stores s JOIN users u ON u.id = s.owner_id
+       UNION ALL
+       SELECT 'order', o.created_at, s.name, o.customer_name || ' · ' || printf('%.2f', o.total) || ' ' || s.currency, o.id, s.id FROM orders o JOIN stores s ON s.id = o.store_id
+     ) ORDER BY at DESC LIMIT 15`
+  ).all();
+  const attention = {
+    empty: db.prepare(`SELECT s.id, s.name, s.created_at, u.name AS owner FROM stores s JOIN users u ON u.id = s.owner_id
+                       WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id) ORDER BY s.id DESC LIMIT 5`).all(),
+  };
+  res.render('admin/overview', { totals, charts, topStores, activity, attention });
+});
+
+// ----- Stores -----
+admin.get('/stores', (req, res) => {
+  const q = str(req.query.q, 100);
+  const filter = ['active', 'suspended', 'empty', 'domain'].includes(req.query.f) ? req.query.f : 'all';
+  const like = likeOf(q);
   const stores = db.prepare(
     `SELECT s.*, u.name AS owner_name, u.email AS owner_email,
        (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) AS product_count,
@@ -810,40 +867,134 @@ admin.get('/', (req, res) => {
        (SELECT COALESCE(SUM(total), 0) FROM orders o WHERE o.store_id = s.id AND o.status != 'cancelled') AS revenue,
        (SELECT MAX(created_at) FROM orders o WHERE o.store_id = s.id) AS last_order
      FROM stores s JOIN users u ON u.id = s.owner_id
-     WHERE (? = '' OR s.name LIKE ? ESCAPE '\\' OR s.slug LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')
+     WHERE (? = '' OR s.name LIKE ? ESCAPE '\\' OR s.slug LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\' OR s.custom_domain LIKE ? ESCAPE '\\')
        AND (? = 'all' OR (? = 'active' AND s.suspended = 0) OR (? = 'suspended' AND s.suspended = 1)
-            OR (? = 'empty' AND NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id)))
-     ORDER BY s.id DESC LIMIT 200`
-  ).all(q, like, like, like, like, filter, filter, filter, filter);
-  res.render('admin/index', { totals, stores, q, filter });
+            OR (? = 'empty' AND NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id))
+            OR (? = 'domain' AND s.custom_domain IS NOT NULL))
+     ORDER BY s.id DESC LIMIT 300`
+  ).all(q, like, like, like, like, like, filter, filter, filter, filter, filter);
+  res.render('admin/index', { stores, q, filter });
 });
 
+function adminStore(req, res, next) {
+  const store = db.prepare('SELECT s.*, u.name AS owner_name, u.email AS owner_email, u.id AS owner_uid FROM stores s JOIN users u ON u.id = s.owner_id WHERE s.id = ?').get(req.params.id);
+  if (!store) return res.status(404).render('message', { title: 'غير موجود', message: 'المتجر غير موجود.' });
+  req.target = store;
+  next();
+}
+admin.get('/stores/:id', adminStore, (req, res) => {
+  const s = req.target;
+  const stats = db.prepare(
+    `SELECT (SELECT COUNT(*) FROM products WHERE store_id = ?) AS products,
+            (SELECT COUNT(*) FROM products WHERE store_id = ? AND active = 1) AS live_products,
+            (SELECT COUNT(*) FROM orders WHERE store_id = ?) AS orders,
+            (SELECT COUNT(*) FROM orders WHERE store_id = ? AND status = 'cancelled') AS cancelled,
+            (SELECT COALESCE(SUM(total), 0) FROM orders WHERE store_id = ? AND status != 'cancelled') AS revenue,
+            (SELECT COUNT(*) FROM conversations WHERE store_id = ?) AS chats,
+            (SELECT COUNT(*) FROM pages WHERE store_id = ?) AS pages`
+  ).get(s.id, s.id, s.id, s.id, s.id, s.id, s.id);
+  const orders = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC LIMIT 10').all(s.id);
+  const sales = series(`SELECT date(created_at) AS day, SUM(total) AS v FROM orders WHERE store_id = ${Number(s.id)} AND status != 'cancelled' AND created_at >= date('now', '-29 days') GROUP BY day`, lastDays(30));
+  res.render('admin/store', { s, stats, orders, sales, error: null });
+});
+admin.post('/stores/:id/suspend', adminStore, (req, res) => {
+  const on = req.body.suspend === '1' ? 1 : 0;
+  db.prepare('UPDATE stores SET suspended = ?, suspend_reason = ? WHERE id = ?').run(on, on ? str(req.body.reason, 200) : '', req.target.id);
+  const back = req.get('referer') || '';
+  res.redirect(back.includes('/admin') ? back : `/admin/stores/${req.target.id}`);
+});
+admin.post('/stores/:id/delete', adminStore, (req, res) => {
+  // Requires typing the store's slug to confirm. Deletes products, orders, pages and chats with it.
+  if (str(req.body.confirm, 60) !== req.target.slug) {
+    return res.status(400).render('message', { title: 'لم يُحذف', message: 'للتأكيد يجب كتابة رابط المتجر كما هو تماماً.' });
+  }
+  db.prepare('DELETE FROM stores WHERE id = ?').run(req.target.id);
+  res.redirect('/admin/stores');
+});
+
+// ----- Merchants -----
 admin.get('/merchants', (req, res) => {
+  const q = str(req.query.q, 100);
+  const like = likeOf(q);
   const merchants = db.prepare(
     `SELECT u.id, u.name, u.email, u.role, u.suspended, u.created_at,
        (SELECT COUNT(*) FROM stores s WHERE s.owner_id = u.id) AS store_count,
        (SELECT COUNT(*) FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = u.id) AS order_count,
        (SELECT MAX(created_at) FROM sessions se WHERE se.user_id = u.id) AS last_seen
-     FROM users u ORDER BY u.id DESC LIMIT 500`
-  ).all();
-  res.render('admin/merchants', { merchants });
+     FROM users u WHERE (? = '' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')
+     ORDER BY u.id DESC LIMIT 500`
+  ).all(q, like, like);
+  res.render('admin/merchants', { merchants, q });
 });
 
-admin.post('/stores/:id/suspend', (req, res) => {
-  const on = req.body.suspend === '1' ? 1 : 0;
-  db.prepare('UPDATE stores SET suspended = ?, suspend_reason = ? WHERE id = ?').run(on, on ? str(req.body.reason, 200) : '', req.params.id);
-  res.redirect(req.get('referer')?.includes('/admin') ? req.get('referer') : '/admin');
+function adminUser(req, res, next) {
+  const u = db.prepare('SELECT id, name, email, role, suspended, created_at FROM users WHERE id = ?').get(req.params.id);
+  if (!u) return res.status(404).render('message', { title: 'غير موجود', message: 'الحساب غير موجود.' });
+  req.target = u;
+  next();
+}
+admin.get('/merchants/:id', adminUser, (req, res) => {
+  const u = req.target;
+  const stores = db.prepare(
+    `SELECT s.*, (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) AS product_count,
+       (SELECT COUNT(*) FROM orders o WHERE o.store_id = s.id) AS order_count,
+       (SELECT COALESCE(SUM(total), 0) FROM orders o WHERE o.store_id = s.id AND o.status != 'cancelled') AS revenue
+     FROM stores s WHERE s.owner_id = ? ORDER BY s.id`
+  ).all(u.id);
+  const lastSeen = db.prepare('SELECT MAX(created_at) AS t FROM sessions WHERE user_id = ?').get(u.id).t;
+  res.render('admin/merchant', { u, stores, lastSeen });
 });
-
-admin.post('/merchants/:id/suspend', (req, res) => {
-  const target = db.prepare('SELECT id, role FROM users WHERE id = ?').get(req.params.id);
-  if (!target || target.role === 'admin') return res.status(400).render('message', { title: 'خطأ', message: 'لا يمكن إيقاف هذا الحساب.' });
+admin.post('/merchants/:id/suspend', adminUser, (req, res) => {
+  const t = req.target;
+  if (t.role === 'admin') return res.status(400).render('message', { title: 'خطأ', message: 'لا يمكن إيقاف حساب مسؤول.' });
   const on = req.body.suspend === '1' ? 1 : 0;
   transaction(() => {
-    db.prepare('UPDATE users SET suspended = ? WHERE id = ?').run(on, target.id);
-    if (on) auth.logoutEverywhere(target.id);
+    db.prepare('UPDATE users SET suspended = ? WHERE id = ?').run(on, t.id);
+    if (on) auth.logoutEverywhere(t.id);
   });
-  res.redirect('/admin/merchants');
+  const back = req.get('referer') || '';
+  res.redirect(back.includes('/admin/merchants/') ? back : '/admin/merchants');
+});
+admin.post('/merchants/:id/role', adminUser, (req, res) => {
+  const t = req.target;
+  if (t.id === req.user.id) return res.status(400).render('message', { title: 'خطأ', message: 'لا يمكنك تغيير صلاحيتك بنفسك.' });
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(req.body.role === 'admin' ? 'admin' : 'merchant', t.id);
+  res.redirect(`/admin/merchants/${t.id}`);
+});
+// Generate a one-hour password reset link for a merchant (to send them over WhatsApp, for example).
+admin.post('/merchants/:id/reset-link', adminUser, (req, res) => {
+  const t = req.target;
+  const token = crypto.randomBytes(32).toString('hex');
+  db.prepare('DELETE FROM password_resets WHERE user_id = ? OR expires_at < ?').run(t.id, Date.now());
+  db.prepare('INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(sha256(token), t.id, Date.now() + 60 * MIN);
+  const link = `${baseUrl(req)}/reset/${token}`;
+  res.render('admin/merchant-reset', { u: t, link });
+});
+
+// ----- Orders (platform-wide) -----
+admin.get('/orders', (req, res) => {
+  const q = str(req.query.q, 100);
+  const status = STATUSES[req.query.status] ? req.query.status : '';
+  const like = likeOf(q);
+  const orders = db.prepare(
+    `SELECT o.*, s.name AS store_name, s.currency, s.id AS sid FROM orders o JOIN stores s ON s.id = o.store_id
+     WHERE (? = '' OR o.customer_name LIKE ? ESCAPE '\\' OR o.customer_phone LIKE ? ESCAPE '\\' OR s.name LIKE ? ESCAPE '\\')
+       AND (? = '' OR o.status = ?)
+     ORDER BY o.id DESC LIMIT 300`
+  ).all(q, like, like, like, status, status);
+  const counts = Object.fromEntries(db.prepare('SELECT status, COUNT(*) AS n FROM orders GROUP BY status').all().map((r) => [r.status, r.n]));
+  res.render('admin/orders', { orders, q, status, counts });
+});
+
+// ----- Platform settings -----
+admin.get('/settings', (req, res) => res.render('admin/settings', { saved: !!req.query.saved }));
+admin.post('/settings', (req, res) => {
+  setSetting('signups_open', req.body.signups_open ? '1' : '0');
+  setSetting('notice', str(req.body.notice, 400));
+  setSetting('notice_level', ['info', 'warning', 'success'].includes(req.body.notice_level) ? req.body.notice_level : 'info');
+  setSetting('support_whatsapp', str(req.body.support_whatsapp, 20).replace(/\D/g, ''));
+  setSetting('support_email', str(req.body.support_email, 200));
+  res.redirect('/admin/settings?saved=1');
 });
 
 app.use('/admin', admin);

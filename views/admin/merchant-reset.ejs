@@ -1,0 +1,10 @@
+<%- include('../partials/header', { title: 'رابط الاستعادة' }) %>
+<p><a href="/admin/merchants/<%= u.id %>">← <%= u.name %></a></p>
+<section class="card narrow">
+  <h1>🔑 رابط استعادة كلمة المرور</h1>
+  <p>أرسل هذا الرابط إلى <strong><%= u.name %></strong>. صالح <strong>لساعة واحدة</strong> ويُستعمل مرة واحدة.</p>
+  <div class="copy-row"><input id="lnk" readonly dir="ltr" value="<%= link %>" onclick="this.select()"><button type="button" class="btn small" onclick="navigator.clipboard.writeText(document.getElementById('lnk').value).then(() => (this.textContent = '✓'))">نسخ</button></div>
+  <a class="btn wa full" target="_blank" rel="noopener" href="https://wa.me/?text=<%= encodeURIComponent('مرحباً ' + u.name + '، هذا رابط لتعيين كلمة مرور جديدة لحسابك في YASSER (صالح لساعة):\n' + link) %>">إرسال عبر واتساب</a>
+  <p class="muted small">⚠️ هذا الرابط يمنح الدخول للحساب. لا تشاركه إلا مع صاحب الحساب.</p>
+</section>
+<%- include('../partials/footer') %>

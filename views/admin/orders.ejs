@@ -1,0 +1,30 @@
+<%- include('../partials/header', { title: 'كل الطلبات' }) %>
+<%- include('nav', { heading: 'كل الطلبات', sub: 'طلبات كل المتاجر على المنصة' }) %>
+<nav class="ib-filters admin-status">
+  <a href="?q=<%= encodeURIComponent(q) %>" class="<%= !status ? 'on' : '' %>">الكل</a>
+  <% Object.entries(STATUSES).forEach(([k, l]) => { %><a href="?status=<%= k %>&q=<%= encodeURIComponent(q) %>" class="<%= status === k ? 'on' : '' %>"><%= l %> <small><%= counts[k] || 0 %></small></a><% }) %>
+</nav>
+<form class="shop-tools" method="get">
+  <% if (status) { %><input type="hidden" name="status" value="<%= status %>"><% } %>
+  <input type="search" name="q" value="<%= q %>" placeholder="🔍 ابحث باسم العميل أو هاتفه أو المتجر...">
+  <button class="btn">بحث</button>
+</form>
+<% if (!orders.length) { %>
+  <div class="card center empty"><div class="big-icon">🧾</div><p class="muted">لا توجد طلبات مطابقة.</p></div>
+<% } else { %>
+<div class="table-wrap"><table class="admin-table">
+  <tr><th>#</th><th>المتجر</th><th>العميل</th><th>الهاتف</th><th>المجموع</th><th>الحالة</th><th>التاريخ</th></tr>
+  <% orders.forEach(o => { %>
+  <tr>
+    <td><a href="/dashboard/stores/<%= o.sid %>/orders/<%= o.id %>">#<%= o.id %></a></td>
+    <td><a href="/admin/stores/<%= o.sid %>"><%= o.store_name %></a></td>
+    <td><%= o.customer_name %></td>
+    <td dir="ltr" class="small"><%= o.customer_phone %></td>
+    <td><%= money(o.total, o.currency) %></td>
+    <td><span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span></td>
+    <td class="muted small"><%= o.created_at.slice(0, 16) %></td>
+  </tr>
+  <% }) %>
+</table></div>
+<% } %>
+<%- include('../partials/footer') %>

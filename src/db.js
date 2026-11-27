@@ -106,6 +106,10 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT ''
+);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(store_id, customer_phone);
 `);
 
@@ -152,6 +156,17 @@ addColumn('products', 'cost_price', 'REAL NOT NULL DEFAULT 0');
 addColumn('orders', 'ip', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
 
+// Platform-wide settings (key/value).
+const SETTING_DEFAULTS = { signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '' };
+function getSettings() {
+  const out = { ...SETTING_DEFAULTS };
+  for (const r of db.prepare('SELECT key, value FROM settings').all()) out[r.key] = r.value;
+  return out;
+}
+function setSetting(key, value) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value));
+}
+
 function transaction(fn) {
   db.exec('BEGIN');
   try {
@@ -164,4 +179,4 @@ function transaction(fn) {
   }
 }
 
-module.exports = { db, transaction };
+module.exports = { db, transaction, getSettings, setSetting };

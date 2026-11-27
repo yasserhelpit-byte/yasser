@@ -1,0 +1,31 @@
+<%- include('../partials/header', { title: 'إعدادات المنصة' }) %>
+<%- include('nav', { heading: 'إعدادات المنصة' }) %>
+<% if (saved) { %><div class="alert ok">✓ تم الحفظ.</div><% } %>
+<form method="post" class="settings">
+  <%- include('../partials/csrf') %>
+  <section class="card form">
+    <h3>👤 التسجيل</h3>
+    <label class="switch"><input type="checkbox" name="signups_open" value="1" <%= platform.signups_open === '1' ? 'checked' : '' %>><span class="slider"></span> السماح بتسجيل تجار جدد</label>
+    <p class="muted small">عند الإغلاق تظهر صفحة التسجيل برسالة «التسجيل مغلق حالياً»، ويبقى التجار الحاليون قادرين على الدخول.</p>
+  </section>
+  <section class="card form">
+    <h3>📢 إعلان لكل التجار</h3>
+    <p class="muted small">يظهر شريطاً أعلى لوحة تحكم كل التجار (مثلاً: صيانة، ميزة جديدة، عرض). اتركه فارغاً لإخفائه.</p>
+    <textarea name="notice" rows="3" maxlength="400" placeholder="مثال: 🎉 أضفنا الدردشة المباشرة! فعّلها من صفحة الرسائل."><%= platform.notice %></textarea>
+    <div class="seg">
+      <% [['info', 'ℹ️ معلومة'], ['success', '🎉 خبر جيد'], ['warning', '⚠️ تنبيه']].forEach(([k, l]) => { %>
+        <label><input type="radio" name="notice_level" value="<%= k %>" <%= platform.notice_level === k ? 'checked' : '' %>><span><%= l %></span></label>
+      <% }) %>
+    </div>
+  </section>
+  <section class="card form">
+    <h3>🆘 دعم التجار</h3>
+    <p class="muted small">يظهر رابط «تحتاج مساعدة؟» في القائمة الجانبية لكل التجار.</p>
+    <div class="row">
+      <label>رقم واتساب الدعم<input name="support_whatsapp" dir="ltr" placeholder="212600000000" value="<%= platform.support_whatsapp %>"></label>
+      <label>بريد الدعم<input name="support_email" type="email" dir="ltr" placeholder="support@yasser.ma" value="<%= platform.support_email %>"></label>
+    </div>
+  </section>
+  <div class="save-bar"><button class="btn big">💾 حفظ</button></div>
+</form>
+<%- include('../partials/footer') %>

@@ -45,11 +45,17 @@
       <% if (!cur) { %><a href="/dashboard/stores/new" class="<%= on('/dashboard/stores/new', true) %>"><span>➕</span>متجر جديد</a><% } %>
       <% if (user.isAdmin) { %>
         <div class="side-label">الإدارة</div>
-        <a href="/admin" class="<%= on('/admin', true) %>"><span>🛡️</span>كل المتاجر</a>
+        <a href="/admin" class="<%= on('/admin', true) %>"><span>📈</span>نظرة عامة</a>
+        <a href="/admin/stores" class="<%= on('/admin/stores') %>"><span>🏪</span>كل المتاجر</a>
         <a href="/admin/merchants" class="<%= on('/admin/merchants') %>"><span>👥</span>التجار</a>
+        <a href="/admin/orders" class="<%= on('/admin/orders') %>"><span>🧾</span>كل الطلبات</a>
+        <a href="/admin/settings" class="<%= on('/admin/settings') %>"><span>⚙️</span>إعدادات المنصة</a>
       <% } %>
     </nav>
 
+    <% if (!user.isAdmin && (platform.support_whatsapp || platform.support_email)) { %>
+    <a class="side-help" href="<%= platform.support_whatsapp ? 'https://wa.me/' + platform.support_whatsapp : 'mailto:' + platform.support_email %>" target="_blank" rel="noopener">🆘 تحتاج مساعدة؟ <small>تواصل مع فريق YASSER</small></a>
+    <% } %>
     <div class="side-user">
       <span class="u-avatar"><%= user.name.trim().charAt(0).toUpperCase() %></span>
       <span class="u-info"><strong><%= user.name %></strong><small dir="ltr"><%= user.email %></small></span>
@@ -63,6 +69,13 @@
       <button type="button" class="burger" onclick="document.body.classList.add('side-open')" aria-label="القائمة"><span></span><span></span><span></span></button>
       <a href="/dashboard" class="logo">YASSER</a>
     </header>
+    <% if (platform.notice) { %>
+    <div class="notice-bar n-<%= platform.notice_level %>" id="notice-bar" data-key="<%= require_hash(platform.notice) %>" hidden>
+      <span>📢 <%= platform.notice %></span>
+      <button type="button" aria-label="إخفاء" onclick="try { localStorage.setItem('yasser:notice', this.parentNode.dataset.key) } catch {} this.parentNode.hidden = true">✕</button>
+    </div>
+    <script>(function () { const b = document.getElementById('notice-bar'); let seen = ''; try { seen = localStorage.getItem('yasser:notice') } catch {} b.hidden = seen === b.dataset.key; })();</script>
+    <% } %>
     <% if (typeof actingAs !== 'undefined' && actingAs) { %>
     <div class="acting-bar">🛡️ أنت تدير متجر التاجر <strong><%= actingAs.name %></strong> (<span dir="ltr"><%= actingAs.email %></span>) بصفتك مسؤولاً. أي تعديل هنا يغيّر متجره. <a href="/admin">← لوحة المسؤول</a></div>
     <% } %>

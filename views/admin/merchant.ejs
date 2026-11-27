@@ -1,0 +1,60 @@
+<%- include('../partials/header', { title: u.name }) %>
+<p><a href="/admin/merchants">← التجار</a></p>
+<div class="ov-head">
+  <div class="ov-id">
+    <span class="ov-logo" style="background: var(--brand)"><%= u.name.trim().charAt(0).toUpperCase() %></span>
+    <div>
+      <div class="row ov-title"><h1><%= u.name %></h1>
+        <% if (u.role === 'admin') { %><span class="badge s-new">مسؤول</span><% } %>
+        <span class="badge <%= u.suspended ? 's-cancelled' : 's-delivered' %>"><%= u.suspended ? '● موقوف' : '● نشط' %></span></div>
+      <p class="muted"><span dir="ltr"><%= u.email %></span> · سجّل <%= u.created_at.slice(0, 10) %> · آخر دخول <%= lastSeen ? lastSeen.slice(0, 10) : '—' %></p>
+    </div>
+  </div>
+</div>
+
+<div class="ov-grid">
+  <div class="ov-col">
+    <section class="card">
+      <h3>🏪 متاجره (<%= stores.length %>)</h3>
+      <% if (!stores.length) { %><p class="muted">لم ينشئ أي متجر بعد.</p><% } %>
+      <div class="list">
+        <% stores.forEach(s => { %>
+          <a class="list-row" href="/admin/stores/<%= s.id %>">
+            <span class="thumb" style="background: <%= s.color %>; color: #fff"><% if (s.logo_url) { %><img src="<%= s.logo_url %>" alt=""><% } else { %><%= s.name.trim().charAt(0).toUpperCase() %><% } %></span>
+            <span class="list-main"><strong><%= s.name %></strong><small><%= s.product_count %> منتج · <%= s.order_count %> طلب</small></span>
+            <% if (s.suspended) { %><span class="badge s-cancelled">موقوف</span><% } %>
+            <strong class="list-amt"><%= money(s.revenue, s.currency) %></strong>
+          </a>
+        <% }) %>
+      </div>
+    </section>
+  </div>
+  <div class="ov-col">
+    <section class="card">
+      <h3>🔑 نسي كلمة المرور؟</h3>
+      <p class="muted small">أنشئ رابطاً لتعيين كلمة مرور جديدة (صالح لساعة واحدة)، ثم أرسله للتاجر عبر واتساب.</p>
+      <form method="post" action="/admin/merchants/<%= u.id %>/reset-link"><%- include('../partials/csrf') %><button class="btn ghost full">إنشاء رابط استعادة</button></form>
+    </section>
+    <% if (u.id !== user.id) { %>
+    <section class="card">
+      <h3>🛡️ الصلاحية</h3>
+      <form method="post" action="/admin/merchants/<%= u.id %>/role" onsubmit="return confirm('تغيير صلاحية هذا الحساب؟')">
+        <%- include('../partials/csrf') %>
+        <input type="hidden" name="role" value="<%= u.role === 'admin' ? 'merchant' : 'admin' %>">
+        <button class="btn ghost full"><%= u.role === 'admin' ? 'إزالة صلاحية المسؤول' : 'جعله مسؤولاً' %></button>
+      </form>
+    </section>
+    <% } %>
+    <% if (u.role !== 'admin') { %>
+    <section class="card">
+      <h3><%= u.suspended ? '▶️ إعادة تفعيل الحساب' : '⏸️ إيقاف الحساب' %></h3>
+      <p class="muted small"><%= u.suspended ? 'سيتمكن من الدخول مجدداً.' : 'سيتم تسجيل خروجه ولن يستطيع الدخول. متاجره تبقى كما هي (أوقفها منفصلة إن أردت).' %></p>
+      <form method="post" action="/admin/merchants/<%= u.id %>/suspend" <% if (!u.suspended) { %>onsubmit="return confirm('إيقاف هذا الحساب؟')"<% } %>>
+        <%- include('../partials/csrf') %><input type="hidden" name="suspend" value="<%= u.suspended ? 0 : 1 %>">
+        <button class="btn full <%= u.suspended ? '' : 'ghost danger-btn' %>"><%= u.suspended ? 'إعادة التفعيل' : 'إيقاف الحساب' %></button>
+      </form>
+    </section>
+    <% } %>
+  </div>
+</div>
+<%- include('../partials/footer') %>

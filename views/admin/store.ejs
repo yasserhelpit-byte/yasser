@@ -1,0 +1,72 @@
+<%- include('../partials/header', { title: s.name }) %>
+<p><a href="/admin/stores">← كل المتاجر</a></p>
+<div class="ov-head">
+  <div class="ov-id">
+    <span class="ov-logo" style="background: <%= s.color %>"><% if (s.logo_url) { %><img src="<%= s.logo_url %>" alt=""><% } else { %><%= s.name.trim().charAt(0).toUpperCase() %><% } %></span>
+    <div>
+      <div class="row ov-title"><h1><%= s.name %></h1><span class="badge <%= s.suspended ? 's-cancelled' : 's-delivered' %>"><%= s.suspended ? '● موقوف' : '● نشط' %></span></div>
+      <p class="muted">أُنشئ <%= s.created_at.slice(0, 10) %> · <a href="/s/<%= s.slug %>" target="_blank" dir="ltr">/s/<%= s.slug %> ↗</a><% if (s.custom_domain) { %> · 🌐 <span dir="ltr"><%= s.custom_domain %></span> <%= s.domain_verified ? '✓' : '(بانتظار التحقق)' %><% } %></p>
+    </div>
+  </div>
+  <div class="row">
+    <a href="/dashboard/stores/<%= s.id %>" class="btn">إدارة المتجر</a>
+  </div>
+</div>
+<% if (s.suspended && s.suspend_reason) { %><div class="alert">⛔ سبب الإيقاف: <%= s.suspend_reason %></div><% } %>
+
+<section class="kpis">
+  <div class="kpi"><span class="kpi-ic c1">💰</span><div><small>المبيعات</small><strong><%= money(stats.revenue, s.currency) %></strong><em><%= stats.orders %> طلب · <%= stats.cancelled %> ملغى</em></div></div>
+  <div class="kpi"><span class="kpi-ic c4">📦</span><div><small>المنتجات</small><strong><%= stats.products %></strong><em><%= stats.live_products %> منشور</em></div></div>
+  <div class="kpi"><span class="kpi-ic c2">💬</span><div><small>محادثات</small><strong><%= stats.chats %></strong><em><%= stats.pages %> صفحة مخصّصة</em></div></div>
+  <div class="kpi"><span class="kpi-ic c3">📉</span><div><small>نسبة الإلغاء</small><strong><%= stats.orders ? Math.round(stats.cancelled / stats.orders * 100) : 0 %>%</strong><em>من كل الطلبات</em></div></div>
+</section>
+
+<div class="ov-grid">
+  <div class="ov-col">
+    <section class="card"><div class="card-head"><h3>المبيعات · 30 يوماً</h3></div><%- include('../partials/minichart', { data: sales, fmt: (v) => money(v, s.currency), label: 'المبيعات' }) %></section>
+    <section class="card">
+      <div class="card-head"><h3>آخر الطلبات</h3></div>
+      <% if (!orders.length) { %><div class="chart-empty"><span>📭</span><p>لا توجد طلبات.</p></div><% } %>
+      <div class="list">
+        <% orders.forEach(o => { %>
+          <a class="list-row" href="/dashboard/stores/<%= s.id %>/orders/<%= o.id %>">
+            <span class="list-av"><%= o.customer_name.trim().charAt(0) %></span>
+            <span class="list-main"><strong><%= o.customer_name %></strong><small>#<%= o.id %> · <%= o.created_at.slice(0, 16) %></small></span>
+            <span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span>
+            <strong class="list-amt"><%= money(o.total, s.currency) %></strong>
+          </a>
+        <% }) %>
+      </div>
+    </section>
+  </div>
+  <div class="ov-col">
+    <section class="card">
+      <h3>👤 صاحب المتجر</h3>
+      <a class="list-row" href="/admin/merchants/<%= s.owner_uid %>">
+        <span class="list-av"><%= s.owner_name.trim().charAt(0) %></span>
+        <span class="list-main"><strong><%= s.owner_name %></strong><small dir="ltr"><%= s.owner_email %></small></span>
+      </a>
+      <% if (s.whatsapp) { %><a class="btn small wa full" href="https://wa.me/<%= s.whatsapp %>" target="_blank" rel="noopener">مراسلة على واتساب</a><% } %>
+    </section>
+    <section class="card">
+      <h3><%= s.suspended ? '▶️ إعادة تفعيل' : '⏸️ إيقاف المتجر' %></h3>
+      <p class="muted small"><%= s.suspended ? 'سيعود المتجر للظهور للعملاء واستقبال الطلبات.' : 'يختفي المتجر عن العملاء ولا يستقبل طلبات. يبقى صاحبه قادراً على الدخول.' %></p>
+      <form method="post" action="/admin/stores/<%= s.id %>/suspend" class="form">
+        <%- include('../partials/csrf') %>
+        <input type="hidden" name="suspend" value="<%= s.suspended ? 0 : 1 %>">
+        <% if (!s.suspended) { %><input name="reason" maxlength="200" placeholder="سبب الإيقاف (يظهر لك فقط)"><% } %>
+        <button class="btn <%= s.suspended ? '' : 'ghost danger-btn' %>"><%= s.suspended ? 'إعادة التفعيل' : 'إيقاف المتجر' %></button>
+      </form>
+    </section>
+    <section class="card danger-zone">
+      <h3>🗑️ حذف المتجر نهائياً</h3>
+      <p class="muted small">يحذف المتجر مع كل منتجاته وطلباته وصفحاته ومحادثاته. <strong>لا يمكن التراجع.</strong> للتأكيد اكتب رابط المتجر: <code dir="ltr"><%= s.slug %></code></p>
+      <form method="post" action="/admin/stores/<%= s.id %>/delete" class="form" onsubmit="return confirm('حذف المتجر <%= s.slug %> نهائياً؟')">
+        <%- include('../partials/csrf') %>
+        <input name="confirm" dir="ltr" autocomplete="off" placeholder="<%= s.slug %>" required>
+        <button class="btn danger-solid">حذف نهائي</button>
+      </form>
+    </section>
+  </div>
+</div>
+<%- include('../partials/footer') %>

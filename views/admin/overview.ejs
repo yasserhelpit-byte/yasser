@@ -1,0 +1,63 @@
+<%- include('../partials/header', { title: 'لوحة المسؤول' }) %>
+<%
+  const n = (v) => Math.round(v).toLocaleString('en');
+  const KIND = { signup: ['👤', 'تاجر جديد سجّل'], store: ['🏪', 'متجر جديد'], order: ['🧾', 'طلب جديد'] };
+  const when = (t) => t ? t.replace('T', ' ').slice(5, 16) : '';
+%>
+<%- include('nav', { heading: 'نظرة عامة على المنصة', sub: 'كل ما يحدث في YASSER في مكان واحد.' }) %>
+
+<section class="kpis">
+  <a class="kpi" href="/admin/merchants"><span class="kpi-ic c2">👥</span><div><small>الحسابات</small><strong><%= totals.users %></strong><em>اليوم: +<%= totals.users_today %></em></div></a>
+  <a class="kpi" href="/admin/stores"><span class="kpi-ic c4">🏪</span><div><small>المتاجر</small><strong><%= totals.stores %></strong><em><%= totals.live_stores %> فيها منتجات · <%= totals.suspended %> موقوف</em></div></a>
+  <a class="kpi" href="/admin/orders"><span class="kpi-ic c3">🧾</span><div><small>الطلبات</small><strong><%= totals.orders %></strong><em>اليوم: +<%= totals.orders_today %> · ملغاة <%= totals.cancelled %></em></div></a>
+  <div class="kpi"><span class="kpi-ic c1">💰</span><div><small>قيمة المبيعات</small><strong><%= n(totals.gmv) %></strong><em>آخر 30 يوماً: <%= n(totals.gmv30) %></em></div></div>
+</section>
+
+<section class="grid three">
+  <div class="card"><div class="card-head"><h3>🧾 الطلبات</h3><small class="muted">30 يوماً</small></div><%- include('../partials/minichart', { data: charts.orders, fmt: (v) => v + ' طلب', label: 'الطلبات' }) %></div>
+  <div class="card"><div class="card-head"><h3>💰 المبيعات</h3><small class="muted">30 يوماً</small></div><%- include('../partials/minichart', { data: charts.gmv, fmt: n, label: 'المبيعات' }) %></div>
+  <div class="card"><div class="card-head"><h3>👤 التسجيلات</h3><small class="muted">30 يوماً</small></div><%- include('../partials/minichart', { data: charts.signups, fmt: (v) => v + ' حساب', label: 'التسجيلات' }) %></div>
+</section>
+
+<div class="ov-grid">
+  <div class="ov-col">
+    <section class="card">
+      <div class="card-head"><h3>⚡ آخر النشاطات</h3></div>
+      <% if (!activity.length) { %><div class="chart-empty"><span>🌱</span><p>لا يوجد نشاط بعد.</p></div><% } %>
+      <div class="list">
+        <% activity.forEach(a => { const k = KIND[a.kind]; const link = a.kind === 'signup' ? '/admin/merchants/' + a.ref : '/admin/stores/' + a.store_id; %>
+          <a class="list-row" href="<%= link %>">
+            <span class="list-av act-<%= a.kind %>"><%= k[0] %></span>
+            <span class="list-main"><strong><%= k[1] %> · <%= a.title %></strong><small><%= a.detail %></small></span>
+            <small class="muted"><%= when(a.at) %></small>
+          </a>
+        <% }) %>
+      </div>
+    </section>
+  </div>
+  <div class="ov-col">
+    <section class="card">
+      <h3>🏆 أفضل المتاجر (30 يوماً)</h3>
+      <% if (!topStores.length) { %><p class="muted small">لا توجد مبيعات في آخر 30 يوماً.</p><% } %>
+      <% topStores.forEach((t, i) => { %>
+        <a class="top-row link-row" href="/admin/stores/<%= t.id %>"><b><%= i + 1 %></b><span><%= t.name %></span><small class="muted"><%= n(t.revenue) %> <%= t.currency %> · <%= t.orders %> طلب</small></a>
+      <% }) %>
+    </section>
+    <section class="card">
+      <h3>👀 تحتاج انتباهك</h3>
+      <% if (totals.domains_pending) { %><p><a href="/admin/stores?f=domain">🌐 <%= totals.domains_pending %> نطاق بانتظار التحقق</a></p><% } %>
+      <% if (attention.empty.length) { %>
+        <p class="muted small">متاجر بدون منتجات (قد يحتاج أصحابها مساعدة):</p>
+        <% attention.empty.forEach(e => { %><p class="row between"><a href="/admin/stores/<%= e.id %>"><%= e.name %></a><small class="muted"><%= e.owner %></small></p><% }) %>
+      <% } else if (!totals.domains_pending) { %><p class="muted small">✅ لا شيء يحتاج تدخلك الآن.</p><% } %>
+    </section>
+    <section class="card">
+      <h3>⚙️ اختصارات</h3>
+      <div class="quick">
+        <a href="/admin/settings"><span>📢</span>إعلان للتجار</a>
+        <a href="/admin/settings"><span><%= platform.signups_open === '1' ? '🟢' : '🔴' %></span><%= platform.signups_open === '1' ? 'التسجيل مفتوح' : 'التسجيل مغلق' %></a>
+      </div>
+    </section>
+  </div>
+</div>
+<%- include('../partials/footer') %>

@@ -1,24 +1,15 @@
-<%- include('../partials/header', { title: 'لوحة المسؤول' }) %>
-<%- include('nav', { heading: 'كل المتاجر', tab: 'stores' }) %>
-
-<section class="grid four stats">
-  <div class="card stat"><span class="icon">👥</span><span class="muted">التجار</span><strong><%= totals.merchants %></strong><small class="muted">+<%= totals.signups7 %> هذا الأسبوع</small></div>
-  <div class="card stat"><span class="icon">🏪</span><span class="muted">المتاجر</span><strong><%= totals.stores %></strong><small class="muted"><%= totals.suspended %> موقوف</small></div>
-  <div class="card stat"><span class="icon">🧾</span><span class="muted">الطلبات</span><strong><%= totals.orders %></strong><small class="muted">+<%= totals.orders7 %> هذا الأسبوع</small></div>
-  <div class="card stat"><span class="icon">💰</span><span class="muted">قيمة المبيعات</span><strong><%= Math.round(totals.gmv).toLocaleString('en') %></strong><small class="muted"><%= totals.products %> منتج</small></div>
-</section>
-
-<form class="shop-tools" method="get" action="/admin">
-  <input type="search" name="q" value="<%= q %>" placeholder="🔍 ابحث باسم المتجر أو التاجر أو البريد...">
+<%- include('../partials/header', { title: 'المتاجر' }) %>
+<%- include('nav', { heading: 'كل المتاجر', sub: stores.length + ' متجر' }) %>
+<form class="shop-tools" method="get" action="/admin/stores">
+  <input type="search" name="q" value="<%= q %>" placeholder="🔍 ابحث باسم المتجر أو التاجر أو البريد أو النطاق...">
   <select name="f" onchange="this.form.submit()">
-    <option value="all" <%= filter === 'all' ? 'selected' : '' %>>كل المتاجر</option>
-    <option value="active" <%= filter === 'active' ? 'selected' : '' %>>النشطة</option>
-    <option value="suspended" <%= filter === 'suspended' ? 'selected' : '' %>>الموقوفة</option>
-    <option value="empty" <%= filter === 'empty' ? 'selected' : '' %>>بدون منتجات</option>
+    <% [['all', 'كل المتاجر'], ['active', 'النشطة'], ['suspended', 'الموقوفة'], ['empty', 'بدون منتجات'], ['domain', 'بنطاق خاص']].forEach(([k, l]) => { %>
+      <option value="<%= k %>" <%= filter === k ? 'selected' : '' %>><%= l %></option>
+    <% }) %>
   </select>
   <button class="btn">بحث</button>
 </form>
-<p class="muted"><%= stores.length %> متجر<% if (q) { %> · <a href="/admin">مسح البحث</a><% } %></p>
+<% if (q) { %><p class="muted"><a href="/admin/stores">مسح البحث</a></p><% } %>
 
 <% if (!stores.length) { %>
   <div class="card center empty"><div class="big-icon">🏪</div><p class="muted">لا توجد متاجر مطابقة.</p></div>
@@ -27,27 +18,17 @@
   <tr><th>المتجر</th><th>التاجر</th><th>المنتجات</th><th>الطلبات</th><th>المبيعات</th><th>آخر طلب</th><th>الحالة</th><th></th></tr>
   <% stores.forEach(s => { %>
   <tr class="<%= s.suspended ? 'row-off' : '' %>">
-    <td><div class="prod-cell">
+    <td><a class="prod-cell" href="/admin/stores/<%= s.id %>">
       <span class="thumb" style="background: <%= s.color %>; color: #fff"><% if (s.logo_url) { %><img src="<%= s.logo_url %>" alt=""><% } else { %><%= s.name.trim().charAt(0).toUpperCase() %><% } %></span>
-      <div><strong><%= s.name %></strong><br><a href="/s/<%= s.slug %>" target="_blank" class="muted small" dir="ltr">/s/<%= s.slug %> ↗</a></div>
-    </div></td>
-    <td><%= s.owner_name %><br><span class="muted small" dir="ltr"><%= s.owner_email %></span></td>
+      <span><strong><%= s.name %></strong><br><small class="muted" dir="ltr"><%= s.domain_verified ? s.custom_domain : '/s/' + s.slug %></small></span>
+    </a></td>
+    <td><%= s.owner_name %><br><small class="muted" dir="ltr"><%= s.owner_email %></small></td>
     <td><%= s.product_count %></td>
     <td><%= s.order_count %></td>
     <td><%= money(s.revenue, s.currency) %></td>
     <td class="muted small"><%= s.last_order ? s.last_order.slice(0, 10) : '—' %></td>
-    <td><span class="badge <%= s.suspended ? 's-cancelled' : 's-delivered' %>"><%= s.suspended ? 'موقوف' : 'نشط' %></span>
-      <% if (s.suspended && s.suspend_reason) { %><br><small class="muted"><%= s.suspend_reason %></small><% } %></td>
-    <td><div class="row">
-      <a href="/dashboard/stores/<%= s.id %>" class="btn small ghost">إدارة</a>
-      <% if (s.suspended) { %>
-        <form method="post" action="/admin/stores/<%= s.id %>/suspend" class="inline"><%- include('../partials/csrf') %><input type="hidden" name="suspend" value="0"><button class="link">إعادة تفعيل</button></form>
-      <% } else { %>
-        <form method="post" action="/admin/stores/<%= s.id %>/suspend" class="inline" onsubmit="const r = prompt('سبب الإيقاف (يظهر لك فقط):', ''); if (r === null) return false; this.reason.value = r;">
-          <%- include('../partials/csrf') %><input type="hidden" name="suspend" value="1"><input type="hidden" name="reason"><button class="link danger">إيقاف</button>
-        </form>
-      <% } %>
-    </div></td>
+    <td><span class="badge <%= s.suspended ? 's-cancelled' : 's-delivered' %>"><%= s.suspended ? 'موقوف' : 'نشط' %></span></td>
+    <td><a href="/admin/stores/<%= s.id %>" class="btn small ghost">التفاصيل</a></td>
   </tr>
   <% }) %>
 </table></div>

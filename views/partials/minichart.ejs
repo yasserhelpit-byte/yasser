@@ -1,0 +1,11 @@
+<%
+  // data: [{ day, v }]; fmt: value formatter. Thin 30-day bar chart.
+  const mx = Math.max(1, ...data.map(d => d.v));
+  const total = data.reduce((a, d) => a + d.v, 0);
+%>
+<div class="mchart" role="img" aria-label="<%= label %>">
+  <% data.forEach((d, i) => { %>
+    <span class="mc-bar <%= d.v ? '' : 'zero' %>" style="height: <%= Math.max(2, Math.round(d.v / mx * 100)) %>%" title="<%= d.day %>: <%= fmt(d.v) %>"></span>
+  <% }) %>
+</div>
+<div class="mc-axis"><span><%= data[0].day.slice(5) %></span><span><%= data[data.length - 1].day.slice(5) %></span></div>
