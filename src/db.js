@@ -83,6 +83,29 @@ CREATE TABLE IF NOT EXISTS pages (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (store_id, slug)
 );
+CREATE TABLE IF NOT EXISTS conversations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  visitor_key TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open',
+  unread_merchant INTEGER NOT NULL DEFAULT 0,
+  unread_visitor INTEGER NOT NULL DEFAULT 0,
+  last_message TEXT NOT NULL DEFAULT '',
+  last_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_conv_store ON conversations(store_id, last_at);
+CREATE INDEX IF NOT EXISTS idx_conv_visitor ON conversations(store_id, visitor_key);
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('visitor', 'merchant')),
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(store_id, customer_phone);
 `);
 
@@ -114,6 +137,8 @@ addColumn('stores', 'custom_domain', 'TEXT');
 addColumn('stores', 'domain_token', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'domain_verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_domain ON stores(custom_domain) WHERE custom_domain IS NOT NULL');
+addColumn('stores', 'chat_enabled', 'INTEGER NOT NULL DEFAULT 1');
+addColumn('stores', 'chat_greeting', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'home_sections', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'font', "TEXT NOT NULL DEFAULT 'tajawal'");
 addColumn('stores', 'radius', "TEXT NOT NULL DEFAULT 'soft'");

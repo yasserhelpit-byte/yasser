@@ -232,8 +232,11 @@ const shell = (req, res, next) => {
 dash.use(shell);
 const pendingFor = (userId) =>
   db.prepare(`SELECT COUNT(*) AS n FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ? AND o.status = 'new'`).get(userId).n;
+const unreadChatsFor = (userId) =>
+  db.prepare('SELECT COALESCE(SUM(c.unread_merchant), 0) AS n FROM conversations c JOIN stores s ON s.id = c.store_id WHERE s.owner_id = ?').get(userId).n;
 dash.use((req, res, next) => {
   res.locals.pendingOrders = pendingFor(req.user.id);
+  res.locals.unreadChats = unreadChatsFor(req.user.id);
   next();
 });
 
@@ -245,7 +248,12 @@ dash.get('/notifications', (req, res) => {
        FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ? ORDER BY o.id DESC LIMIT 1`
     )
     .get(req.user.id);
-  res.json({ pending: res.locals.pendingOrders, latest: latest || null });
+  const latestChat = db.prepare(
+    `SELECT c.id, c.store_id, c.name, c.last_message, m.id AS mid FROM conversations c JOIN stores s ON s.id = c.store_id
+     JOIN messages m ON m.id = (SELECT MAX(id) FROM messages WHERE conversation_id = c.id AND sender = 'visitor')
+     WHERE s.owner_id = ? AND c.unread_merchant > 0 ORDER BY m.id DESC LIMIT 1`
+  ).get(req.user.id);
+  res.json({ pending: res.locals.pendingOrders, latest: latest || null, unreadChats: res.locals.unreadChats, latestChat: latestChat || null });
 });
 
 function ownStore(req, res, next) {
@@ -585,6 +593,60 @@ dash.post('/stores/:storeId/design', ownStore, (req, res) => {
   db.prepare('UPDATE stores SET home_sections = ?, font = ?, radius = ?, header_style = ?, color = ? WHERE id = ?')
     .run(JSON.stringify(list), font, radius, header, color, req.store.id);
   res.redirect(`/dashboard/stores/${req.store.id}/design?saved=1`);
+});
+
+// ----- Inbox (storefront chat) -----
+function ownConv(req, res, next) {
+  const conv = db.prepare('SELECT * FROM conversations WHERE id = ? AND store_id = ?').get(req.params.convId, req.store.id);
+  if (!conv) return res.status(404).json({ error: 'not found' });
+  req.conv = conv;
+  next();
+}
+const inboxList = (storeId, filter) => db.prepare(
+  `SELECT id, name, phone, status, unread_merchant, last_message, last_at FROM conversations
+   WHERE store_id = ? AND (? = 'all' OR status = ?) ORDER BY last_at DESC LIMIT 200`
+).all(storeId, filter, filter);
+
+dash.get(['/stores/:storeId/inbox', '/stores/:storeId/inbox/:convId'], ownStore, (req, res) => {
+  const filter = ['open', 'closed'].includes(req.query.f) ? req.query.f : 'all';
+  let active = null;
+  let messages = [];
+  if (req.params.convId) {
+    active = db.prepare('SELECT * FROM conversations WHERE id = ? AND store_id = ?').get(req.params.convId, req.store.id);
+    if (!active) return res.redirect(`/dashboard/stores/${req.store.id}/inbox`);
+    messages = db.prepare(`SELECT ${msgFields} FROM messages WHERE conversation_id = ? ORDER BY id`).all(active.id);
+    // Opening a conversation marks it read (before the list and the sidebar badge are computed).
+    db.prepare('UPDATE conversations SET unread_merchant = 0 WHERE id = ?').run(active.id);
+    active.unread_merchant = 0;
+    res.locals.unreadChats = unreadChatsFor(req.user.id);
+  }
+  const conversations = inboxList(req.store.id, filter);
+  res.render('dashboard/inbox', { conversations, active, messages, filter, wide: true });
+});
+// JSON for live updates of the inbox
+dash.get('/stores/:storeId/inbox.json', ownStore, (req, res) => {
+  res.json({ conversations: inboxList(req.store.id, ['open', 'closed'].includes(req.query.f) ? req.query.f : 'all') });
+});
+dash.get('/stores/:storeId/inbox/:convId/messages', ownStore, ownConv, (req, res) => {
+  const messages = db.prepare(`SELECT ${msgFields} FROM messages WHERE conversation_id = ? AND id > ? ORDER BY id`).all(req.conv.id, Number(req.query.after) || 0);
+  if (messages.length) db.prepare('UPDATE conversations SET unread_merchant = 0 WHERE id = ?').run(req.conv.id);
+  res.json({ messages });
+});
+dash.post('/stores/:storeId/inbox/:convId/reply', ownStore, ownConv, (req, res) => {
+  const body = str(req.body.body, 2000);
+  if (!body) return res.status(400).json({ error: 'اكتب ردك.' });
+  const { lastInsertRowid } = db.prepare("INSERT INTO messages (conversation_id, sender, body) VALUES (?, 'merchant', ?)").run(req.conv.id, body);
+  db.prepare("UPDATE conversations SET unread_visitor = unread_visitor + 1, unread_merchant = 0, last_message = ?, last_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
+    .run(body.slice(0, 140), req.conv.id);
+  res.json({ message: db.prepare(`SELECT ${msgFields} FROM messages WHERE id = ?`).get(lastInsertRowid) });
+});
+dash.post('/stores/:storeId/inbox/:convId/status', ownStore, ownConv, (req, res) => {
+  db.prepare('UPDATE conversations SET status = ? WHERE id = ?').run(req.body.status === 'closed' ? 'closed' : 'open', req.conv.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/inbox/${req.conv.id}`);
+});
+dash.post('/stores/:storeId/chat-settings', ownStore, (req, res) => {
+  db.prepare('UPDATE stores SET chat_enabled = ?, chat_greeting = ? WHERE id = ?').run(req.body.chat_enabled ? 1 : 0, str(req.body.chat_greeting, 300), req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/inbox`);
 });
 
 // ----- Custom domain -----
@@ -1021,6 +1083,62 @@ shop.get('/thanks/:orderId', (req, res) => {
   if (!order) return res.redirect(req.base || '/');
   res.render('store/thanks', { order });
 });
+
+// ----- Storefront live chat -----
+// A visitor is identified per store by a hash of their session token (never the token itself).
+const visitorKey = (req) => sha256(`${req.store.id}:${req.session.token}`);
+const msgFields = 'id, sender, body, created_at';
+function visitorConversation(req) {
+  return db.prepare("SELECT * FROM conversations WHERE store_id = ? AND visitor_key = ? ORDER BY id DESC LIMIT 1").get(req.store.id, visitorKey(req));
+}
+shop.get('/chat', (req, res) => {
+  const conv = visitorConversation(req);
+  if (!conv) return res.json({ messages: [], unread: 0 });
+  const after = Number(req.query.after) || 0;
+  const messages = db.prepare(`SELECT ${msgFields} FROM messages WHERE conversation_id = ? AND id > ? ORDER BY id LIMIT 200`).all(conv.id, after);
+  if (req.query.read && conv.unread_visitor) db.prepare('UPDATE conversations SET unread_visitor = 0 WHERE id = ?').run(conv.id);
+  res.json({ messages, unread: req.query.read ? 0 : conv.unread_visitor, name: conv.name });
+});
+shop.post('/chat', (req, res) => {
+  if (!req.store.chat_enabled) return res.status(403).json({ error: 'الدردشة غير مفعّلة.' });
+  const body = str(req.body.body, 1000);
+  if (!body) return res.status(400).json({ error: 'اكتب رسالتك.' });
+  if (!limiter.hit(`chat:${req.ip}`, 15, MIN) || !limiter.hit(`chat-day:${req.ip}`, 300, 24 * 60 * MIN)) {
+    return res.status(429).json({ error: 'رسائل كثيرة. انتظر قليلاً.' });
+  }
+  const name = str(req.body.name, 60);
+  const phone = cleanPhone(req.body.phone);
+  let conv = visitorConversation(req);
+  let isNew = false;
+  if (!conv) {
+    const { lastInsertRowid } = db.prepare('INSERT INTO conversations (store_id, visitor_key, name, phone) VALUES (?, ?, ?, ?)')
+      .run(req.store.id, visitorKey(req), name, validPhone(phone) ? phone : '');
+    conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(lastInsertRowid);
+    isNew = true;
+  } else if ((name && !conv.name) || (validPhone(phone) && !conv.phone)) {
+    db.prepare('UPDATE conversations SET name = COALESCE(NULLIF(name, \'\'), ?), phone = COALESCE(NULLIF(phone, \'\'), ?) WHERE id = ?')
+      .run(name, validPhone(phone) ? phone : '', conv.id);
+  }
+  const { lastInsertRowid: mid } = db.prepare("INSERT INTO messages (conversation_id, sender, body) VALUES (?, 'visitor', ?)").run(conv.id, body);
+  db.prepare("UPDATE conversations SET status = 'open', unread_merchant = unread_merchant + 1, last_message = ?, last_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
+    .run(body.slice(0, 140), conv.id);
+  if (isNew) notifyNewChat(req, conv, body);
+  res.json({ message: db.prepare(`SELECT ${msgFields} FROM messages WHERE id = ?`).get(mid) });
+});
+
+function notifyNewChat(req, conv, body) {
+  const owner = db.prepare('SELECT email FROM users WHERE id = ?').get(req.store.owner_id);
+  const link = `${baseUrl(req)}/dashboard/stores/${req.store.id}/inbox/${conv.id}`;
+  const who = conv.name || 'زائر';
+  mailer.send({
+    to: owner?.email,
+    subject: `💬 رسالة جديدة من ${who} · ${req.store.name}`,
+    text: `${who} كتب في متجر ${req.store.name}:\n\n${body}\n\nردّ عليه: ${link}`,
+    html: mailer.layout('رسالة جديدة في متجرك', `<p><strong>${mailer.esc(who)}</strong> كتب:</p>
+      <blockquote style="margin:0;padding:12px 16px;background:#f6f7f9;border-radius:8px">${mailer.esc(body)}</blockquote>
+      <p><a href="${mailer.esc(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">الرد على الرسالة</a></p>`),
+  });
+}
 
 // Email the merchant about a new order (account email + store contact email).
 function notifyNewOrder(req, orderId) {

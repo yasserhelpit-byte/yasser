@@ -23,13 +23,18 @@
     const t = document.getElementById('toast');
     t.innerHTML = '';
     const a = document.createElement('a');
-    a.href = '/dashboard/stores/' + o.store_id + '/orders/' + o.id;
-    a.textContent = '🛒 طلب جديد #' + o.id + ' من ' + o.customer_name + ' — ' + Number(o.total).toFixed(2) + ' ' + o.currency;
+    if (o.chat) {
+      a.href = '/dashboard/stores/' + o.store_id + '/inbox/' + o.id;
+      a.textContent = '💬 ' + o.customer_name + ': ' + String(o.text || '').slice(0, 80);
+    } else {
+      a.href = '/dashboard/stores/' + o.store_id + '/orders/' + o.id;
+      a.textContent = '🛒 طلب جديد #' + o.id + ' من ' + o.customer_name + ' — ' + Number(o.total).toFixed(2) + ' ' + o.currency;
+    }
     t.appendChild(a); t.hidden = false;
     setTimeout(() => (t.hidden = true), 15000);
     beep();
     if ('Notification' in window && Notification.permission === 'granted') {
-      const n = new Notification('طلب جديد · ' + o.store_name, { body: a.textContent });
+      const n = new Notification(o.chat ? 'رسالة جديدة' : 'طلب جديد · ' + o.store_name, { body: a.textContent });
       n.onclick = () => { window.focus(); location.href = a.href; };
     }
   }
@@ -41,6 +46,15 @@
       document.title = (d.pending ? '(' + d.pending + ') ' : '') + baseTitle;
       const badge = document.getElementById('pending-badge');
       if (badge) badge.textContent = d.pending;
+      // New chat messages
+      if (d.latestChat) {
+        const CK = 'yasser:lastChatMsg';
+        let seen = 0; try { seen = Number(localStorage.getItem(CK)) || 0; } catch {}
+        const onThread = location.pathname.endsWith('/inbox/' + d.latestChat.id);
+        if (!first && d.latestChat.mid > seen && !onThread) show({ id: d.latestChat.id, chat: true, store_id: d.latestChat.store_id, customer_name: d.latestChat.name || 'زائر', text: d.latestChat.last_message, store_name: '' });
+        try { localStorage.setItem(CK, d.latestChat.mid); } catch {}
+      }
+      const cu = document.getElementById('chat-unread'); if (cu) { cu.textContent = d.unreadChats || ''; cu.hidden = !d.unreadChats; }
       if (d.latest) {
         if (!first && d.latest.id > get()) show(d.latest);
         if (first && !get()) set(d.latest.id);

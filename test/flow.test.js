@@ -27,7 +27,7 @@ function client(base) {
   req.cookie = () => cookie;
   return req;
 }
-const csrfOf = (html) => html.match(/name="_csrf" value="([^"]+)"/)[1];
+const csrfOf = (html) => (html.match(/name="_csrf" value="([^"]+)"/) || html.match(/csrf = "([a-f0-9]{64})"/))[1];
 
 test('merchant creates a store, customer orders, stock decreases', async (t) => {
   const server = app.listen(0);
@@ -318,4 +318,57 @@ test('custom domains serve the store at the root', async (t) => {
   const r2 = await m2('POST', '/dashboard/stores', { _csrf: c2, name: 'Other Shop', slug: 'other-shop' });
   const sid2 = r2.location.match(/\d+$/)[0];
   assert.match((await m2('POST', `/dashboard/stores/${sid2}/domain`, { _csrf: c2, domain: 'lamps-shop.com' })).text, /مربوط بمتجر آخر/);
+});
+
+test('storefront chat: visitor writes, merchant replies in the inbox', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+
+  const m = client(base);
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Chat Owner', email: 'chat@example.com', password: 'password123' });
+  const mc = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = (await m('POST', '/dashboard/stores', { _csrf: mc, name: 'Chat Shop', slug: 'chat-shop' })).location.match(/\d+$/)[0];
+
+  // Visitor opens the store: widget present; writes a message.
+  const v = client(base);
+  const page = await v('GET', '/s/chat-shop');
+  assert.match(page.text, /id="chat-fab"/);
+  const vc = csrfOf(page.text);
+  const post = (c, url, body, csrf) => fetch(base + url, { method: 'POST', body: new URLSearchParams(body), headers: { cookie: c.cookie(), 'x-csrf-token': csrf } });
+  let r = await post(v, '/s/chat-shop/chat', { body: 'هل التوصيل متوفر؟', name: 'Salma', phone: '0611223344' }, vc);
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual((await post(v, '/s/chat-shop/chat', { body: '   ' }, vc)).status, 400);
+  // The merchant got one email for the new conversation.
+  assert.strictEqual(sent.filter((mail) => mail.to === 'chat@example.com' && /Salma/.test(mail.subject)).length, 1);
+
+  // Merchant sees it (unread badge), opens it, replies.
+  let inbox = (await m('GET', `/dashboard/stores/${sid}/inbox`)).text;
+  assert.match(inbox, /Salma/);
+  assert.match(inbox, /id="chat-unread" >1</);
+  const cid = inbox.match(/inbox\/(\d+)\?f=all/)[1];
+  const thread = (await m('GET', `/dashboard/stores/${sid}/inbox/${cid}`)).text;
+  assert.match(thread, /هل التوصيل متوفر؟/);
+  assert.match(thread, /wa\.me\/212611223344/);
+  r = await post(m, `/dashboard/stores/${sid}/inbox/${cid}/reply`, { body: 'نعم، لكل المدن <b>' }, csrfOf(thread));
+  assert.strictEqual(r.status, 200);
+
+  // Visitor gets the reply (as JSON text, never HTML).
+  const got = await (await fetch(base + '/s/chat-shop/chat?after=0', { headers: { cookie: v.cookie() } })).json();
+  assert.deepStrictEqual(got.messages.map((x) => x.sender), ['visitor', 'merchant']);
+  assert.strictEqual(got.messages[1].body, 'نعم، لكل المدن <b>');
+  assert.strictEqual(got.unread, 1);
+
+  // Another visitor can't see this conversation; other merchants can't open it.
+  const stranger = await (await fetch(base + '/s/chat-shop/chat')).json();
+  assert.strictEqual(stranger.messages.length, 0);
+  const o = client(base);
+  await o('POST', '/signup', { _csrf: csrfOf((await o('GET', '/signup')).text), name: 'Nosy', email: 'nosy@example.com', password: 'password123' });
+  assert.strictEqual((await o('GET', `/dashboard/stores/${sid}/inbox/${cid}`)).status, 404);
+
+  // Disabling chat hides the widget and refuses messages.
+  await m('POST', `/dashboard/stores/${sid}/chat-settings`, { _csrf: csrfOf(thread), chat_greeting: 'hi' });
+  assert.doesNotMatch((await v('GET', '/s/chat-shop')).text, /id="chat-fab"/);
+  assert.strictEqual((await post(v, '/s/chat-shop/chat', { body: 'hello?' }, vc)).status, 403);
 });

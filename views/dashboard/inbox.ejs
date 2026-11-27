@@ -1,0 +1,142 @@
+<%- include('../partials/header', { title: 'الرسائل' }) %>
+<%
+  const ago = (iso) => iso ? iso.replace('T', ' ').slice(0, 16) : '';
+  const nameOf = (c) => c.name || ('زائر #' + c.id);
+%>
+<div class="inbox" id="inbox" data-store="<%= store.id %>" data-active="<%= active ? active.id : '' %>" data-filter="<%= filter %>">
+  <aside class="ib-list">
+    <div class="ib-list-head">
+      <h2>💬 الرسائل</h2>
+      <details class="ib-settings">
+        <summary title="إعدادات الدردشة">⚙️</summary>
+        <form method="post" action="/dashboard/stores/<%= store.id %>/chat-settings" class="form">
+          <%- include('../partials/csrf') %>
+          <label class="switch"><input type="checkbox" name="chat_enabled" value="1" <%= store.chat_enabled ? 'checked' : '' %>><span class="slider"></span> الدردشة مفعّلة في المتجر</label>
+          <label>رسالة الترحيب<textarea name="chat_greeting" rows="2" maxlength="300" placeholder="مرحباً 👋 كيف يمكننا مساعدتك؟"><%= store.chat_greeting %></textarea></label>
+          <button class="btn small">حفظ</button>
+        </form>
+      </details>
+    </div>
+    <nav class="ib-filters">
+      <% [['all', 'الكل'], ['open', 'مفتوحة'], ['closed', 'مغلقة']].forEach(([k, l]) => { %>
+        <a href="?f=<%= k %>" class="<%= filter === k ? 'on' : '' %>"><%= l %></a>
+      <% }) %>
+    </nav>
+    <div class="ib-convs" id="ib-convs">
+      <% if (!conversations.length) { %>
+        <div class="ib-empty">لا توجد محادثات بعد.<br><small>عندما يكتب لك عميل من متجرك ستظهر رسالته هنا.</small></div>
+      <% } %>
+      <% conversations.forEach(c => { %>
+        <a href="/dashboard/stores/<%= store.id %>/inbox/<%= c.id %>?f=<%= filter %>" class="ib-conv <%= active && active.id === c.id ? 'on' : '' %> <%= c.unread_merchant ? 'unread' : '' %>" data-id="<%= c.id %>">
+          <span class="list-av"><%= nameOf(c).charAt(0) %></span>
+          <span class="ib-conv-main">
+            <span class="row between"><strong><%= nameOf(c) %></strong><small><%= ago(c.last_at).slice(5) %></small></span>
+            <span class="ib-last"><%= c.last_message %></span>
+          </span>
+          <% if (c.unread_merchant) { %><b class="pending"><%= c.unread_merchant %></b><% } %>
+        </a>
+      <% }) %>
+    </div>
+  </aside>
+
+  <section class="ib-thread">
+    <% if (!active) { %>
+      <div class="ib-placeholder">
+        <div class="big-icon">💬</div>
+        <h3>اختر محادثة</h3>
+        <p class="muted">رسائل عملائك من نافذة الدردشة في متجرك تصل إلى هنا، وتصلك رسالة بريد عند كل محادثة جديدة.</p>
+        <% if (!store.chat_enabled) { %><p class="alert">الدردشة معطّلة في متجرك. فعّلها من ⚙️.</p><% } %>
+      </div>
+    <% } else { %>
+      <header class="ib-head">
+        <a href="/dashboard/stores/<%= store.id %>/inbox?f=<%= filter %>" class="ib-back" aria-label="رجوع">→</a>
+        <span class="list-av"><%= nameOf(active).charAt(0) %></span>
+        <div class="ib-who">
+          <strong><%= nameOf(active) %></strong>
+          <small><%= active.phone ? '' : 'لم يترك رقم هاتف' %><% if (active.phone) { %><a href="tel:<%= active.phone %>" dir="ltr"><%= active.phone %></a><% } %> · بدأت <%= ago(active.created_at) %></small>
+        </div>
+        <div class="row ib-actions">
+          <% if (active.phone) { %><a class="btn small wa" href="https://wa.me/<%= waNumber(active.phone) %>" target="_blank" rel="noopener">متابعة على واتساب</a><% } %>
+          <form method="post" action="/dashboard/stores/<%= store.id %>/inbox/<%= active.id %>/status" class="inline">
+            <%- include('../partials/csrf') %><input type="hidden" name="status" value="<%= active.status === 'open' ? 'closed' : 'open' %>">
+            <button class="btn small ghost"><%= active.status === 'open' ? '✓ إغلاق المحادثة' : '↺ إعادة فتح' %></button>
+          </form>
+        </div>
+      </header>
+      <div class="ib-msgs" id="ib-msgs">
+        <% messages.forEach(m => { %>
+          <div class="bubble <%= m.sender === 'merchant' ? 'me' : 'them' %>" id="m<%= m.id %>"><%= m.body %><time data-iso="<%= m.created_at %>"></time></div>
+        <% }) %>
+      </div>
+      <form class="ib-reply" id="ib-reply">
+        <div class="ib-canned">
+          <% ['شكراً لتواصلك! 😊', 'نعم، التوصيل متوفر لكل المدن.', 'مدة التوصيل من 24 إلى 72 ساعة.', 'سنتصل بك قريباً لتأكيد طلبك.'].forEach(t => { %><button type="button"><%= t %></button><% }) %>
+        </div>
+        <div class="ib-input">
+          <textarea id="ib-text" rows="2" maxlength="2000" placeholder="اكتب ردك… (Enter للإرسال، Shift+Enter لسطر جديد)"></textarea>
+          <button class="btn">إرسال</button>
+        </div>
+      </form>
+    <% } %>
+  </section>
+</div>
+<script>
+(function () {
+  const box = document.getElementById('inbox'), sid = box.dataset.store, cid = box.dataset.active, filter = box.dataset.filter;
+  const csrf = <%- js(csrf) %>;
+  const base = '/dashboard/stores/' + sid + '/inbox';
+  const fmt = (iso) => { try { return new Date(iso).toLocaleString('ar', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }); } catch { return ''; } };
+  document.querySelectorAll('time[data-iso]').forEach((t) => (t.textContent = fmt(t.dataset.iso)));
+  const list = document.getElementById('ib-msgs');
+  const scroll = () => list && (list.scrollTop = list.scrollHeight);
+  scroll();
+  let last = list ? Math.max(0, ...[...list.querySelectorAll('.bubble')].map((b) => +b.id.slice(1))) : 0;
+  function add(m) {
+    if (document.getElementById('m' + m.id)) return;
+    last = Math.max(last, m.id);
+    const d = document.createElement('div');
+    d.id = 'm' + m.id; d.className = 'bubble ' + (m.sender === 'merchant' ? 'me' : 'them'); d.textContent = m.body;
+    const t = document.createElement('time'); t.textContent = fmt(m.created_at); d.appendChild(t);
+    list.appendChild(d); scroll();
+  }
+  if (cid) {
+    const text = document.getElementById('ib-text');
+    async function send(v) {
+      v = v.trim(); if (!v) return;
+      text.value = '';
+      const r = await fetch(base + '/' + cid + '/reply', { method: 'POST', body: new URLSearchParams({ body: v }), headers: { 'x-csrf-token': csrf } });
+      if (r.ok) add((await r.json()).message); else text.value = v;
+    }
+    document.getElementById('ib-reply').onsubmit = (e) => { e.preventDefault(); send(text.value); };
+    text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text.value); } });
+    document.querySelectorAll('.ib-canned button').forEach((b) => (b.onclick = () => { text.value = (text.value ? text.value + ' ' : '') + b.textContent; text.focus(); }));
+    setInterval(async () => {
+      try { const r = await fetch(base + '/' + cid + '/messages?after=' + last); if (r.ok) (await r.json()).messages.forEach(add); } catch {}
+    }, 4000);
+  }
+  // Refresh the conversation list (new chats, unread counts).
+  const convs = document.getElementById('ib-convs');
+  setInterval(async () => {
+    try {
+      const r = await fetch(base + '.json?f=' + filter); if (!r.ok) return;
+      const { conversations } = await r.json();
+      convs.innerHTML = '';
+      if (!conversations.length) { convs.innerHTML = '<div class="ib-empty">لا توجد محادثات بعد.</div>'; return; }
+      conversations.forEach((c) => {
+        const a = document.createElement('a');
+        const name = c.name || ('زائر #' + c.id);
+        a.href = base + '/' + c.id + '?f=' + filter;
+        a.className = 'ib-conv' + (String(c.id) === cid ? ' on' : '') + (c.unread_merchant && String(c.id) !== cid ? ' unread' : '');
+        a.innerHTML = '<span class="list-av"></span><span class="ib-conv-main"><span class="row between"><strong></strong><small></small></span><span class="ib-last"></span></span>';
+        a.querySelector('.list-av').textContent = name.charAt(0);
+        a.querySelector('strong').textContent = name;
+        a.querySelector('small').textContent = (c.last_at || '').replace('T', ' ').slice(5, 16);
+        a.querySelector('.ib-last').textContent = c.last_message;
+        if (c.unread_merchant && String(c.id) !== cid) { const b = document.createElement('b'); b.className = 'pending'; b.textContent = c.unread_merchant; a.appendChild(b); }
+        convs.appendChild(a);
+      });
+    } catch {}
+  }, 8000);
+})();
+</script>
+<%- include('../partials/footer') %>
