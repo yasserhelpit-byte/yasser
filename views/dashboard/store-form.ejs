@@ -25,10 +25,26 @@
       <label>لون المتجر<input name="color" type="color" value="<%= v.color || '#0f766e' %>"></label>
       <label>العملة<input name="currency" dir="ltr" maxlength="5" value="<%= v.currency || 'MAD' %>"></label>
     </div>
-    <label>رابط صورة الشعار (اللوغو)<input name="logo_url" type="url" dir="ltr" placeholder="https://..." value="<%= v.logo_url || '' %>"></label>
-    <label>رابط صورة الغلاف (البانر)<input name="banner_url" type="url" dir="ltr" placeholder="https://..." value="<%= v.banner_url || '' %>"></label>
+    <% if (editing) { %>
+    <% [['logo_url', 'الشعار (اللوغو)', 'مربعة، 400×400 مثلاً'], ['banner_url', 'صورة الغلاف (البانر)', 'عريضة، 1600×600 مثلاً']].forEach(([field, label, hint]) => { %>
+      <div class="img-field" data-field="<%= field %>">
+        <span class="label"><%= label %> <small class="muted">· <%= hint %></small></span>
+        <div class="img-field-row">
+          <div class="img-box <%= field === 'banner_url' ? 'wide' : '' %>"><% if (v[field]) { %><img src="<%= v[field] %>" alt=""><% } else { %><span class="muted">لا توجد صورة</span><% } %></div>
+          <div class="img-actions">
+            <div class="dropzone mini" data-upload="/dashboard/stores/<%= store.id %>/uploads">
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+              <button type="button" class="btn small">📤 رفع صورة</button>
+            </div>
+            <button type="button" class="link danger remove-img">إزالة</button>
+            <div class="dz-status"></div>
+          </div>
+        </div>
+        <input type="hidden" name="<%= field %>" value="<%= v[field] || '' %>">
+      </div>
+    <% }) %>
+    <% } else { %><p class="muted small">يمكنك رفع الشعار وصورة الغلاف بعد إنشاء المتجر.</p><% } %>
     <label>شريط الإعلانات أعلى المتجر<input name="announcement" maxlength="200" placeholder="مثال: 🎉 خصم 20% على كل المنتجات هذا الأسبوع" value="<%= v.announcement || '' %>"></label>
-    <p class="muted small">💡 لاستخدام صورة من جهازك: ارفعها على موقع مثل imgbb.com ثم انسخ رابطها المباشر.</p>
   </section>
 
   <section class="card form">
@@ -61,4 +77,20 @@
 
   <div class="save-bar"><button class="btn big">💾 حفظ</button></div>
 </form>
+<% if (editing) { %>
+<script>window.CSRF = <%- js(csrf) %>;</script>
+<script src="/upload.js"></script>
+<script>
+document.querySelectorAll('.img-field').forEach((f) => {
+  const hidden = f.querySelector('input[type=hidden]');
+  const box = f.querySelector('.img-box');
+  const zone = f.querySelector('.dropzone');
+  const file = zone.querySelector('input[type=file]');
+  const show = (src) => { hidden.value = src; box.innerHTML = src ? '<img alt="">' : '<span class="muted">لا توجد صورة</span>'; if (src) box.querySelector('img').src = src; };
+  zone.querySelector('button').onclick = () => file.click();
+  setupDropzone(zone, file, f.querySelector('.dz-status'), (urls) => show(urls[0]), () => 1);
+  f.querySelector('.remove-img').onclick = () => show('');
+});
+</script>
+<% } %>
 <%- include('../partials/footer') %>

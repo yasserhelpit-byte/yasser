@@ -1,7 +1,15 @@
 <%- include('../partials/store-header', { title: product.name }) %>
 <p class="crumbs"><a href="/s/<%= store.slug %>">الرئيسية</a><% if (product.category) { %> / <a href="/s/<%= store.slug %>?c=<%= encodeURIComponent(product.category) %>#products"><%= product.category %></a><% } %> / <span class="muted"><%= product.name %></span></p>
 <section class="grid two product-page">
-  <div class="card product-img"><% if (product.image_url) { %><img src="<%= product.image_url %>" alt="<%= product.name %>"><% } else { %><span><%= product.name.trim().charAt(0) %></span><% } %></div>
+  <% const imgs = json(product.images).length ? json(product.images) : (product.image_url ? [product.image_url] : []); const opts = json(product.options); %>
+  <div class="gallery-view">
+    <div class="card product-img" id="main-img"><% if (imgs.length) { %><img src="<%= imgs[0] %>" alt="<%= product.name %>"><% } else { %><span><%= product.name.trim().charAt(0) %></span><% } %></div>
+    <% if (imgs.length > 1) { %>
+    <div class="thumbs">
+      <% imgs.forEach((src, i) => { %><button type="button" class="<%= i === 0 ? 'on' : '' %>" onclick="document.querySelector('#main-img img').src=this.querySelector('img').src; document.querySelectorAll('.thumbs button').forEach(b=>b.classList.remove('on')); this.classList.add('on')"><img src="<%= src %>" alt=""></button><% }) %>
+    </div>
+    <% } %>
+  </div>
   <div>
     <% if (product.category) { %><span class="pill"><%= product.category %></span><% } %>
     <h1><%= product.name %></h1>
@@ -11,8 +19,19 @@
       <form method="post" action="/s/<%= store.slug %>/cart" class="buy">
         <%- include('../partials/csrf') %>
         <input type="hidden" name="product_id" value="<%= product.id %>">
-        <input type="number" name="quantity" value="1" min="1" max="<%= product.stock %>" class="qty" aria-label="الكمية">
-        <button class="btn big">🛒 أضف إلى السلة</button>
+        <% opts.forEach((o, i) => { %>
+          <fieldset class="opt-pick">
+            <legend><%= o.name %></legend>
+            <% o.values.forEach((val, j) => { %>
+              <label><input type="radio" name="opt<%= i %>" value="<%= val %>" required><span><%= val %></span></label>
+            <% }) %>
+          </fieldset>
+        <% }) %>
+        <% if (choose) { %><p class="alert">الرجاء اختيار <%= opts.map(o => o.name).join(' و') %>.</p><% } %>
+        <div class="buy-row">
+          <input type="number" name="quantity" value="1" min="1" max="<%= product.stock %>" class="qty" aria-label="الكمية">
+          <button class="btn big">🛒 أضف إلى السلة</button>
+        </div>
       </form>
       <% if (store.whatsapp) { %>
         <a class="btn big wa full" target="_blank" rel="noopener" href="https://wa.me/<%= store.whatsapp %>?text=<%= encodeURIComponent('مرحباً، أريد طلب: ' + product.name + ' (' + money(product.price, store.currency) + ')') %>">💬 اطلب عبر واتساب</a>

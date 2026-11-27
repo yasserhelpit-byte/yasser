@@ -10,10 +10,11 @@
       <span class="thumb big"><% if (l.product.image_url) { %><img src="<%= l.product.image_url %>" alt=""><% } else { %><%= l.product.name.trim().charAt(0) %><% } %></span>
       <div class="grow">
         <a href="/s/<%= store.slug %>/p/<%= l.product.id %>"><strong><%= l.product.name %></strong></a>
+        <% if (l.variant) { %><div class="variant"><%= l.variant %></div><% } %>
         <div class="muted small"><%= money(l.product.price, store.currency) %></div>
         <form method="post" action="/s/<%= store.slug %>/cart" class="row qty-form">
           <%- include('../partials/csrf') %>
-          <input type="hidden" name="product_id" value="<%= l.product.id %>"><input type="hidden" name="mode" value="set">
+          <input type="hidden" name="key" value="<%= l.key %>"><input type="hidden" name="mode" value="set">
           <input type="number" name="quantity" value="<%= l.quantity %>" min="0" max="<%= l.product.stock %>" class="qty" onchange="this.form.submit()" aria-label="الكمية">
           <button class="link danger" name="quantity" value="0">إزالة</button>
         </form>

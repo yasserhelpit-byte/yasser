@@ -73,7 +73,9 @@
         <% if (p.category) { %><small class="muted"><%= p.category %></small><% } %>
         <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="name"><%= p.name %></a>
         <div class="price-row"><%- include('../partials/price', { p }) %></div>
-        <% if (p.stock) { %>
+        <% if (p.stock && json(p.options).length) { %>
+          <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="btn small full">اختر <%= json(p.options).map(o => o.name).join(' و') %></a>
+        <% } else if (p.stock) { %>
           <form method="post" action="/s/<%= store.slug %>/cart">
             <%- include('../partials/csrf') %>
             <input type="hidden" name="product_id" value="<%= p.id %>">

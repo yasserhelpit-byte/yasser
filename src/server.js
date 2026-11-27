@@ -2,13 +2,16 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 const { db, transaction } = require('./db');
 const auth = require('./auth');
+const uploads = require('./uploads');
 
 const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/uploads', express.static(uploads.uploadsDir, { maxAge: '30d', immutable: true }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(auth.sessionMiddleware);
@@ -19,7 +22,8 @@ app.use((req, res, next) => {
   const csrf = crypto.createHmac('sha256', CSRF_SECRET).update(req.session.token).digest('hex');
   res.locals.csrf = csrf;
   res.locals.flash = null;
-  if (req.method === 'POST' && req.body._csrf !== csrf) {
+  const sent = req.body?._csrf || req.get('x-csrf-token');
+  if (req.method === 'POST' && sent !== csrf) {
     return res.status(403).render('message', { title: 'خطأ', message: 'انتهت صلاحية النموذج، أعد المحاولة.' });
   }
   next();
@@ -33,6 +37,9 @@ const STATUSES = {
   cancelled: 'ملغى',
 };
 app.locals.STATUSES = STATUSES;
+// Safe for embedding inside <script>: no "</script>" breakout.
+app.locals.js = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
+app.locals.json = (v, fallback = []) => { try { return JSON.parse(v); } catch { return fallback; } };
 app.locals.money = (n, cur) => `${Number(n).toFixed(2)} ${cur || ''}`.trim();
 
 const str = (v, max = 500) => String(v ?? '').trim().slice(0, max);
@@ -169,8 +176,8 @@ function readStoreForm(body) {
     description: str(body.description, 1000),
     color: /^#[0-9a-fA-F]{6}$/.test(body.color) ? body.color : '#0f766e',
     currency: str(body.currency, 5).toUpperCase() || 'MAD',
-    logo_url: url(body.logo_url),
-    banner_url: url(body.banner_url),
+    logo_url: uploads.isImageUrl(str(body.logo_url, 1000)) ? str(body.logo_url, 1000) : '',
+    banner_url: uploads.isImageUrl(str(body.banner_url, 1000)) ? str(body.banner_url, 1000) : '',
     tagline: str(body.tagline, 120),
     announcement: str(body.announcement, 200),
     whatsapp: str(body.whatsapp, 20).replace(/[^0-9]/g, ''),
@@ -248,21 +255,45 @@ dash.post('/stores/:storeId/settings', ownStore, (req, res) => {
   res.redirect(`/dashboard/stores/${req.store.id}`);
 });
 
+function parseJSON(v, fallback) {
+  try { return JSON.parse(v); } catch { return fallback; }
+}
+// Up to 2 options (e.g. size, color), each with up to 20 values.
+function readOptions(body) {
+  const opts = [];
+  for (const i of [1, 2]) {
+    const name = str(body[`opt${i}_name`], 30);
+    const values = [...new Set(str(body[`opt${i}_values`], 500).split(/[,،\n]/).map((v) => v.trim().slice(0, 30)).filter(Boolean))].slice(0, 20);
+    if (name && values.length) opts.push({ name, values });
+  }
+  return opts;
+}
+
 function readProductForm(body) {
+  const images = (Array.isArray(parseJSON(body.images, [])) ? parseJSON(body.images, []) : [])
+    .filter(uploads.isImageUrl).slice(0, uploads.MAX_FILES);
+  const extra = url(body.image_url);
+  if (extra && !images.includes(extra)) images.push(extra);
   return {
+    images: JSON.stringify(images.slice(0, uploads.MAX_FILES)),
+    options: JSON.stringify(readOptions(body)),
+    sku: str(body.sku, 60),
+    cost_price: money0(body.cost_price),
     name: str(body.name, 200),
     description: str(body.description, 3000),
     price: Number(body.price),
     stock: Math.max(0, parseInt(body.stock, 10) || 0),
-    image_url: url(body.image_url),
+    image_url: images[0] || '',
     category: str(body.category, 60),
     compare_price: money0(body.compare_price),
     active: body.active ? 1 : 0,
   };
 }
+const PRODUCT_FIELDS = ['name', 'description', 'price', 'stock', 'image_url', 'images', 'options', 'sku', 'cost_price', 'category', 'compare_price', 'active'];
 function validateProduct(p) {
   if (!p.name) return 'اسم المنتج مطلوب.';
   if (!Number.isFinite(p.price) || p.price < 0) return 'السعر غير صحيح.';
+  if (p.compare_price && p.compare_price <= p.price) return 'السعر قبل التخفيض يجب أن يكون أكبر من السعر الحالي.';
   return null;
 }
 
@@ -276,16 +307,16 @@ function storeCategories(req, res, next) {
 dash.use('/stores/:storeId/products', ownStore, storeCategories);
 
 dash.get('/stores/:storeId/products/new', ownStore, (req, res) =>
-  res.render('dashboard/product-form', { error: null, values: { active: 1 }, action: `/dashboard/stores/${req.store.id}/products` })
+  res.render('dashboard/product-form', { error: null, saved: !!req.query.saved, values: { active: 1, images: '[]', options: '[]' }, action: `/dashboard/stores/${req.store.id}/products` })
 );
 dash.post('/stores/:storeId/products', ownStore, (req, res) => {
   const p = readProductForm(req.body);
   const error = validateProduct(p);
   if (error) return res.status(400).render('dashboard/product-form', { error, values: p, action: req.originalUrl });
-  db.prepare('INSERT INTO products (store_id, name, description, price, stock, image_url, category, compare_price, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    req.store.id, p.name, p.description, p.price, p.stock, p.image_url, p.category, p.compare_price, p.active
+  db.prepare(`INSERT INTO products (store_id, ${PRODUCT_FIELDS.join(', ')}) VALUES (?, ${PRODUCT_FIELDS.map(() => '?').join(', ')})`).run(
+    req.store.id, ...PRODUCT_FIELDS.map((f) => p[f])
   );
-  res.redirect(`/dashboard/stores/${req.store.id}`);
+  res.redirect(req.body.next === 'another' ? `/dashboard/stores/${req.store.id}/products/new?saved=1` : `/dashboard/stores/${req.store.id}`);
 });
 
 function ownProduct(req, res, next) {
@@ -302,8 +333,8 @@ dash.post('/stores/:storeId/products/:productId', ownStore, ownProduct, (req, re
   const p = readProductForm(req.body);
   const error = validateProduct(p);
   if (error) return res.status(400).render('dashboard/product-form', { error, values: p, action: req.originalUrl });
-  db.prepare('UPDATE products SET name = ?, description = ?, price = ?, stock = ?, image_url = ?, category = ?, compare_price = ?, active = ? WHERE id = ?').run(
-    p.name, p.description, p.price, p.stock, p.image_url, p.category, p.compare_price, p.active, req.product.id
+  db.prepare(`UPDATE products SET ${PRODUCT_FIELDS.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`).run(
+    ...PRODUCT_FIELDS.map((f) => p[f]), req.product.id
   );
   res.redirect(`/dashboard/stores/${req.store.id}`);
 });
@@ -342,6 +373,24 @@ function adjustStock(orderId, sign) {
   for (const it of items) upd.run(sign * it.quantity, it.product_id);
 }
 
+// Image upload (used by product and store forms via fetch). Returns { urls: [...] }.
+dash.post('/stores/:storeId/uploads', ownStore, (req, res) => {
+  uploads.upload.array('files', uploads.MAX_FILES)(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'حجم الصورة يجب ألا يتجاوز 5 ميغابايت.' : 'تعذّر رفع الصور.';
+      return res.status(400).json({ error: msg });
+    }
+    const files = req.files || [];
+    const good = files.filter((f) => {
+      if (uploads.looksLikeImage(f)) return true;
+      fs.unlinkSync(f.path);
+      return false;
+    });
+    if (!good.length) return res.status(400).json({ error: 'الملفات يجب أن تكون صوراً (JPG, PNG, WEBP, GIF).' });
+    res.json({ urls: good.map((f) => `/uploads/${f.filename}`) });
+  });
+});
+
 app.use('/dashboard', dash);
 
 // ---------- Storefront ----------
@@ -356,17 +405,23 @@ shop.use((req, res, next) => {
   next();
 });
 
+// Cart keys are "<productId>" or "<productId>::<variant>" (e.g. "5::M / أحمر").
 function cartLines(req) {
   const items = req.cart[req.store.id] || {};
-  const ids = Object.keys(items);
-  if (!ids.length) return { lines: [], subtotal: 0, shipping: 0, total: 0 };
+  const keys = Object.keys(items);
+  if (!keys.length) return { lines: [], subtotal: 0, shipping: 0, total: 0 };
+  const ids = [...new Set(keys.map((k) => parseInt(k, 10)))];
   const products = db
     .prepare(`SELECT * FROM products WHERE store_id = ? AND active = 1 AND id IN (${ids.map(() => '?').join(',')})`)
     .all(req.store.id, ...ids);
-  const lines = products.map((p) => {
-    const quantity = Math.min(items[p.id], p.stock);
-    return { product: p, quantity, subtotal: quantity * p.price };
-  }).filter((l) => l.quantity > 0);
+  const byId = Object.fromEntries(products.map((p) => [p.id, p]));
+  const lines = keys.map((key) => {
+    const p = byId[parseInt(key, 10)];
+    if (!p) return null;
+    const variant = key.includes('::') ? key.slice(key.indexOf('::') + 2) : '';
+    const quantity = Math.min(items[key], p.stock);
+    return { key, product: p, variant, quantity, subtotal: quantity * p.price };
+  }).filter((l) => l && l.quantity > 0);
   const subtotal = lines.reduce((a, l) => a + l.subtotal, 0);
   const { shipping_fee: fee, free_shipping_over: freeOver } = req.store;
   const shipping = !lines.length || (freeOver > 0 && subtotal >= freeOver) ? 0 : fee;
@@ -406,17 +461,34 @@ shop.get('/', (req, res) => {
 shop.get('/p/:productId', (req, res) => {
   const product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.params.productId, req.store.id);
   if (!product) return res.status(404).render('message', { title: 'غير موجود', message: 'المنتج غير موجود.' });
-  res.render('store/product', { product });
+  res.render('store/product', { product, choose: !!req.query.choose });
 });
 
 shop.post('/cart', (req, res) => {
-  const product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.body.product_id, req.store.id);
-  if (product) {
-    const cart = (req.cart[req.store.id] ||= {});
-    const qty = Math.max(0, parseInt(req.body.quantity, 10) || 0);
-    const next = req.body.mode === 'set' ? qty : (cart[product.id] || 0) + qty;
-    if (next <= 0) delete cart[product.id];
-    else cart[product.id] = Math.min(next, product.stock);
+  const cart = (req.cart[req.store.id] ||= {});
+  const qty = Math.max(0, parseInt(req.body.quantity, 10) || 0);
+  let key = null;
+  let product = null;
+  if (req.body.mode === 'set') {
+    // Updating an existing line: the key must already be in the cart.
+    key = Object.hasOwn(cart, req.body.key) ? req.body.key : null;
+    if (key) product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ?').get(parseInt(key, 10), req.store.id);
+  } else {
+    product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.body.product_id, req.store.id);
+    if (product) {
+      const options = JSON.parse(product.options || '[]');
+      const chosen = options.map((o, i) => str(req.body[`opt${i}`], 30));
+      // Every option must be chosen, and from the allowed values.
+      if (options.some((o, i) => !o.values.includes(chosen[i]))) {
+        return res.redirect(`/s/${req.store.slug}/p/${product.id}?choose=1`);
+      }
+      key = options.length ? `${product.id}::${chosen.join(' / ')}` : String(product.id);
+    }
+  }
+  if (key && product) {
+    const next = req.body.mode === 'set' ? qty : (cart[key] || 0) + qty;
+    if (next <= 0) delete cart[key];
+    else cart[key] = Math.min(next, product.stock);
     auth.saveCart(req);
   }
   res.redirect(`/s/${req.store.slug}/cart`);
@@ -452,7 +524,7 @@ shop.post('/checkout', (req, res) => {
       const addItem = db.prepare('INSERT INTO order_items (order_id, product_id, name, price, quantity) VALUES (?, ?, ?, ?, ?)');
       for (const l of cart.lines) {
         if (take.run(l.quantity, l.product.id, l.quantity).changes !== 1) throw new Error('OUT_OF_STOCK');
-        addItem.run(lastInsertRowid, l.product.id, l.product.name, l.product.price, l.quantity);
+        addItem.run(lastInsertRowid, l.product.id, l.variant ? `${l.product.name} (${l.variant})` : l.product.name, l.product.price, l.quantity);
       }
       return Number(lastInsertRowid);
     });

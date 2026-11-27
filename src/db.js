@@ -86,6 +86,10 @@ for (const [col, def] of [
 ]) addColumn('stores', col, def);
 addColumn('products', 'category', "TEXT NOT NULL DEFAULT ''");
 addColumn('products', 'compare_price', 'REAL NOT NULL DEFAULT 0');
+addColumn('products', 'images', "TEXT NOT NULL DEFAULT '[]'");
+addColumn('products', 'options', "TEXT NOT NULL DEFAULT '[]'");
+addColumn('products', 'sku', "TEXT NOT NULL DEFAULT ''");
+addColumn('products', 'cost_price', 'REAL NOT NULL DEFAULT 0');
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
 
 function transaction(fn) {

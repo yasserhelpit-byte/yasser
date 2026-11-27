@@ -15,7 +15,7 @@
   </div>
   <div class="card">
     <h3>ملخص الطلب</h3>
-    <% lines.forEach(l => { %><p class="row between"><span><%= l.product.name %> × <%= l.quantity %></span><span><%= money(l.subtotal, store.currency) %></span></p><% }) %>
+    <% lines.forEach(l => { %><p class="row between"><span><%= l.product.name %><%= l.variant ? ' (' + l.variant + ')' : '' %> × <%= l.quantity %></span><span><%= money(l.subtotal, store.currency) %></span></p><% }) %>
     <hr>
     <%- include('../partials/totals') %>
   </div>

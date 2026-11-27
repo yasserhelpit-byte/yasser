@@ -1,22 +1,179 @@
-<%- include('../partials/header', { title: 'منتج' }) %>
-<section class="card narrow">
-  <p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p>
+<%- include('../partials/header', { title: values.id ? 'تعديل المنتج' : 'منتج جديد' }) %>
+<%
+  const imgs = json(values.images);
+  const opts = json(values.options);
+  const cur = store.currency;
+%>
+<p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p>
+<div class="row between">
   <h1><%= values.id ? 'تعديل المنتج' : 'منتج جديد' %></h1>
-  <%- include('../partials/errors') %>
-  <form method="post" action="<%= action %>" class="form">
-    <%- include('../partials/csrf') %>
-    <label>الاسم<input name="name" required value="<%= values.name || '' %>"></label>
-    <label>التصنيف (اختياري)<input name="category" list="cats" maxlength="60" placeholder="مثال: ملابس، أحذية، إكسسوارات" value="<%= values.category || '' %>"></label>
-    <datalist id="cats"><% (categories || []).forEach(c => { %><option value="<%= c %>"><% }) %></datalist>
-    <label>الوصف<textarea name="description" rows="4"><%= values.description || '' %></textarea></label>
-    <div class="row">
-      <label>السعر (<%= store.currency %>)<input name="price" type="number" step="0.01" min="0" required value="<%= values.price ?? '' %>"></label>
-      <label>السعر قبل التخفيض (اختياري)<input name="compare_price" type="number" step="0.01" min="0" value="<%= values.compare_price || '' %>"></label>
-    </div>
-    <label>المخزون<input name="stock" type="number" min="0" value="<%= values.stock ?? 0 %>"></label>
-    <label>رابط الصورة<input name="image_url" type="url" dir="ltr" placeholder="https://..." value="<%= values.image_url || '' %>"></label>
-    <label class="check"><input type="checkbox" name="active" value="1" <%= values.active ? 'checked' : '' %>> منشور في المتجر</label>
-    <button class="btn">حفظ</button>
-  </form>
-</section>
+  <% if (values.id) { %><a href="/s/<%= store.slug %>/p/<%= values.id %>" target="_blank" class="btn ghost">عرض في المتجر ↗</a><% } %>
+</div>
+<% if (typeof saved !== 'undefined' && saved) { %><div class="alert ok">✓ تم حفظ المنتج. يمكنك إضافة منتج آخر.</div><% } %>
+<%- include('../partials/errors') %>
+
+<form method="post" action="<%= action %>" id="product-form" class="pf-grid">
+  <%- include('../partials/csrf') %>
+  <input type="hidden" name="images" id="images-input" value="<%= JSON.stringify(imgs) %>">
+
+  <div class="pf-main">
+    <section class="card form">
+      <h3>📝 المعلومات الأساسية</h3>
+      <label>اسم المنتج<input name="name" id="f-name" required maxlength="200" placeholder="مثال: قميص قطني كلاسيكي" value="<%= values.name || '' %>"></label>
+      <label>الوصف
+        <textarea name="description" id="f-desc" rows="6" maxlength="3000" placeholder="صف منتجك: الخامة، المقاسات، طريقة الاستعمال، المميزات..."><%= values.description || '' %></textarea>
+        <small class="muted counter" data-for="f-desc"></small>
+      </label>
+    </section>
+
+    <section class="card form">
+      <div class="row between"><h3>🖼️ الصور</h3><small class="muted">حتى 8 صور · الصورة الأولى هي الرئيسية</small></div>
+      <div class="dropzone" id="dropzone" data-upload="/dashboard/stores/<%= store.id %>/uploads">
+        <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+        <div class="dz-icon">📤</div>
+        <strong>اسحب الصور وأفلتها هنا</strong>
+        <span class="muted">أو</span>
+        <button type="button" class="btn small" onclick="document.getElementById('file-input').click()">اختر من جهازك</button>
+        <small class="muted">JPG, PNG, WEBP · حتى 5 ميغابايت للصورة</small>
+      </div>
+      <div class="dz-status" id="dz-status"></div>
+      <div class="gallery-edit" id="gallery"></div>
+      <details class="url-add">
+        <summary class="muted">أو أضف صورة عبر رابط</summary>
+        <div class="row"><input type="url" id="url-input" dir="ltr" placeholder="https://..."><button type="button" class="btn small ghost" id="url-add">إضافة</button></div>
+      </details>
+    </section>
+
+    <section class="card form">
+      <h3>💰 التسعير</h3>
+      <div class="row">
+        <label>السعر (<%= cur %>)<input name="price" id="f-price" type="number" step="0.01" min="0" required value="<%= values.price ?? '' %>"></label>
+        <label>السعر قبل التخفيض<input name="compare_price" id="f-compare" type="number" step="0.01" min="0" placeholder="اختياري" value="<%= values.compare_price || '' %>"></label>
+      </div>
+      <div class="row">
+        <label>تكلفة المنتج عليك<input name="cost_price" id="f-cost" type="number" step="0.01" min="0" placeholder="اختياري · لا يراها العملاء" value="<%= values.cost_price || '' %>"></label>
+        <div class="profit" id="profit"><span class="muted">الربح</span><strong>—</strong><small class="muted">الهامش —</small></div>
+      </div>
+    </section>
+
+    <section class="card form">
+      <h3>📦 المخزون</h3>
+      <div class="row">
+        <label>الكمية المتوفرة<input name="stock" type="number" min="0" value="<%= values.stock ?? 0 %>"></label>
+        <label>رمز المنتج SKU<input name="sku" dir="ltr" maxlength="60" placeholder="اختياري" value="<%= values.sku || '' %>"></label>
+      </div>
+    </section>
+
+    <section class="card form">
+      <h3>🎨 الخيارات <small class="muted">(المقاس، اللون...)</small></h3>
+      <p class="muted small">أضف خيارات ليختار منها العميل. افصل بين القيم بفاصلة.</p>
+      <% [0, 1].forEach(i => { const o = opts[i] || {}; %>
+      <div class="row opt-row">
+        <label>اسم الخيار <%= i + 1 %><input name="opt<%= i + 1 %>_name" maxlength="30" list="opt-names" placeholder="<%= i ? 'مثال: اللون' : 'مثال: المقاس' %>" value="<%= o.name || '' %>"></label>
+        <label class="wide">القيم<input name="opt<%= i + 1 %>_values" maxlength="500" placeholder="<%= i ? 'أحمر، أزرق، أسود' : 'S, M, L, XL' %>" value="<%= (o.values || []).join('، ') %>"></label>
+      </div>
+      <% }) %>
+      <datalist id="opt-names"><option value="المقاس"><option value="اللون"><option value="الحجم"><option value="النوع"></datalist>
+    </section>
+  </div>
+
+  <aside class="pf-side">
+    <section class="card form">
+      <h3>الحالة</h3>
+      <label class="switch"><input type="checkbox" name="active" value="1" <%= values.active ? 'checked' : '' %>><span class="slider"></span> منشور في المتجر</label>
+      <p class="muted small">المنتج المخفي لا يظهر للعملاء.</p>
+    </section>
+    <section class="card form">
+      <h3>التصنيف</h3>
+      <input name="category" list="cats" maxlength="60" placeholder="مثال: ملابس" value="<%= values.category || '' %>">
+      <datalist id="cats"><% (categories || []).forEach(c => { %><option value="<%= c %>"><% }) %></datalist>
+      <% if ((categories || []).length) { %>
+        <div class="chips small-chips"><% categories.forEach(c => { %><button type="button" onclick="this.form.category.value=this.textContent"><%= c %></button><% }) %></div>
+      <% } %>
+    </section>
+    <section class="card preview-card">
+      <h3>👁️ معاينة</h3>
+      <div class="product pv">
+        <div class="img" id="pv-img"><span id="pv-letter">؟</span><em class="tag sale" id="pv-sale" hidden>تخفيض</em></div>
+        <span class="name" id="pv-name">اسم المنتج</span>
+        <div class="price-row"><span class="price" id="pv-price">0.00 <%= cur %></span><s class="muted compare" id="pv-compare"></s></div>
+      </div>
+    </section>
+  </aside>
+
+  <div class="save-bar pf-save">
+    <a href="/dashboard/stores/<%= store.id %>" class="btn ghost">إلغاء</a>
+    <% if (!values.id) { %><button class="btn ghost" name="next" value="another">حفظ وإضافة آخر</button><% } %>
+    <button class="btn big">💾 حفظ المنتج</button>
+  </div>
+</form>
+<script>window.CSRF = <%- js(csrf) %>; window.CURRENCY = <%- js(cur) %>;</script>
+<script src="/upload.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const imagesInput = $('images-input');
+  let images = JSON.parse(imagesInput.value || '[]');
+  const fmt = (n) => (Number(n) || 0).toFixed(2) + ' ' + CURRENCY;
+
+  function render() {
+    imagesInput.value = JSON.stringify(images);
+    $('gallery').innerHTML = '';
+    images.forEach((src, i) => {
+      const d = document.createElement('div');
+      d.className = 'g-item' + (i === 0 ? ' main' : '');
+      d.innerHTML = '<img alt=""><div class="g-tools"></div>' + (i === 0 ? '<span class="g-badge">رئيسية</span>' : '');
+      d.querySelector('img').src = src;
+      const tools = d.querySelector('.g-tools');
+      const btn = (label, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.title = title; b.onclick = fn; tools.appendChild(b); };
+      if (i > 0) btn('★', 'اجعلها الرئيسية', () => { images.unshift(images.splice(i, 1)[0]); render(); });
+      if (i > 0) btn('→', 'تقديم', () => { [images[i - 1], images[i]] = [images[i], images[i - 1]]; render(); });
+      if (i < images.length - 1) btn('←', 'تأخير', () => { [images[i + 1], images[i]] = [images[i], images[i + 1]]; render(); });
+      btn('✕', 'حذف', () => { images.splice(i, 1); render(); });
+      $('gallery').appendChild(d);
+    });
+    preview();
+  }
+
+  setupDropzone($('dropzone'), $('file-input'), $('dz-status'), (urls) => {
+    images = images.concat(urls).slice(0, 8);
+    render();
+  }, () => 8 - images.length);
+
+  $('url-add').onclick = () => {
+    const v = $('url-input').value.trim();
+    if (/^https?:\/\//i.test(v) && images.length < 8) { images.push(v); $('url-input').value = ''; render(); }
+  };
+
+  function preview() {
+    const name = $('f-name').value.trim();
+    $('pv-name').textContent = name || 'اسم المنتج';
+    $('pv-letter').textContent = name ? name.charAt(0) : '؟';
+    const box = $('pv-img');
+    const old = box.querySelector('img'); if (old) old.remove();
+    if (images[0]) { const im = document.createElement('img'); im.src = images[0]; box.prepend(im); $('pv-letter').hidden = true; } else $('pv-letter').hidden = false;
+    const price = +$('f-price').value || 0, cmp = +$('f-compare').value || 0, cost = +$('f-cost').value || 0;
+    $('pv-price').textContent = fmt(price);
+    const sale = cmp > price;
+    $('pv-compare').textContent = sale ? fmt(cmp) : '';
+    $('pv-sale').hidden = !sale;
+    if (sale) $('pv-sale').textContent = '-' + Math.round((1 - price / cmp) * 100) + '%';
+    const p = $('profit');
+    if (cost > 0 && price > 0) {
+      const profit = price - cost;
+      p.querySelector('strong').textContent = fmt(profit);
+      p.querySelector('strong').className = profit < 0 ? 'neg' : 'pos';
+      p.querySelector('small').textContent = 'الهامش ' + Math.round(profit / price * 100) + '٪';
+    } else { p.querySelector('strong').textContent = '—'; p.querySelector('strong').className = ''; p.querySelector('small').textContent = 'أدخل التكلفة لحساب الربح'; }
+  }
+  ['f-name', 'f-price', 'f-compare', 'f-cost'].forEach((id) => $(id).addEventListener('input', preview));
+
+  document.querySelectorAll('.counter').forEach((c) => {
+    const t = $(c.dataset.for);
+    const upd = () => (c.textContent = t.value.length + ' / ' + t.maxLength);
+    t.addEventListener('input', upd); upd();
+  });
+  render();
+})();
+</script>
 <%- include('../partials/footer') %>
