@@ -1,0 +1,97 @@
+<%- include('../partials/header', { title: 'النطاق الخاص' }) %>
+<%
+  const d = store.custom_domain;
+  const isSub = d && d.split('.').length > 2;
+  const copyBtn = (v) => `<button type="button" class="copy" data-copy="${v.replace(/"/g, '&quot;')}" title="نسخ">نسخ</button>`;
+%>
+<div class="page-head-row">
+  <div><h1>🌐 النطاق الخاص</h1><p class="muted">اجعل متجرك يعمل على نطاقك، مثل <span dir="ltr">myshop.com</span>، بدل رابط المنصة.</p></div>
+</div>
+<% if (notice) { %><div class="alert ok"><%= notice %></div><% } %>
+<%- include('../partials/errors') %>
+
+<% if (!d) { %>
+<section class="card domain-card">
+  <div class="dom-empty">
+    <div class="big-icon">🌐</div>
+    <h3>اربط نطاقك الخاص</h3>
+    <p class="muted">يجب أن تملك النطاق أولاً. يمكنك شراؤه من مواقع مثل Namecheap أو GoDaddy أو Hostinger أو Genious.ma (بحوالي 10 إلى 15 دولاراً في السنة).</p>
+  </div>
+  <form method="post" action="/dashboard/stores/<%= store.id %>/domain" class="dom-form">
+    <%- include('../partials/csrf') %>
+    <div class="prefix-input" dir="ltr"><span>https://</span><input name="domain" required placeholder="myshop.com" autocomplete="off" spellcheck="false"></div>
+    <button class="btn">ربط النطاق</button>
+  </form>
+  <p class="muted small">حالياً متجرك على: <a href="/s/<%= store.slug %>" target="_blank" dir="ltr">/s/<%= store.slug %></a></p>
+</section>
+<% } else { %>
+<section class="card domain-card">
+  <div class="dom-head">
+    <div>
+      <span class="muted small">نطاقك</span>
+      <div class="dom-name" dir="ltr"><%= d %></div>
+    </div>
+    <span class="badge <%= store.domain_verified ? 's-delivered' : 's-confirmed' %>"><%= store.domain_verified ? '✓ مفعّل' : '⏳ بانتظار التحقق' %></span>
+  </div>
+  <% if (store.domain_verified) { %>
+    <p>🎉 متجرك يعمل على <a href="https://<%= d %>" target="_blank" dir="ltr">https://<%= d %></a>. يبقى الرابط القديم <span dir="ltr">/s/<%= store.slug %></span> يعمل أيضاً.</p>
+  <% } %>
+</section>
+
+<section class="card">
+  <h3><%= store.domain_verified ? 'سجلات DNS (للمرجع)' : 'الخطوة 1: أضف هذه السجلات في لوحة نطاقك' %></h3>
+  <p class="muted small">ادخل إلى الموقع الذي اشتريت منه النطاق، ثم افتح «إدارة DNS» أو «DNS Records»، وأضف السجلات التالية:</p>
+  <div class="table-wrap"><table class="dns-table">
+    <tr><th>النوع</th><th>الاسم (Host)</th><th>القيمة (Value)</th><th>لماذا؟</th></tr>
+    <tr>
+      <td><b>TXT</b></td>
+      <td dir="ltr"><code>_yasser<%= isSub ? '.' + d.split('.').slice(0, -2).join('.') : '' %></code> <%- copyBtn('_yasser' + (isSub ? '.' + d.split('.').slice(0, -2).join('.') : '')) %></td>
+      <td dir="ltr"><code>yasser-verify=<%= store.domain_token %></code> <%- copyBtn('yasser-verify=' + store.domain_token) %></td>
+      <td class="muted small">لإثبات أنك تملك النطاق</td>
+    </tr>
+    <% if (isSub) { %>
+    <tr>
+      <td><b>CNAME</b></td>
+      <td dir="ltr"><code><%= d.split('.').slice(0, -2).join('.') %></code></td>
+      <td dir="ltr"><code><%= dnsTarget %></code> <%- copyBtn(dnsTarget) %></td>
+      <td class="muted small">لتوجيه النطاق إلى متجرك</td>
+    </tr>
+    <% } else { %>
+    <tr>
+      <td><b><%= dnsIp ? 'A' : 'ALIAS / CNAME' %></b></td>
+      <td dir="ltr"><code>@</code></td>
+      <td dir="ltr"><code><%= dnsIp || dnsTarget %></code> <%- copyBtn(dnsIp || dnsTarget) %></td>
+      <td class="muted small">لتوجيه النطاق إلى متجرك</td>
+    </tr>
+    <tr>
+      <td><b>CNAME</b></td>
+      <td dir="ltr"><code>www</code></td>
+      <td dir="ltr"><code><%= dnsTarget %></code> <%- copyBtn(dnsTarget) %></td>
+      <td class="muted small">ليعمل www.<%= d %> أيضاً</td>
+    </tr>
+    <% } %>
+  </table></div>
+  <p class="muted small">💡 بعض المواقع تكتب الاسم كاملاً تلقائياً (مثل <span dir="ltr">_yasser.<%= d %></span>)، وهذا صحيح أيضاً.</p>
+</section>
+
+<% if (!store.domain_verified) { %>
+<section class="card">
+  <h3>الخطوة 2: تحقق من الربط</h3>
+  <p class="muted">بعد إضافة السجلات اضغط «تحقق الآن». قد تحتاج السجلات الجديدة من بضع دقائق إلى 24 ساعة لتظهر.</p>
+  <form method="post" action="/dashboard/stores/<%= store.id %>/domain/verify" class="inline"><%- include('../partials/csrf') %><button class="btn">🔍 تحقق الآن</button></form>
+</section>
+<% } %>
+
+<section class="card">
+  <div class="row between">
+    <div><h3>إزالة النطاق</h3><p class="muted small">سيعود متجرك للعمل على رابط المنصة فقط.</p></div>
+    <form method="post" action="/dashboard/stores/<%= store.id %>/domain/remove" class="inline" onsubmit="return confirm('إزالة النطاق <%= d %>؟')"><%- include('../partials/csrf') %><button class="btn ghost danger-btn">إزالة</button></form>
+  </div>
+</section>
+<% } %>
+<script>
+document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+  navigator.clipboard.writeText(b.dataset.copy).then(() => { b.textContent = '✓'; setTimeout(() => (b.textContent = 'نسخ'), 1500); });
+}));
+</script>
+<%- include('../partials/footer') %>

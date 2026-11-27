@@ -10,6 +10,7 @@ const limiter = require('./limiter');
 const mailer = require('./mailer');
 const sections = require('./sections');
 
+const dns = require('dns').promises;
 const app = express();
 // Behind one reverse proxy (Codespaces, Render, Railway...): use X-Forwarded-For for req.ip.
 app.set('trust proxy', 1);
@@ -17,6 +18,33 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/uploads', express.static(uploads.uploadsDir, { maxAge: '30d', immutable: true }));
+
+// ---------- Custom domains ----------
+// PLATFORM_HOSTS: the platform's own hostnames (comma separated). Requests for any other host that
+// matches a verified store domain are served that store at the root: "/products" -> "/s/<slug>/products".
+const PLATFORM_HOSTS = new Set(['localhost', '127.0.0.1', ...(process.env.PLATFORM_HOSTS || '').split(',')].map((h) => h.trim().toLowerCase()).filter(Boolean));
+const DNS_TARGET = process.env.DNS_TARGET || (process.env.PLATFORM_HOSTS || '').split(',')[0].trim() || 'yasser.example.com';
+const DNS_IP = process.env.DNS_IP || '';
+const hostOf = (req) => String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
+const bareHost = (h) => h.replace(/^www\./, '');
+
+// For HTTPS on custom domains (e.g. Caddy "on_demand_tls ask"): 200 only for verified store domains.
+app.get('/_domain-check', (req, res) => {
+  const d = String(req.query.domain || '').toLowerCase();
+  const ok = db.prepare('SELECT 1 FROM stores WHERE domain_verified = 1 AND suspended = 0 AND (custom_domain = ? OR custom_domain = ?)').get(d, bareHost(d));
+  res.status(ok ? 200 : 404).end(ok ? 'ok' : 'no');
+});
+
+app.use((req, res, next) => {
+  const host = hostOf(req);
+  if (!host || PLATFORM_HOSTS.has(host) || host.endsWith('.app.github.dev')) return next();
+  const store = db.prepare('SELECT slug FROM stores WHERE domain_verified = 1 AND (custom_domain = ? OR custom_domain = ?)').get(host, bareHost(host));
+  if (!store) return next();
+  req.customDomain = host;
+  // Only the storefront lives on a merchant's domain.
+  if (!req.url.startsWith('/s/')) req.url = `/s/${store.slug}${req.url === '/' ? '' : req.url}`;
+  next();
+});
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(auth.sessionMiddleware);
@@ -368,7 +396,7 @@ dash.get('/stores/:storeId', ownStore, (req, res) => {
     .all(id);
   const host = req.get('x-forwarded-host') || req.get('host');
   const proto = req.get('x-forwarded-proto') || req.protocol;
-  const storeUrl = `${proto}://${host}/s/${req.store.slug}`;
+  const storeUrl = req.store.domain_verified ? `https://${req.store.custom_domain}` : `${proto}://${host}/s/${req.store.slug}`;
   const today = db
     .prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total END), 0) AS revenue FROM orders WHERE store_id = ? AND date(created_at) = date('now')`)
     .get(id);
@@ -559,6 +587,44 @@ dash.post('/stores/:storeId/design', ownStore, (req, res) => {
   res.redirect(`/dashboard/stores/${req.store.id}/design?saved=1`);
 });
 
+// ----- Custom domain -----
+const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/;
+function cleanDomain(v) {
+  return String(v || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '').replace(/^www\./, '').replace(/\.$/, '');
+}
+dash.get('/stores/:storeId/domain', ownStore, (req, res) => {
+  res.render('dashboard/domain', { error: null, notice: req.query.ok ? '✓ تم التحقق! متجرك يعمل الآن على نطاقك.' : null, dnsTarget: DNS_TARGET, dnsIp: DNS_IP });
+});
+dash.post('/stores/:storeId/domain', ownStore, (req, res) => {
+  const domain = cleanDomain(req.body.domain);
+  const fail = (error) => res.status(400).render('dashboard/domain', { error, notice: null, dnsTarget: DNS_TARGET, dnsIp: DNS_IP });
+  if (!DOMAIN_RE.test(domain)) return fail('النطاق غير صحيح. مثال: myshop.com أو shop.myshop.com');
+  if (PLATFORM_HOSTS.has(domain) || [...PLATFORM_HOSTS].some((h) => domain.endsWith('.' + h))) return fail('لا يمكن استعمال نطاق المنصة.');
+  if (db.prepare('SELECT 1 FROM stores WHERE custom_domain = ? AND id != ?').get(domain, req.store.id)) return fail('هذا النطاق مربوط بمتجر آخر.');
+  const token = crypto.randomBytes(12).toString('hex');
+  db.prepare('UPDATE stores SET custom_domain = ?, domain_token = ?, domain_verified = 0 WHERE id = ?').run(domain, token, req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/domain`);
+});
+dash.post('/stores/:storeId/domain/verify', ownStore, async (req, res) => {
+  const store = req.store;
+  const fail = (error) => res.status(400).render('dashboard/domain', { error, notice: null, dnsTarget: DNS_TARGET, dnsIp: DNS_IP });
+  if (!store.custom_domain) return res.redirect(`/dashboard/stores/${store.id}/domain`);
+  if (!limiter.hit(`domain-verify:${store.id}`, 10, 10 * 60 * 1000)) return fail('محاولات كثيرة. انتظر بضع دقائق ثم أعد المحاولة.');
+  let records = [];
+  try {
+    records = (await dns.resolveTxt(`_yasser.${store.custom_domain}`)).map((r) => r.join(''));
+  } catch {
+    return fail(`لم نجد سجل TXT باسم _yasser.${store.custom_domain}. قد يستغرق ظهور السجلات الجديدة من بضع دقائق إلى 24 ساعة.`);
+  }
+  if (!records.includes(`yasser-verify=${store.domain_token}`)) return fail('وجدنا سجل TXT لكن قيمته غير مطابقة. انسخ القيمة كما هي تماماً.');
+  db.prepare('UPDATE stores SET domain_verified = 1 WHERE id = ?').run(store.id);
+  res.redirect(`/dashboard/stores/${store.id}/domain?ok=1`);
+});
+dash.post('/stores/:storeId/domain/remove', ownStore, (req, res) => {
+  db.prepare("UPDATE stores SET custom_domain = NULL, domain_token = '', domain_verified = 0 WHERE id = ?").run(req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/domain`);
+});
+
 // ----- Custom pages -----
 const PAGE_TEMPLATES = {
   blank: { title: '', sections: [{ type: 'text' }] },
@@ -722,13 +788,15 @@ app.use('/admin', admin);
 
 // ---------- Storefront ----------
 // Theme + navigation values every storefront page needs (also used by the editor preview).
-function storefrontLocals(store) {
+function storefrontLocals(store, customDomain = false) {
+  const base = customDomain ? '' : `/s/${store.slug}`;
   return {
+    base,
     menuPages: db.prepare('SELECT title, slug, in_menu, in_footer FROM pages WHERE store_id = ? ORDER BY position, id').all(store.id),
     font: FONTS[store.font] || FONTS.tajawal,
     radius: (RADII[store.radius] || RADII.soft).v,
     // Store-relative links: "/products" -> "/s/<slug>/products".
-    href: (link) => (link && link.startsWith('/') ? `/s/${store.slug}${link === '/' ? '' : link}` : link),
+    href: (link) => (link && link.startsWith('/') ? (link === '/' ? base || '/' : base + link) : link),
   };
 }
 
@@ -743,7 +811,12 @@ shop.use((req, res, next) => {
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);
   res.locals.isOwner = !!req.user && req.user.id === store.owner_id;
-  Object.assign(res.locals, storefrontLocals(store));
+  // On the merchant's own domain, only their store is reachable.
+  if (req.customDomain && ![store.custom_domain, `www.${store.custom_domain}`].includes(req.customDomain)) {
+    return res.status(404).render('message', { title: 'غير موجود', message: 'الصفحة غير موجودة.' });
+  }
+  Object.assign(res.locals, storefrontLocals(store, !!req.customDomain));
+  req.base = res.locals.base;
   next();
 });
 
@@ -865,7 +938,7 @@ shop.post('/cart', (req, res) => {
       const chosen = options.map((o, i) => str(req.body[`opt${i}`], 30));
       // Every option must be chosen, and from the allowed values.
       if (options.some((o, i) => !o.values.includes(chosen[i]))) {
-        return res.redirect(`/s/${req.store.slug}/p/${product.id}?choose=1`);
+        return res.redirect(`${req.base}/p/${product.id}?choose=1`);
       }
       key = options.length ? `${product.id}::${chosen.join(' / ')}` : String(product.id);
     }
@@ -876,14 +949,14 @@ shop.post('/cart', (req, res) => {
     else cart[key] = Math.min(next, product.stock);
     auth.saveCart(req);
   }
-  res.redirect(`/s/${req.store.slug}/cart`);
+  res.redirect(`${req.base}/cart`);
 });
 
 shop.get('/cart', (req, res) => res.render('store/cart', cartLines(req)));
 
 shop.get('/checkout', (req, res) => {
   const cart = cartLines(req);
-  if (!cart.lines.length) return res.redirect(`/s/${req.store.slug}/cart`);
+  if (!cart.lines.length) return res.redirect(`${req.base}/cart`);
   res.render('store/checkout', { ...cart, error: null, values: {} });
 });
 
@@ -895,7 +968,7 @@ shop.post('/checkout', (req, res) => {
     note: str(req.body.note, 1000),
   };
   const cart = cartLines(req);
-  if (!cart.lines.length) return res.redirect(`/s/${req.store.slug}/cart`);
+  if (!cart.lines.length) return res.redirect(`${req.base}/cart`);
   const fail = (error, status = 400) => res.status(status).render('store/checkout', { ...cart, error, values });
 
   // Bots: a hidden field humans never fill, and a form submitted impossibly fast.
@@ -940,12 +1013,12 @@ shop.post('/checkout', (req, res) => {
   delete req.cart[req.store.id];
   auth.saveCart(req);
   notifyNewOrder(req, orderId); // fire and forget
-  res.redirect(`/s/${req.store.slug}/thanks/${orderId}`);
+  res.redirect(`${req.base}/thanks/${orderId}`);
 });
 
 shop.get('/thanks/:orderId', (req, res) => {
   const order = db.prepare('SELECT id, total FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
-  if (!order) return res.redirect(`/s/${req.store.slug}`);
+  if (!order) return res.redirect(req.base || '/');
   res.render('store/thanks', { order });
 });
 

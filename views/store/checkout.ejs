@@ -3,7 +3,7 @@
 <section class="grid side">
   <div class="card">
     <%- include('../partials/errors') %>
-    <form method="post" action="/s/<%= store.slug %>/checkout" class="form">
+    <form method="post" action="<%= base %>/checkout" class="form">
       <%- include('../partials/csrf') %>
       <input type="hidden" name="_t" value="<%= Date.now() %>">
       <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>

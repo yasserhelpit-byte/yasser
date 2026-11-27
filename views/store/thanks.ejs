@@ -5,7 +5,7 @@
   <p>رقم الطلب <strong>#<%= order.id %></strong> — الإجمالي <%= money(order.total, store.currency) %></p>
   <p class="muted">سنتواصل معك قريباً لتأكيد الطلب. الدفع عند الاستلام.</p>
   <div class="row" style="justify-content:center">
-    <a href="/s/<%= store.slug %>" class="btn">العودة إلى المتجر</a>
+    <a href="<%= base || '/' %>" class="btn">العودة إلى المتجر</a>
     <% if (store.whatsapp) { %><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/<%= store.whatsapp %>?text=<%= encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + order.id) %>">تواصل عبر واتساب</a><% } %>
   </div>
 </section>

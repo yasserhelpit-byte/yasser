@@ -1,5 +1,5 @@
 <%- include('../partials/store-header', { title: product.name }) %>
-<p class="crumbs"><a href="/s/<%= store.slug %>">الرئيسية</a><% if (product.category) { %> / <a href="/s/<%= store.slug %>?c=<%= encodeURIComponent(product.category) %>#products"><%= product.category %></a><% } %> / <span class="muted"><%= product.name %></span></p>
+<p class="crumbs"><a href="<%= base || '/' %>">الرئيسية</a><% if (product.category) { %> / <a href="<%= base %>?c=<%= encodeURIComponent(product.category) %>#products"><%= product.category %></a><% } %> / <span class="muted"><%= product.name %></span></p>
 <section class="grid two product-page">
   <% const imgs = json(product.images).length ? json(product.images) : (product.image_url ? [product.image_url] : []); const opts = json(product.options); %>
   <div class="gallery-view">
@@ -16,7 +16,7 @@
     <div class="price-row big"><%- include('../partials/price', { p: product }) %></div>
     <% if (product.stock > 0) { %>
       <p class="<%= product.stock <= 3 ? 'warn-text' : 'ok-text' %>"><%= product.stock <= 3 ? '🔥 بقي ' + product.stock + ' فقط في المخزون' : '✓ متوفر' %></p>
-      <form method="post" action="/s/<%= store.slug %>/cart" class="buy">
+      <form method="post" action="<%= base %>/cart" class="buy">
         <%- include('../partials/csrf') %>
         <input type="hidden" name="product_id" value="<%= product.id %>">
         <% opts.forEach((o, i) => { %>

@@ -269,3 +269,53 @@ test('admin sees all stores; merchants only their own', async (t) => {
   const admId = db.prepare('SELECT id FROM users WHERE email = ?').get('boss@example.com').id;
   assert.strictEqual((await adm('POST', `/admin/merchants/${admId}/suspend`, { _csrf: acsrf, suspend: '1' })).status, 400);
 });
+
+test('custom domains serve the store at the root', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { db } = require('../src/db');
+  require('../src/limiter').clear();
+
+  const m = client(base);
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Dom', email: 'dom@example.com', password: 'password123' });
+  let csrf = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const r = await m('POST', '/dashboard/stores', { _csrf: csrf, name: 'Dom Shop', slug: 'dom-shop' });
+  const sid = r.location.match(/\d+$/)[0];
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: csrf, name: 'Lamp', price: '20', stock: '5', active: '1' });
+
+  // Invalid and platform domains are refused; a real one is saved unverified with a token.
+  assert.match((await m('POST', `/dashboard/stores/${sid}/domain`, { _csrf: csrf, domain: 'not a domain' })).text, /النطاق غير صحيح/);
+  assert.match((await m('POST', `/dashboard/stores/${sid}/domain`, { _csrf: csrf, domain: 'localhost' })).text, /النطاق غير صحيح|نطاق المنصة/);
+  await m('POST', `/dashboard/stores/${sid}/domain`, { _csrf: csrf, domain: 'https://www.Lamps-Shop.com/' });
+  const row = db.prepare('SELECT custom_domain, domain_token, domain_verified FROM stores WHERE id = ?').get(sid);
+  assert.strictEqual(row.custom_domain, 'lamps-shop.com');
+  assert.strictEqual(row.domain_verified, 0);
+  assert.match((await m('GET', `/dashboard/stores/${sid}/domain`)).text, new RegExp(`yasser-verify=${row.domain_token}`));
+
+  const onDomain = (path, host = 'lamps-shop.com') => fetch(base + path, { headers: { 'x-forwarded-host': host }, redirect: 'manual' });
+  // Not verified yet: the domain doesn't serve the store.
+  assert.doesNotMatch(await (await onDomain('/')).text(), /Dom Shop/);
+  assert.strictEqual((await onDomain('/_domain-check?domain=lamps-shop.com')).status, 404);
+
+  // Once verified (normally via the DNS TXT check), the store is served at the root with clean links.
+  db.prepare('UPDATE stores SET domain_verified = 1 WHERE id = ?').run(sid);
+  const home = await (await onDomain('/')).text();
+  assert.match(home, /Dom Shop/);
+  assert.match(home, /href="\/products"/);
+  assert.doesNotMatch(home, /\/s\/dom-shop/);
+  assert.match(await (await onDomain('/products', 'www.lamps-shop.com')).text(), /Lamp/);
+  assert.strictEqual((await onDomain('/_domain-check?domain=lamps-shop.com')).status, 200);
+  // The dashboard and other stores are not reachable through a merchant's domain.
+  assert.strictEqual((await onDomain('/dashboard')).status, 404);
+  assert.strictEqual((await onDomain('/s/shop-one')).status, 404);
+  // The platform URL keeps working.
+  assert.match(await (await fetch(base + '/s/dom-shop')).text(), /Dom Shop/);
+  // Another store can't claim the same domain.
+  const m2 = client(base);
+  await m2('POST', '/signup', { _csrf: csrfOf((await m2('GET', '/signup')).text), name: 'Other', email: 'other2@example.com', password: 'password123' });
+  const c2 = csrfOf((await m2('GET', '/dashboard/stores/new')).text);
+  const r2 = await m2('POST', '/dashboard/stores', { _csrf: c2, name: 'Other Shop', slug: 'other-shop' });
+  const sid2 = r2.location.match(/\d+$/)[0];
+  assert.match((await m2('POST', `/dashboard/stores/${sid2}/domain`, { _csrf: c2, domain: 'lamps-shop.com' })).text, /مربوط بمتجر آخر/);
+});

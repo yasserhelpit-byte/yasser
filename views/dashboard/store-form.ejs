@@ -11,6 +11,7 @@
   <section class="card form">
     <h3>📝 المعلومات الأساسية</h3>
     <label>اسم المتجر<input name="name" required maxlength="100" value="<%= v.name || '' %>"></label>
+    <% if (editing) { %><p class="muted small">🌐 تريد نطاقاً خاصاً مثل <span dir="ltr">myshop.com</span>؟ <a href="/dashboard/stores/<%= store.id %>/domain">اربط نطاقك من هنا</a><% if (store.domain_verified) { %> · مربوط حالياً: <b dir="ltr"><%= store.custom_domain %></b><% } %></p><% } %>
     <label>رابط المتجر (أحرف إنجليزية وأرقام و -)
       <div class="prefix-input" dir="ltr"><span>/s/</span><input name="slug" placeholder="my-shop" value="<%= v.slug || '' %>"></div>
     </label>

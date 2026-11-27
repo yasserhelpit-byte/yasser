@@ -1,7 +1,7 @@
 <%- include('../partials/store-header', { title: 'السلة' }) %>
 <h1>سلة التسوق</h1>
 <% if (!lines.length) { %>
-  <section class="card center empty"><div class="big-icon">🛒</div><p>السلة فارغة.</p><a href="/s/<%= store.slug %>" class="btn">تصفح المنتجات</a></section>
+  <section class="card center empty"><div class="big-icon">🛒</div><p>السلة فارغة.</p><a href="<%= base || '/' %>" class="btn">تصفح المنتجات</a></section>
 <% } else { %>
 <section class="grid side">
   <div class="card cart-list">
@@ -9,10 +9,10 @@
     <div class="cart-line">
       <span class="thumb big"><% if (l.product.image_url) { %><img src="<%= l.product.image_url %>" alt=""><% } else { %><%= l.product.name.trim().charAt(0) %><% } %></span>
       <div class="grow">
-        <a href="/s/<%= store.slug %>/p/<%= l.product.id %>"><strong><%= l.product.name %></strong></a>
+        <a href="<%= base %>/p/<%= l.product.id %>"><strong><%= l.product.name %></strong></a>
         <% if (l.variant) { %><div class="variant"><%= l.variant %></div><% } %>
         <div class="muted small"><%= money(l.product.price, store.currency) %></div>
-        <form method="post" action="/s/<%= store.slug %>/cart" class="row qty-form">
+        <form method="post" action="<%= base %>/cart" class="row qty-form">
           <%- include('../partials/csrf') %>
           <input type="hidden" name="key" value="<%= l.key %>"><input type="hidden" name="mode" value="set">
           <input type="number" name="quantity" value="<%= l.quantity %>" min="0" max="<%= l.product.stock %>" class="qty" onchange="this.form.submit()" aria-label="الكمية">
@@ -26,8 +26,8 @@
   <div class="card">
     <h3>ملخص الطلب</h3>
     <%- include('../partials/totals') %>
-    <a href="/s/<%= store.slug %>/checkout" class="btn big full">إتمام الطلب</a>
-    <p class="center"><a href="/s/<%= store.slug %>">← متابعة التسوق</a></p>
+    <a href="<%= base %>/checkout" class="btn big full">إتمام الطلب</a>
+    <p class="center"><a href="<%= base || '/' %>">← متابعة التسوق</a></p>
   </div>
 </section>
 <% } %>

@@ -8,8 +8,8 @@
     </div>
     <div>
       <strong>روابط</strong>
-      <p><a href="/s/<%= store.slug %>/products">كل المنتجات</a></p>
-      <% menuPages.filter(p => p.in_footer).forEach(p => { %><p><a href="/s/<%= store.slug %>/page/<%= p.slug %>"><%= p.title %></a></p><% }) %>
+      <p><a href="<%= base %>/products">كل المنتجات</a></p>
+      <% menuPages.filter(p => p.in_footer).forEach(p => { %><p><a href="<%= base %>/page/<%= p.slug %>"><%= p.title %></a></p><% }) %>
     </div>
     <% if (store.phone || store.whatsapp || store.email) { %>
     <div>

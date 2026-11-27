@@ -6,15 +6,15 @@
 
 <% if (categories.length) { %>
 <nav class="chips">
-  <a href="/s/<%= store.slug %>/products?sort=<%= sort %>" class="<%= c || sale ? '' : 'on' %>">الكل <small><%= total %></small></a>
+  <a href="<%= base %>/products?sort=<%= sort %>" class="<%= c || sale ? '' : 'on' %>">الكل <small><%= total %></small></a>
   <% categories.forEach(cat => { %>
-    <a href="/s/<%= store.slug %>/products?c=<%= encodeURIComponent(cat.name) %>&sort=<%= sort %>" class="<%= c === cat.name ? 'on' : '' %>"><%= cat.name %> <small><%= cat.n %></small></a>
+    <a href="<%= base %>/products?c=<%= encodeURIComponent(cat.name) %>&sort=<%= sort %>" class="<%= c === cat.name ? 'on' : '' %>"><%= cat.name %> <small><%= cat.n %></small></a>
   <% }) %>
-  <a href="/s/<%= store.slug %>/products?sale=1&sort=<%= sort %>" class="<%= sale ? 'on' : '' %>">🔥 العروض</a>
+  <a href="<%= base %>/products?sale=1&sort=<%= sort %>" class="<%= sale ? 'on' : '' %>">🔥 العروض</a>
 </nav>
 <% } %>
 
-<form class="shop-tools" method="get" action="/s/<%= store.slug %>/products">
+<form class="shop-tools" method="get" action="<%= base %>/products">
   <% if (c) { %><input type="hidden" name="c" value="<%= c %>"><% } %>
   <% if (sale) { %><input type="hidden" name="sale" value="1"><% } %>
   <input type="search" name="q" value="<%= q %>" placeholder="ابحث عن منتج..." aria-label="بحث">
@@ -25,7 +25,7 @@
   </select>
   <button class="btn">بحث</button>
 </form>
-<% if (q) { %><p class="muted">نتائج البحث عن «<%= q %>» · <a href="/s/<%= store.slug %>/products">مسح</a></p><% } %>
+<% if (q) { %><p class="muted">نتائج البحث عن «<%= q %>» · <a href="<%= base %>/products">مسح</a></p><% } %>
 
 <% if (!products.length) { %>
   <div class="empty-sec">
