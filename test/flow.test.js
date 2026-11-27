@@ -393,7 +393,8 @@ test('admin v2: overview, store/merchant pages, reset link, settings, delete', a
   const sellerId = db.prepare('SELECT id FROM users WHERE email = ?').get('seller@example.com').id;
 
   // Overview, lists and detail pages render; merchants can't reach any of them.
-  assert.match((await boss('GET', '/admin')).text, /نظرة عامة على المنصة/);
+  assert.match((await boss('GET', '/admin')).text, /قمع التفعيل/);
+  assert.strictEqual((await boss('GET', '/admin?p=90')).status, 200);
   assert.match((await boss('GET', '/admin/stores?q=seller')).text, /Seller Shop/);
   assert.match((await boss('GET', `/admin/stores/${sid}`)).text, /seller@example\.com/);
   assert.match((await boss('GET', `/admin/merchants/${sellerId}`)).text, /Seller Shop/);

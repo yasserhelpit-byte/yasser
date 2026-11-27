@@ -1,0 +1,35 @@
+<%
+  // Line/area chart drawn as inline SVG. data: [{ day, v }], fmt: value formatter, color: stroke color.
+  const W = 600, H = 170, PT = 10, PB = 4;
+  const n = data.length;
+  const total = data.reduce((a, d) => a + d.v, 0);
+  const raw = Math.max(...data.map(d => d.v), 0);
+  // Round the top of the scale to a "nice" number.
+  const nice = (m) => { if (m <= 4) return 4; const p = Math.pow(10, Math.floor(Math.log10(m))); return Math.ceil(m / p / (m / p > 5 ? 2 : 1)) * p * (m / p > 5 ? 2 : 1); };
+  const top = nice(raw);
+  const x = (i) => n === 1 ? W / 2 : (i / (n - 1)) * W;
+  const y = (v) => PT + (H - PT - PB) * (1 - v / top);
+  const pts = data.map((d, i) => [x(i), y(d.v)]);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = line + ` L ${W} ${H} L 0 ${H} Z`;
+  const gid = 'g' + Math.random().toString(36).slice(2, 8);
+  const mid = data[Math.floor((n - 1) / 2)];
+%>
+<div class="lchart">
+  <div class="lc-plot">
+    <% if (!total) { %><div class="lc-empty">لا توجد بيانات في هذه الفترة بعد</div><% } %>
+    <svg viewBox="0 0 <%= W %> <%= H %>" preserveAspectRatio="none" role="img" aria-label="<%= label %>">
+      <defs><linearGradient id="<%= gid %>" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="<%= color %>" stop-opacity=".28"/><stop offset="1" stop-color="<%= color %>" stop-opacity="0"/></linearGradient></defs>
+      <% [0, .25, .5, .75, 1].forEach(f => { %><line x1="0" x2="<%= W %>" y1="<%= y(top * f) %>" y2="<%= y(top * f) %>" class="lc-grid"/><% }) %>
+      <% if (total) { %>
+        <path d="<%= area %>" fill="url(#<%= gid %>)"/>
+        <path d="<%= line %>" fill="none" stroke="<%= color %>" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <% } %>
+    </svg>
+    <div class="lc-hits">
+      <% data.forEach((d, i) => { %><span style="--x: <%= (x(i) / W * 100).toFixed(2) %>%; --y: <%= (y(d.v) / H * 100).toFixed(2) %>%"><i style="background: <%= color %>"></i><em><b><%= fmt(d.v) %></b><%= d.day.slice(5).replace('-', '/') %></em></span><% }) %>
+    </div>
+    <div class="lc-ylab"><span><%= fmt(top) %></span><span><%= fmt(top / 2) %></span><span>0</span></div>
+  </div>
+  <div class="lc-x"><span><%= data[0].day.slice(5).replace('-', '/') %></span><span><%= mid.day.slice(5).replace('-', '/') %></span><span><%= data[n - 1].day.slice(5).replace('-', '/') %></span></div>
+</div>

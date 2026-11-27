@@ -812,33 +812,46 @@ function series(sql, days) {
 
 // ----- Overview -----
 admin.get('/', (req, res) => {
+  const period = [7, 30, 90].includes(Number(req.query.p)) ? Number(req.query.p) : 30;
+  // Totals for the current period and the one before it (for ▲/▼ trends).
+  const win = (from, to) => db.prepare(
+    `SELECT (SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', ?) AND created_at < datetime('now', ?)) AS users,
+            (SELECT COUNT(*) FROM stores WHERE created_at >= datetime('now', ?) AND created_at < datetime('now', ?)) AS stores,
+            (SELECT COUNT(*) FROM orders WHERE created_at >= datetime('now', ?) AND created_at < datetime('now', ?)) AS orders,
+            (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled' AND created_at >= datetime('now', ?) AND created_at < datetime('now', ?)) AS gmv`
+  ).get(from, to, from, to, from, to, from, to);
+  const cur = win(`-${period} days`, '+1 day');
+  const prev = win(`-${period * 2} days`, `-${period} days`);
   const totals = db.prepare(
     `SELECT (SELECT COUNT(*) FROM users) AS users,
-            (SELECT COUNT(*) FROM users WHERE date(created_at) = date('now')) AS users_today,
             (SELECT COUNT(*) FROM stores) AS stores,
-            (SELECT COUNT(*) FROM stores WHERE date(created_at) = date('now')) AS stores_today,
             (SELECT COUNT(*) FROM stores WHERE suspended = 1) AS suspended,
-            (SELECT COUNT(*) FROM stores s WHERE EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id AND p.active = 1)) AS live_stores,
-            (SELECT COUNT(*) FROM products) AS products,
             (SELECT COUNT(*) FROM orders) AS orders,
-            (SELECT COUNT(*) FROM orders WHERE date(created_at) = date('now')) AS orders_today,
-            (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled') AS gmv,
-            (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled' AND created_at >= datetime('now', '-30 days')) AS gmv30,
             (SELECT COUNT(*) FROM orders WHERE status = 'cancelled') AS cancelled,
+            (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled') AS gmv,
             (SELECT COUNT(*) FROM stores WHERE custom_domain IS NOT NULL AND domain_verified = 0) AS domains_pending`
   ).get();
-  const days = lastDays(30);
+  // Activation funnel: accounts → created a store → added products → received an order.
+  const funnel = db.prepare(
+    `SELECT (SELECT COUNT(*) FROM users WHERE role != 'admin') AS accounts,
+            (SELECT COUNT(DISTINCT s.owner_id) FROM stores s JOIN users u ON u.id = s.owner_id WHERE u.role != 'admin') AS with_store,
+            (SELECT COUNT(DISTINCT s.owner_id) FROM stores s JOIN users u ON u.id = s.owner_id
+               WHERE u.role != 'admin' AND EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id AND p.active = 1)) AS with_products,
+            (SELECT COUNT(DISTINCT s.owner_id) FROM stores s JOIN users u ON u.id = s.owner_id
+               WHERE u.role != 'admin' AND EXISTS (SELECT 1 FROM orders o WHERE o.store_id = s.id)) AS with_orders`
+  ).get();
+  const days = lastDays(period);
+  const since = `date('now', '-${period - 1} days')`;
   const charts = {
-    orders: series(`SELECT date(created_at) AS day, COUNT(*) AS v FROM orders WHERE created_at >= date('now', '-29 days') GROUP BY day`, days),
-    gmv: series(`SELECT date(created_at) AS day, SUM(total) AS v FROM orders WHERE status != 'cancelled' AND created_at >= date('now', '-29 days') GROUP BY day`, days),
-    signups: series(`SELECT date(created_at) AS day, COUNT(*) AS v FROM users WHERE created_at >= date('now', '-29 days') GROUP BY day`, days),
+    orders: series(`SELECT date(created_at) AS day, COUNT(*) AS v FROM orders WHERE created_at >= ${since} GROUP BY day`, days),
+    gmv: series(`SELECT date(created_at) AS day, SUM(total) AS v FROM orders WHERE status != 'cancelled' AND created_at >= ${since} GROUP BY day`, days),
+    signups: series(`SELECT date(created_at) AS day, COUNT(*) AS v FROM users WHERE created_at >= ${since} GROUP BY day`, days),
   };
   const topStores = db.prepare(
     `SELECT s.id, s.name, s.slug, s.color, s.logo_url, s.currency, COUNT(o.id) AS orders, COALESCE(SUM(o.total), 0) AS revenue
-     FROM stores s JOIN orders o ON o.store_id = s.id AND o.status != 'cancelled' AND o.created_at >= datetime('now', '-30 days')
+     FROM stores s JOIN orders o ON o.store_id = s.id AND o.status != 'cancelled' AND o.created_at >= datetime('now', ?)
      GROUP BY s.id ORDER BY revenue DESC LIMIT 5`
-  ).all();
-  // Recent activity across the platform.
+  ).all(`-${period} days`);
   const activity = db.prepare(
     `SELECT * FROM (
        SELECT 'signup' AS kind, u.created_at AS at, u.name AS title, u.email AS detail, u.id AS ref, NULL AS store_id FROM users u
@@ -846,13 +859,13 @@ admin.get('/', (req, res) => {
        SELECT 'store', s.created_at, s.name, u.name, s.id, s.id FROM stores s JOIN users u ON u.id = s.owner_id
        UNION ALL
        SELECT 'order', o.created_at, s.name, o.customer_name || ' · ' || printf('%.2f', o.total) || ' ' || s.currency, o.id, s.id FROM orders o JOIN stores s ON s.id = o.store_id
-     ) ORDER BY at DESC LIMIT 15`
+     ) ORDER BY at DESC LIMIT 12`
   ).all();
   const attention = {
     empty: db.prepare(`SELECT s.id, s.name, s.created_at, u.name AS owner FROM stores s JOIN users u ON u.id = s.owner_id
                        WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id) ORDER BY s.id DESC LIMIT 5`).all(),
   };
-  res.render('admin/overview', { totals, charts, topStores, activity, attention });
+  res.render('admin/overview', { period, cur, prev, totals, funnel, charts, topStores, activity, attention });
 });
 
 // ----- Stores -----

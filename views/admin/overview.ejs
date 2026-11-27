@@ -1,26 +1,89 @@
 <%- include('../partials/header', { title: 'لوحة المسؤول' }) %>
 <%
   const n = (v) => Math.round(v).toLocaleString('en');
+  const compact = (v) => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : n(v);
   const KIND = { signup: ['👤', 'تاجر جديد سجّل'], store: ['🏪', 'متجر جديد'], order: ['🧾', 'طلب جديد'] };
   const when = (t) => t ? t.replace('T', ' ').slice(5, 16) : '';
+  // ▲/▼ versus the previous period of the same length.
+  const delta = (a, b) => {
+    if (!a && !b) return { cls: 'flat', txt: '—' };
+    if (!b) return { cls: 'up', txt: '▲ جديد' };
+    const p = Math.round((a - b) / b * 100);
+    return { cls: p > 0 ? 'up' : p < 0 ? 'down' : 'flat', txt: (p > 0 ? '▲ ' : p < 0 ? '▼ ' : '') + Math.abs(p) + '%' };
+  };
+  const hour = new Date().getHours();
+  const kpis = [
+    ['👥', 'c2', 'تسجيلات جديدة', cur.users, prev.users, n(cur.users), 'إجمالي ' + n(totals.users) + ' حساب', '/admin/merchants'],
+    ['🏪', 'c4', 'متاجر جديدة', cur.stores, prev.stores, n(cur.stores), 'إجمالي ' + n(totals.stores) + ' متجر', '/admin/stores'],
+    ['🧾', 'c3', 'الطلبات', cur.orders, prev.orders, n(cur.orders), 'إجمالي ' + n(totals.orders) + ' · ملغاة ' + n(totals.cancelled), '/admin/orders'],
+    ['💰', 'c1', 'قيمة المبيعات', cur.gmv, prev.gmv, n(cur.gmv), 'إجمالي ' + n(totals.gmv), null],
+  ];
+  const fsteps = [
+    ['أنشأوا حساباً', funnel.accounts],
+    ['أنشأوا متجراً', funnel.with_store],
+    ['أضافوا منتجات', funnel.with_products],
+    ['استقبلوا طلباً', funnel.with_orders],
+  ];
 %>
-<%- include('nav', { heading: 'نظرة عامة على المنصة', sub: 'كل ما يحدث في YASSER في مكان واحد.' }) %>
+<div class="page-head-row">
+  <div>
+    <span class="pill">🛡️ لوحة المسؤول</span>
+    <h1><%= hour < 12 ? 'صباح الخير' : 'مساء الخير' %>، <%= user.name %> 👋</h1>
+    <p class="muted">هذا ما يحدث على منصة YASSER.</p>
+  </div>
+  <nav class="seg-tabs" aria-label="الفترة">
+    <% [[7, '7 أيام'], [30, '30 يوماً'], [90, '90 يوماً']].forEach(([v, l]) => { %><a href="?p=<%= v %>" class="<%= period === v ? 'on' : '' %>"><%= l %></a><% }) %>
+  </nav>
+</div>
 
 <section class="kpis">
-  <a class="kpi" href="/admin/merchants"><span class="kpi-ic c2">👥</span><div><small>الحسابات</small><strong><%= totals.users %></strong><em>اليوم: +<%= totals.users_today %></em></div></a>
-  <a class="kpi" href="/admin/stores"><span class="kpi-ic c4">🏪</span><div><small>المتاجر</small><strong><%= totals.stores %></strong><em><%= totals.live_stores %> فيها منتجات · <%= totals.suspended %> موقوف</em></div></a>
-  <a class="kpi" href="/admin/orders"><span class="kpi-ic c3">🧾</span><div><small>الطلبات</small><strong><%= totals.orders %></strong><em>اليوم: +<%= totals.orders_today %> · ملغاة <%= totals.cancelled %></em></div></a>
-  <div class="kpi"><span class="kpi-ic c1">💰</span><div><small>قيمة المبيعات</small><strong><%= n(totals.gmv) %></strong><em>آخر 30 يوماً: <%= n(totals.gmv30) %></em></div></div>
+  <% kpis.forEach(([ic, c, label, a, b, val, sub, href]) => { const d = delta(a, b); %>
+    <<%= href ? 'a' : 'div' %> class="kpi" <% if (href) { %>href="<%= href %>"<% } %>>
+      <span class="kpi-ic <%= c %>"><%= ic %></span>
+      <div>
+        <small><%= label %> · <%= period %> يوماً</small>
+        <strong><%= val %> <span class="delta <%= d.cls %>" title="مقارنة بالـ <%= period %> يوماً السابقة"><%= d.txt %></span></strong>
+        <em><%= sub %></em>
+      </div>
+    </<%= href ? 'a' : 'div' %>>
+  <% }) %>
 </section>
 
-<section class="grid three">
-  <div class="card"><div class="card-head"><h3>🧾 الطلبات</h3><small class="muted">30 يوماً</small></div><%- include('../partials/minichart', { data: charts.orders, fmt: (v) => v + ' طلب', label: 'الطلبات' }) %></div>
-  <div class="card"><div class="card-head"><h3>💰 المبيعات</h3><small class="muted">30 يوماً</small></div><%- include('../partials/minichart', { data: charts.gmv, fmt: n, label: 'المبيعات' }) %></div>
-  <div class="card"><div class="card-head"><h3>👤 التسجيلات</h3><small class="muted">30 يوماً</small></div><%- include('../partials/minichart', { data: charts.signups, fmt: (v) => v + ' حساب', label: 'التسجيلات' }) %></div>
+<section class="card chart-card">
+  <div class="card-head">
+    <div class="chart-tabs" role="tablist">
+      <button type="button" class="on" data-chart="gmv">💰 المبيعات <b><%= compact(charts.gmv.reduce((a, d) => a + d.v, 0)) %></b></button>
+      <button type="button" data-chart="orders">🧾 الطلبات <b><%= n(charts.orders.reduce((a, d) => a + d.v, 0)) %></b></button>
+      <button type="button" data-chart="signups">👤 التسجيلات <b><%= n(charts.signups.reduce((a, d) => a + d.v, 0)) %></b></button>
+    </div>
+    <small class="muted">آخر <%= period %> يوماً</small>
+  </div>
+  <div data-pane="gmv"><%- include('../partials/linechart', { data: charts.gmv, fmt: compact, color: '#0f766e', label: 'المبيعات' }) %></div>
+  <div data-pane="orders" hidden><%- include('../partials/linechart', { data: charts.orders, fmt: n, color: '#2563eb', label: 'الطلبات' }) %></div>
+  <div data-pane="signups" hidden><%- include('../partials/linechart', { data: charts.signups, fmt: n, color: '#7c3aed', label: 'التسجيلات' }) %></div>
 </section>
 
 <div class="ov-grid">
   <div class="ov-col">
+    <section class="card">
+      <div class="card-head"><h3>🚀 قمع التفعيل</h3><small class="muted">كم تاجراً وصل إلى كل مرحلة</small></div>
+      <div class="funnel">
+        <% fsteps.forEach(([label, v], i) => { const pct = funnel.accounts ? Math.round(v / funnel.accounts * 100) : 0; const prevV = i ? fsteps[i - 1][1] : v; %>
+          <div class="fn-row">
+            <span class="fn-label"><b><%= i + 1 %></b><%= label %></span>
+            <span class="fn-bar"><i style="width: <%= Math.max(pct, v ? 4 : 0) %>%"></i></span>
+            <span class="fn-val"><strong><%= v %></strong><small><%= pct %>%</small></span>
+          </div>
+          <% if (i < fsteps.length - 1) { const drop = prevV ? Math.round((1 - (fsteps[i + 1][1] / v || 0)) * 100) : 0; %>
+            <% if (v && fsteps[i + 1][1] < v) { %><div class="fn-drop">↓ توقّف <%= v - fsteps[i + 1][1] %> هنا</div><% } %>
+          <% } %>
+        <% }) %>
+      </div>
+      <% if (funnel.with_store > funnel.with_products) { %>
+        <p class="tip">💡 <%= funnel.with_store - funnel.with_products %> تاجر أنشأ متجراً دون منتجات. تواصل معهم أو ضع إعلاناً يشرح كيف يضيفون أول منتج.</p>
+      <% } %>
+    </section>
+
     <section class="card">
       <div class="card-head"><h3>⚡ آخر النشاطات</h3></div>
       <% if (!activity.length) { %><div class="chart-empty"><span>🌱</span><p>لا يوجد نشاط بعد.</p></div><% } %>
@@ -35,29 +98,40 @@
       </div>
     </section>
   </div>
+
   <div class="ov-col">
     <section class="card">
-      <h3>🏆 أفضل المتاجر (30 يوماً)</h3>
-      <% if (!topStores.length) { %><p class="muted small">لا توجد مبيعات في آخر 30 يوماً.</p><% } %>
+      <h3>🏆 أفضل المتاجر · <%= period %> يوماً</h3>
+      <% if (!topStores.length) { %><div class="chart-empty"><span>🏆</span><p>لا توجد مبيعات في هذه الفترة.</p></div><% } %>
       <% topStores.forEach((t, i) => { %>
         <a class="top-row link-row" href="/admin/stores/<%= t.id %>"><b><%= i + 1 %></b><span><%= t.name %></span><small class="muted"><%= n(t.revenue) %> <%= t.currency %> · <%= t.orders %> طلب</small></a>
       <% }) %>
     </section>
     <section class="card">
       <h3>👀 تحتاج انتباهك</h3>
-      <% if (totals.domains_pending) { %><p><a href="/admin/stores?f=domain">🌐 <%= totals.domains_pending %> نطاق بانتظار التحقق</a></p><% } %>
+      <% if (totals.domains_pending) { %><a class="attn" href="/admin/stores?f=domain">🌐 <%= totals.domains_pending %> نطاق بانتظار التحقق <span>←</span></a><% } %>
+      <% if (totals.suspended) { %><a class="attn" href="/admin/stores?f=suspended">⛔ <%= totals.suspended %> متجر موقوف <span>←</span></a><% } %>
       <% if (attention.empty.length) { %>
         <p class="muted small">متاجر بدون منتجات (قد يحتاج أصحابها مساعدة):</p>
-        <% attention.empty.forEach(e => { %><p class="row between"><a href="/admin/stores/<%= e.id %>"><%= e.name %></a><small class="muted"><%= e.owner %></small></p><% }) %>
-      <% } else if (!totals.domains_pending) { %><p class="muted small">✅ لا شيء يحتاج تدخلك الآن.</p><% } %>
+        <% attention.empty.forEach(e => { %><a class="row between attn-row" href="/admin/stores/<%= e.id %>"><span><%= e.name %></span><small class="muted"><%= e.owner %></small></a><% }) %>
+      <% } %>
+      <% if (!attention.empty.length && !totals.domains_pending && !totals.suspended) { %><p class="muted small">✅ لا شيء يحتاج تدخلك الآن.</p><% } %>
     </section>
     <section class="card">
       <h3>⚙️ اختصارات</h3>
       <div class="quick">
         <a href="/admin/settings"><span>📢</span>إعلان للتجار</a>
         <a href="/admin/settings"><span><%= platform.signups_open === '1' ? '🟢' : '🔴' %></span><%= platform.signups_open === '1' ? 'التسجيل مفتوح' : 'التسجيل مغلق' %></a>
+        <a href="/admin/orders?status=new"><span>⏳</span>طلبات جديدة</a>
+        <a href="/admin/merchants"><span>👥</span>التجار</a>
       </div>
     </section>
   </div>
 </div>
+<script>
+document.querySelectorAll('.chart-tabs button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.chart-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.chart-card [data-pane]').forEach((p) => (p.hidden = p.dataset.pane !== b.dataset.chart));
+}));
+</script>
 <%- include('../partials/footer') %>
