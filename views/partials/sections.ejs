@@ -32,8 +32,8 @@
     <% }) %>
   </div>
   <% if (b.items.length > 1) { %>
-    <button class="sl-nav prev" type="button" aria-label="السابق">›</button>
-    <button class="sl-nav next" type="button" aria-label="التالي">‹</button>
+    <button class="sl-nav prev" type="button" aria-label="السابق"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></button>
+    <button class="sl-nav next" type="button" aria-label="التالي"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button>
     <div class="dots"><% b.items.forEach((it, i) => { %><button type="button" class="<%= i === 0 ? 'on' : '' %>" aria-label="شريحة <%= i + 1 %>"></button><% }) %></div>
   <% } %>
 </section>

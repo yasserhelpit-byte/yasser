@@ -1126,3 +1126,26 @@ a.prod-cell { color: var(--text); } a.prod-cell:hover { text-decoration: none; }
 .attn-row { padding: 6px 0; color: var(--text); border-bottom: 1px solid var(--line); }
 .attn-row:last-child { border-bottom: 0; }
 @media (max-width: 600px) { .fn-row { grid-template-columns: 110px 1fr 54px; gap: 8px; } .fn-drop { padding-inline-start: 118px; } }
+
+/* Slider arrows (SVG so RTL doesn't mirror them) */
+.sl-nav { display: grid; place-items: center; transition: background .15s, transform .15s; }
+.sl-nav:hover { background: #fff; transform: translateY(-50%) scale(1.06); }
+
+/* Decorative background for image-less hero / slides / banners */
+.sec-hero:not(.has-img), .slide:not(.has-img), .sec-banner:not(.has-img) {
+  background-image:
+    radial-gradient(circle at 15% 20%, rgb(255 255 255 / 16%) 0 120px, transparent 121px),
+    radial-gradient(circle at 88% 85%, rgb(255 255 255 / 10%) 0 200px, transparent 201px),
+    radial-gradient(circle at 75% 10%, rgb(0 0 0 / 12%) 0 90px, transparent 91px),
+    radial-gradient(rgb(255 255 255 / 14%) 1.2px, transparent 1.4px),
+    linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 45%, #000));
+  background-size: auto, auto, auto, 22px 22px, auto;
+}
+.slide:not(.has-img):nth-child(2n) {
+  background-image:
+    radial-gradient(circle at 85% 25%, rgb(255 255 255 / 16%) 0 140px, transparent 141px),
+    radial-gradient(circle at 10% 90%, rgb(255 255 255 / 10%) 0 180px, transparent 181px),
+    radial-gradient(rgb(255 255 255 / 14%) 1.2px, transparent 1.4px),
+    linear-gradient(225deg, color-mix(in srgb, var(--brand) 80%, #fff), color-mix(in srgb, var(--brand) 40%, #000));
+  background-size: auto, auto, 22px 22px, auto;
+}
