@@ -1,11 +1,80 @@
 <%- include('head') %>
+<% if (user && typeof shell !== 'undefined' && shell) { %>
+<%
+  const cur = typeof store !== 'undefined' && store ? store : null;
+  const on = (href, exact) => (exact ? path === href : path === href || path.startsWith(href + '/')) ? 'on' : '';
+  const sb = cur ? `/dashboard/stores/${cur.id}` : '';
+%>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-top">
+      <a href="/dashboard" class="logo">YASSER</a>
+      <button type="button" class="side-close" onclick="document.body.classList.remove('side-open')" aria-label="إغلاق">✕</button>
+    </div>
+
+    <% if (cur) { %>
+    <details class="switcher">
+      <summary>
+        <span class="sw-avatar" style="background: <%= cur.color %>"><% if (cur.logo_url) { %><img src="<%= cur.logo_url %>" alt=""><% } else { %><%= cur.name.trim().charAt(0).toUpperCase() %><% } %></span>
+        <span class="sw-name"><strong><%= cur.name %></strong><small dir="ltr">/s/<%= cur.slug %></small></span>
+        <span class="sw-chev">⌄</span>
+      </summary>
+      <div class="sw-list">
+        <% myStores.forEach(s => { %><a href="/dashboard/stores/<%= s.id %>" class="<%= s.id === cur.id ? 'on' : '' %>"><span class="sw-dot" style="background: <%= s.color %>"></span><%= s.name %></a><% }) %>
+        <a href="/dashboard/stores/new" class="sw-new">+ متجر جديد</a>
+      </div>
+    </details>
+    <nav class="side-nav">
+      <a href="<%= sb %>" class="<%= on(sb, true) %>"><span>📊</span>نظرة عامة</a>
+      <a href="<%= sb %>/orders" class="<%= on(sb + '/orders') %>"><span>🧾</span>الطلبات</a>
+      <a href="<%= sb %>/products" class="<%= on(sb + '/products') %>"><span>📦</span>المنتجات</a>
+      <div class="side-label">المتجر</div>
+      <a href="<%= sb %>/design" class="<%= on(sb + '/design') %>"><span>🎨</span>التصميم</a>
+      <a href="<%= sb %>/pages" class="<%= on(sb + '/pages') %>"><span>📄</span>الصفحات</a>
+      <a href="<%= sb %>/settings" class="<%= on(sb + '/settings') %>"><span>⚙️</span>الإعدادات</a>
+      <a href="/s/<%= cur.slug %>" target="_blank"><span>↗</span>عرض المتجر</a>
+    </nav>
+    <% } %>
+
+    <nav class="side-nav">
+      <div class="side-label">عام</div>
+      <a href="/dashboard" class="<%= on('/dashboard', true) %>"><span>🏪</span>متاجري
+        <% if (typeof pendingOrders !== 'undefined' && pendingOrders) { %><b class="pending" id="pending-badge" title="طلبات جديدة"><%= pendingOrders %></b><% } %></a>
+      <% if (!cur) { %><a href="/dashboard/stores/new" class="<%= on('/dashboard/stores/new', true) %>"><span>➕</span>متجر جديد</a><% } %>
+      <% if (user.isAdmin) { %>
+        <div class="side-label">الإدارة</div>
+        <a href="/admin" class="<%= on('/admin', true) %>"><span>🛡️</span>كل المتاجر</a>
+        <a href="/admin/merchants" class="<%= on('/admin/merchants') %>"><span>👥</span>التجار</a>
+      <% } %>
+    </nav>
+
+    <div class="side-user">
+      <span class="u-avatar"><%= user.name.trim().charAt(0).toUpperCase() %></span>
+      <span class="u-info"><strong><%= user.name %></strong><small dir="ltr"><%= user.email %></small></span>
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="u-out" title="خروج" aria-label="خروج"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button></form>
+    </div>
+  </aside>
+  <div class="side-backdrop" onclick="document.body.classList.remove('side-open')"></div>
+
+  <div class="app-main">
+    <header class="app-top">
+      <button type="button" class="burger" onclick="document.body.classList.add('side-open')" aria-label="القائمة"><span></span><span></span><span></span></button>
+      <a href="/dashboard" class="logo">YASSER</a>
+    </header>
+    <% if (typeof actingAs !== 'undefined' && actingAs) { %>
+    <div class="acting-bar">🛡️ أنت تدير متجر التاجر <strong><%= actingAs.name %></strong> (<span dir="ltr"><%= actingAs.email %></span>) بصفتك مسؤولاً. أي تعديل هنا يغيّر متجره. <a href="/admin">← لوحة المسؤول</a></div>
+    <% } %>
+    <% if (cur && cur.suspended) { %>
+    <div class="acting-bar off">⛔ هذا المتجر موقوف من إدارة المنصة ولا يظهر للعملاء. تواصل مع الإدارة لمعرفة السبب.</div>
+    <% } %>
+    <main class="app-content">
+<% } else { %>
 <header class="topbar">
   <div class="wrap row">
     <a href="/" class="logo">YASSER</a>
     <nav class="row">
       <% if (user) { %>
-        <% if (user.isAdmin) { %><a href="/admin" class="admin-link">🛡️ لوحة المسؤول</a><% } %>
-        <a href="/dashboard" class="nav-orders">لوحة التحكم<% if (typeof pendingOrders !== 'undefined' && pendingOrders) { %> <b class="pending" id="pending-badge" title="طلبات جديدة"><%= pendingOrders %></b><% } %></a>
+        <a href="<%= user.isAdmin ? '/admin' : '/dashboard' %>">لوحة التحكم</a>
         <form method="post" action="/logout" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">خروج</button></form>
       <% } else { %>
         <a href="/login">دخول</a>
@@ -14,10 +83,5 @@
     </nav>
   </div>
 </header>
-<% if (typeof actingAs !== 'undefined' && actingAs) { %>
-<div class="acting-bar"><div class="wrap">🛡️ أنت تدير متجر التاجر <strong><%= actingAs.name %></strong> (<span dir="ltr"><%= actingAs.email %></span>) بصفتك مسؤولاً. أي تعديل هنا يغيّر متجره. <a href="/admin">← لوحة المسؤول</a></div></div>
-<% } %>
-<% if (typeof store !== 'undefined' && store && store.suspended) { %>
-<div class="acting-bar off"><div class="wrap">⛔ هذا المتجر موقوف من إدارة المنصة ولا يظهر للعملاء. تواصل مع الإدارة لمعرفة السبب.</div></div>
-<% } %>
 <main class="wrap">
+<% } %>

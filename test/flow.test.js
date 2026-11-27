@@ -45,7 +45,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   assert.strictEqual(r.status, 302);
   const storeUrl = r.location;
   r = await merchant('POST', `${storeUrl}/products`, { _csrf: csrf, name: 'Mug', price: '50', stock: '3', active: '1' });
-  assert.strictEqual(r.location, storeUrl);
+  assert.strictEqual(r.location, `${storeUrl}/products`);
 
   // Missing CSRF is rejected.
   r = await merchant('POST', `${storeUrl}/products`, { name: 'X', price: '1' });
@@ -89,7 +89,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
     _csrf: csrf, name: 'Shirt', price: '80', stock: '5', active: '1',
     images: JSON.stringify([urls[0], 'javascript:alert(1)']), opt1_name: 'Size', opt1_values: 'S, M, L',
   });
-  assert.strictEqual(r.location, storeUrl);
+  assert.strictEqual(r.location, `${storeUrl}/products`);
   const shop2 = client(base);
   const sp = await shop2('GET', '/s/test-shop');
   const shirtId = sp.text.match(/\/p\/(\d+)" class="pcard-name">Shirt</)[1];

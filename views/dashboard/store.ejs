@@ -11,7 +11,6 @@
   const doneCount = steps.filter(s => s.done).length;
   const shareText = encodeURIComponent(`تسوّق من متجري ${store.name}: ${storeUrl}`);
 %>
-<p><a href="/dashboard">← كل المتاجر</a></p>
 
 <section class="card store-head">
   <div class="store-banner"><span class="avatar"><%= store.name.trim().charAt(0).toUpperCase() %></span></div>
@@ -22,9 +21,6 @@
     </div>
     <div class="row">
       <a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">عرض المتجر ↗</a>
-      <a href="/dashboard/stores/<%= store.id %>/design" class="btn ghost">🎨 التصميم</a>
-      <a href="/dashboard/stores/<%= store.id %>/pages" class="btn ghost">📄 الصفحات</a>
-      <a href="/dashboard/stores/<%= store.id %>/settings" class="btn ghost">⚙️ الإعدادات</a>
       <a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">+ منتج</a>
     </div>
   </div>

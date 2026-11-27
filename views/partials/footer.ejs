@@ -1,5 +1,11 @@
+<% if (user && typeof shell !== 'undefined' && shell) { %>
+    </main>
+  </div>
+</div>
+<% } else { %>
 </main>
 <footer class="foot wrap">صُنع بـ <a href="/">YASSER</a> — منصة المتاجر الإلكترونية</footer>
+<% } %>
 <% if (user && typeof pendingOrders !== 'undefined') { %>
 <div id="toast" class="toast" hidden></div>
 <script>

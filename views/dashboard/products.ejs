@@ -1,0 +1,38 @@
+<%- include('../partials/header', { title: 'المنتجات' }) %>
+<div class="page-head-row">
+  <div><h1>📦 المنتجات</h1><p class="muted"><%= products.length %> منتج<%= q ? ' مطابق' : '' %></p></div>
+  <a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">+ منتج جديد</a>
+</div>
+<form class="shop-tools" method="get">
+  <input type="search" name="q" value="<%= q %>" placeholder="🔍 ابحث بالاسم أو التصنيف أو SKU...">
+  <button class="btn ghost">بحث</button>
+</form>
+<% if (!products.length) { %>
+  <section class="card center empty">
+    <div class="big-icon">📦</div>
+    <h3><%= q ? 'لا توجد نتائج' : 'لا توجد منتجات بعد' %></h3>
+    <% if (!q) { %><p class="muted">أضف أول منتج ليظهر في متجرك.</p><a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">+ أضف منتجاً</a><% } %>
+  </section>
+<% } else { %>
+<div class="table-wrap"><table>
+  <tr><th>المنتج</th><th>التصنيف</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th></th></tr>
+  <% products.forEach(p => { %>
+  <tr>
+    <td><div class="prod-cell">
+      <span class="thumb"><% if (p.image_url) { %><img src="<%= p.image_url %>" alt=""><% } else { %><%= p.name.trim().charAt(0) %><% } %></span>
+      <div><a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>"><strong><%= p.name %></strong></a><% if (p.sku) { %><br><small class="muted" dir="ltr"><%= p.sku %></small><% } %></div>
+    </div></td>
+    <td class="muted"><%= p.category || '—' %></td>
+    <td><%= money(p.price, store.currency) %><% if (p.compare_price > p.price) { %><br><s class="muted small"><%= money(p.compare_price, store.currency) %></s><% } %></td>
+    <td><span class="badge <%= p.stock === 0 ? 's-cancelled' : p.stock <= 3 ? 's-confirmed' : 's-delivered' %>"><%= p.stock === 0 ? 'نفد' : p.stock %></span></td>
+    <td><span class="badge <%= p.active ? 's-new' : '' %>"><%= p.active ? 'منشور' : 'مخفي' %></span></td>
+    <td><div class="row">
+      <a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>">تعديل</a>
+      <a href="/s/<%= store.slug %>/p/<%= p.id %>" target="_blank" class="muted">عرض ↗</a>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/products/<%= p.id %>/delete" class="inline" onsubmit="return confirm('حذف المنتج؟')"><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
+    </div></td>
+  </tr>
+  <% }) %>
+</table></div>
+<% } %>
+<%- include('../partials/footer') %>

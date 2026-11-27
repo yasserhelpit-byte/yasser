@@ -194,6 +194,14 @@ app.post('/logout', (req, res) => {
 // ---------- Merchant dashboard ----------
 const dash = express.Router();
 dash.use(auth.requireLogin);
+const shell = (req, res, next) => {
+  res.locals.shell = true;
+  res.locals.path = req.originalUrl.split('?')[0];
+  // Sidebar store switcher.
+  res.locals.myStores = db.prepare('SELECT id, name, color, logo_url FROM stores WHERE owner_id = ? ORDER BY id').all(req.user.id);
+  next();
+};
+dash.use(shell);
 const pendingFor = (userId) =>
   db.prepare(`SELECT COUNT(*) AS n FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ? AND o.status = 'new'`).get(userId).n;
 dash.use((req, res, next) => {
@@ -429,6 +437,16 @@ function storeCategories(req, res, next) {
 }
 dash.use('/stores/:storeId/products', ownStore, storeCategories);
 
+dash.get('/stores/:storeId/products', ownStore, (req, res) => {
+  const q = str(req.query.q, 100);
+  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
+  const products = db.prepare(
+    `SELECT * FROM products WHERE store_id = ? AND (? = '' OR name LIKE ? ESCAPE '\\' OR sku LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')
+     ORDER BY id DESC`
+  ).all(req.store.id, q, like, like, like);
+  res.render('dashboard/products', { products, q });
+});
+
 dash.get('/stores/:storeId/products/new', ownStore, (req, res) =>
   res.render('dashboard/product-form', { error: null, saved: !!req.query.saved, values: { active: 1, images: '[]', options: '[]' }, action: `/dashboard/stores/${req.store.id}/products` })
 );
@@ -439,7 +457,7 @@ dash.post('/stores/:storeId/products', ownStore, (req, res) => {
   db.prepare(`INSERT INTO products (store_id, ${PRODUCT_FIELDS.join(', ')}) VALUES (?, ${PRODUCT_FIELDS.map(() => '?').join(', ')})`).run(
     req.store.id, ...PRODUCT_FIELDS.map((f) => p[f])
   );
-  res.redirect(req.body.next === 'another' ? `/dashboard/stores/${req.store.id}/products/new?saved=1` : `/dashboard/stores/${req.store.id}`);
+  res.redirect(req.body.next === 'another' ? `/dashboard/stores/${req.store.id}/products/new?saved=1` : `/dashboard/stores/${req.store.id}/products`);
 });
 
 function ownProduct(req, res, next) {
@@ -459,11 +477,11 @@ dash.post('/stores/:storeId/products/:productId', ownStore, ownProduct, (req, re
   db.prepare(`UPDATE products SET ${PRODUCT_FIELDS.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`).run(
     ...PRODUCT_FIELDS.map((f) => p[f]), req.product.id
   );
-  res.redirect(`/dashboard/stores/${req.store.id}`);
+  res.redirect(`/dashboard/stores/${req.store.id}/products`);
 });
 dash.post('/stores/:storeId/products/:productId/delete', ownStore, ownProduct, (req, res) => {
   db.prepare('DELETE FROM products WHERE id = ?').run(req.product.id);
-  res.redirect(`/dashboard/stores/${req.store.id}`);
+  res.redirect(`/dashboard/stores/${req.store.id}/products`);
 });
 
 dash.get('/stores/:storeId/orders', ownStore, (req, res) => {
@@ -618,6 +636,11 @@ app.use('/dashboard', dash);
 // ---------- Platform admin ----------
 const admin = express.Router();
 admin.use(auth.requireAdmin);
+admin.use(shell);
+admin.use((req, res, next) => {
+  res.locals.pendingOrders = pendingFor(req.user.id);
+  next();
+});
 
 admin.get('/', (req, res) => {
   const q = str(req.query.q, 100);

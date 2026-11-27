@@ -4,7 +4,7 @@
   const opts = json(values.options);
   const cur = store.currency;
 %>
-<p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p>
+<p><a href="/dashboard/stores/<%= store.id %>/products">← المنتجات</a></p>
 <div class="row between">
   <h1><%= values.id ? 'تعديل المنتج' : 'منتج جديد' %></h1>
   <% if (values.id) { %><a href="/s/<%= store.slug %>/p/<%= values.id %>" target="_blank" class="btn ghost">عرض في المتجر ↗</a><% } %>
@@ -102,7 +102,7 @@
   </aside>
 
   <div class="save-bar pf-save">
-    <a href="/dashboard/stores/<%= store.id %>" class="btn ghost">إلغاء</a>
+    <a href="/dashboard/stores/<%= store.id %>/products" class="btn ghost">إلغاء</a>
     <% if (!values.id) { %><button class="btn ghost" name="next" value="another">حفظ وإضافة آخر</button><% } %>
     <button class="btn big">💾 حفظ المنتج</button>
   </div>

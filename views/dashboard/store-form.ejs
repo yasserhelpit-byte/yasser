@@ -1,6 +1,5 @@
 <%- include('../partials/header', { title: 'إعدادات المتجر' }) %>
 <% const v = values; const editing = !!(typeof store !== 'undefined' && store); %>
-<% if (editing) { %><p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p><% } %>
 <div class="row between">
   <h1><%= editing ? '🎨 تخصيص المتجر' : 'متجر جديد' %></h1>
   <% if (editing) { %><a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">معاينة المتجر ↗</a><% } %>
