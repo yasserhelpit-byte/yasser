@@ -74,7 +74,7 @@ app.get('/_domain-check', (req, res) => {
 
 app.use((req, res, next) => {
   const host = hostOf(req);
-  if (!host || PLATFORM_HOSTS.has(host) || host.endsWith('.app.github.dev')) return next();
+  if (!host || PLATFORM_HOSTS.has(host) || host.endsWith('.app.github.dev') || host.endsWith('.up.railway.app')) return next();
   const store = db.prepare('SELECT slug FROM stores WHERE domain_verified = 1 AND (custom_domain = ? OR custom_domain = ?)').get(host, bareHost(host));
   if (!store) return next();
   req.customDomain = host;
@@ -159,6 +159,9 @@ app.get(/^\/icon-(192|512)\.png$/, async (req, res) => {
   }
   if (!iconCache[size]) return res.status(404).end();
   res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }).send(iconCache[size]);
+});
+app.get('/healthz', (req, res) => {
+  try { db.prepare('SELECT 1').get(); res.type('text').send('ok'); } catch (e) { res.status(503).type('text').send('db error'); }
 });
 app.get('/manifest.webmanifest', (req, res) => {
   res.type('application/manifest+json').json({
