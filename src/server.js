@@ -170,15 +170,45 @@ function validateStore(values, excludeId = 0) {
 }
 
 dash.get('/stores/:storeId', ownStore, (req, res) => {
-  const products = db.prepare('SELECT * FROM products WHERE store_id = ? ORDER BY id DESC').all(req.store.id);
-  const orders = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC LIMIT 10').all(req.store.id);
+  const id = req.store.id;
+  const products = db.prepare('SELECT * FROM products WHERE store_id = ? ORDER BY id DESC').all(id);
+  const orders = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC LIMIT 8').all(id);
   const stats = db
     .prepare(
-      `SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total END), 0) AS revenue,
-              SUM(status = 'new') AS pending FROM orders WHERE store_id = ?`
+      `SELECT COUNT(*) AS count,
+              COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total END), 0) AS revenue,
+              COALESCE(SUM(status = 'new'), 0) AS pending,
+              COALESCE(AVG(CASE WHEN status != 'cancelled' THEN total END), 0) AS avg
+       FROM orders WHERE store_id = ?`
     )
-    .get(req.store.id);
-  res.render('dashboard/store', { products, orders, stats });
+    .get(id);
+  // Revenue per day for the last 7 days (including days with no sales).
+  const rows = db
+    .prepare(
+      `SELECT date(created_at) AS day, SUM(total) AS total FROM orders
+       WHERE store_id = ? AND status != 'cancelled' AND created_at >= date('now', '-6 days')
+       GROUP BY day`
+    )
+    .all(id);
+  const byDay = Object.fromEntries(rows.map((r) => [r.day, r.total]));
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    days.push({ day: d, total: byDay[d] || 0 });
+  }
+  const max = Math.max(1, ...days.map((d) => d.total));
+  const topProducts = db
+    .prepare(
+      `SELECT oi.name, SUM(oi.quantity) AS qty, SUM(oi.quantity * oi.price) AS total
+       FROM order_items oi JOIN orders o ON o.id = oi.order_id
+       WHERE o.store_id = ? AND o.status != 'cancelled'
+       GROUP BY oi.name ORDER BY qty DESC LIMIT 5`
+    )
+    .all(id);
+  const host = req.get('x-forwarded-host') || req.get('host');
+  const proto = req.get('x-forwarded-proto') || req.protocol;
+  const storeUrl = `${proto}://${host}/s/${req.store.slug}`;
+  res.render('dashboard/store', { products, orders, stats, days, max, topProducts, storeUrl });
 });
 
 dash.get('/stores/:storeId/settings', ownStore, (req, res) =>

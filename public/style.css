@@ -236,3 +236,28 @@ html { scroll-behavior: smooth; }
 .l-foot { border-top: 1px solid var(--line); margin-top: 64px; padding: 28px 0 12px; background: var(--card); }
 .l-foot nav { gap: 20px; }
 .l-foot nav a { color: var(--muted); }
+
+/* Store management */
+.store-head { padding: 0; overflow: hidden; margin-bottom: 16px; }
+.store-head .store-banner { background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 55%, #000)); height: 90px; }
+.store-head .avatar { width: 64px; height: 64px; bottom: -28px; font-size: 1.7rem; }
+.store-head-body { padding: 36px 20px 8px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.store-head-body h1 { margin: 0; }
+.store-head-body p { margin: 2px 0 0; }
+.share { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 14px 20px; margin-top: 12px; border-top: 1px solid var(--line); background: var(--bg); }
+.share input { flex: 1 1 220px; width: auto; padding: 6px 10px; background: var(--card); }
+.btn.wa { background: #25d366; color: #fff; }
+.bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 180px; align-items: end; margin-top: 12px; }
+.bar { display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; gap: 4px; }
+.bar span { width: 100%; max-width: 40px; background: var(--brand); border-radius: 6px 6px 2px 2px; }
+.bar span.zero { background: var(--line); }
+.bar small { font-size: 0.75rem; color: var(--muted); min-height: 1em; }
+.bar em { font-style: normal; font-size: 0.75rem; color: var(--muted); }
+.top-row { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.top-row:last-child { border-bottom: 0; }
+.top-row b { width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--brand) 15%, var(--bg)); color: var(--brand); display: grid; place-items: center; font-size: 0.85rem; flex: none; }
+.top-row span { flex: 1; }
+.prod-cell { display: flex; gap: 10px; align-items: center; }
+.thumb { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--brand) 12%, var(--bg)); color: var(--brand); font-weight: 800; display: grid; place-items: center; flex: none; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+h2 small { font-size: 0.9rem; font-weight: 500; }

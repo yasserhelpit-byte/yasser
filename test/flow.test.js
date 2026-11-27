@@ -61,7 +61,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
 
   page = await merchant('GET', storeUrl);
   assert.match(page.text, /Ali/);
-  assert.match(page.text, /<td>1<\/td>/); // stock 3 - 2
+  assert.match(page.text, /s-confirmed">1</); // stock 3 - 2 = 1 (low-stock badge)
 
   // Another merchant cannot see the store.
   const other = client(base);
