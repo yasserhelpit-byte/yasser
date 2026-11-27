@@ -86,7 +86,9 @@
     <div class="ed-stage">
       <div class="ed-frame" id="frame-wrap">
         <div class="ed-browser"><i></i><i></i><i></i><span dir="ltr">/s/<%= store.slug %></span><em id="pv-loading" hidden>جارٍ التحديث…</em></div>
-        <iframe id="preview" title="معاينة المتجر" sandbox="allow-scripts"></iframe>
+        <!-- Same origin so the preview loads CSS, fonts and /uploads with the merchant's cookies (needed behind
+             authenticating proxies such as Codespaces). Still sandboxed: no top navigation, popups or form posts. -->
+        <iframe id="preview" title="معاينة المتجر" sandbox="allow-scripts allow-same-origin"></iframe>
       </div>
     </div>
   </div>
