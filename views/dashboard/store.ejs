@@ -1,0 +1,36 @@
+<%- include('../partials/header', { title: store.name }) %>
+<div class="row between">
+  <h1><%= store.name %></h1>
+  <div class="row">
+    <a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">عرض المتجر ↗</a>
+    <a href="/dashboard/stores/<%= store.id %>/settings" class="btn ghost">الإعدادات</a>
+  </div>
+</div>
+<section class="grid three stats">
+  <div class="card"><span class="muted">الطلبات</span><strong><%= stats.count %></strong></div>
+  <div class="card"><span class="muted">بانتظار المعالجة</span><strong><%= stats.pending || 0 %></strong></div>
+  <div class="card"><span class="muted">المبيعات</span><strong><%= money(stats.revenue, store.currency) %></strong></div>
+</section>
+
+<div class="row between"><h2>المنتجات</h2><a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">+ منتج</a></div>
+<% if (!products.length) { %><p class="muted">لا توجد منتجات بعد.</p><% } else { %>
+<div class="table-wrap"><table>
+  <tr><th>المنتج</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th></th></tr>
+  <% products.forEach(p => { %>
+  <tr>
+    <td><%= p.name %></td><td><%= money(p.price, store.currency) %></td>
+    <td><%= p.stock %></td><td><%= p.active ? 'منشور' : 'مخفي' %></td>
+    <td><div class="row">
+      <a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>">تعديل</a>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/products/<%= p.id %>/delete" class="inline" onsubmit="return confirm('حذف المنتج؟')">
+        <%- include('../partials/csrf') %><button class="link danger">حذف</button>
+      </form>
+    </div></td>
+  </tr>
+  <% }) %>
+</table></div>
+<% } %>
+
+<div class="row between"><h2>آخر الطلبات</h2><a href="/dashboard/stores/<%= store.id %>/orders">كل الطلبات</a></div>
+<%- include('orders-table', { orders }) %>
+<%- include('../partials/footer') %>

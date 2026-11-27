@@ -1,0 +1,14 @@
+<%- include('../partials/store-header', { title: store.name }) %>
+<section class="hero store-hero"><h1><%= store.name %></h1><% if (store.description) { %><p><%= store.description %></p><% } %></section>
+<% if (!products.length) { %><p class="muted center">لا توجد منتجات حالياً.</p><% } %>
+<section class="grid products">
+  <% products.forEach(p => { %>
+    <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="card product">
+      <div class="img"><% if (p.image_url) { %><img src="<%= p.image_url %>" alt="<%= p.name %>" loading="lazy"><% } else { %><span>📦</span><% } %></div>
+      <h3><%= p.name %></h3>
+      <p class="price"><%= money(p.price, store.currency) %></p>
+      <% if (!p.stock) { %><span class="badge s-cancelled">نفدت الكمية</span><% } %>
+    </a>
+  <% }) %>
+</section>
+<%- include('../partials/footer') %>

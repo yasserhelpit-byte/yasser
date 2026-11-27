@@ -1,0 +1,8 @@
+<%- include('../partials/store-header', { title: 'شكراً' }) %>
+<section class="card center">
+  <h1>✅ تم استلام طلبك</h1>
+  <p>رقم الطلب <strong>#<%= order.id %></strong> — الإجمالي <%= money(order.total, store.currency) %></p>
+  <p class="muted">سيتواصل معك المتجر لتأكيد الطلب.</p>
+  <a href="/s/<%= store.slug %>" class="btn">العودة إلى المتجر</a>
+</section>
+<%- include('../partials/footer') %>

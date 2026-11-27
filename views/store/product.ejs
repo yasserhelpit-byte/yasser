@@ -1,0 +1,20 @@
+<%- include('../partials/store-header', { title: product.name }) %>
+<p><a href="/s/<%= store.slug %>">← كل المنتجات</a></p>
+<section class="grid two">
+  <div class="card product-img"><% if (product.image_url) { %><img src="<%= product.image_url %>" alt="<%= product.name %>"><% } else { %><span>📦</span><% } %></div>
+  <div>
+    <h1><%= product.name %></h1>
+    <p class="price big"><%= money(product.price, store.currency) %></p>
+    <p class="pre"><%= product.description %></p>
+    <% if (product.stock > 0) { %>
+      <form method="post" action="/s/<%= store.slug %>/cart" class="row">
+        <%- include('../partials/csrf') %>
+        <input type="hidden" name="product_id" value="<%= product.id %>">
+        <input type="number" name="quantity" value="1" min="1" max="<%= product.stock %>" class="qty">
+        <button class="btn">أضف إلى السلة</button>
+      </form>
+      <p class="muted">متوفر: <%= product.stock %></p>
+    <% } else { %><p class="badge s-cancelled">نفدت الكمية</p><% } %>
+  </div>
+</section>
+<%- include('../partials/footer') %>

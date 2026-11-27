@@ -1,0 +1,16 @@
+<%- include('head') %>
+<header class="topbar">
+  <div class="wrap row">
+    <a href="/" class="logo">YASSER</a>
+    <nav class="row">
+      <% if (user) { %>
+        <a href="/dashboard">لوحة التحكم</a>
+        <form method="post" action="/logout" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">خروج</button></form>
+      <% } else { %>
+        <a href="/login">دخول</a>
+        <a href="/signup" class="btn small">أنشئ متجرك</a>
+      <% } %>
+    </nav>
+  </div>
+</header>
+<main class="wrap">

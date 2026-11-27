@@ -1,0 +1,14 @@
+<% if (!orders.length) { %><p class="muted">لا توجد طلبات بعد.</p><% } else { %>
+<div class="table-wrap"><table>
+  <tr><th>#</th><th>العميل</th><th>الهاتف</th><th>المجموع</th><th>الحالة</th><th>التاريخ</th></tr>
+  <% orders.forEach(o => { %>
+  <tr>
+    <td><a href="/dashboard/stores/<%= store.id %>/orders/<%= o.id %>">#<%= o.id %></a></td>
+    <td><%= o.customer_name %></td><td dir="ltr"><%= o.customer_phone %></td>
+    <td><%= money(o.total, store.currency) %></td>
+    <td><span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span></td>
+    <td class="muted"><%= o.created_at %></td>
+  </tr>
+  <% }) %>
+</table></div>
+<% } %>

@@ -1,0 +1,22 @@
+<%- include('partials/header') %>
+<section class="hero">
+  <h1>أنشئ متجرك الإلكتروني في دقائق</h1>
+  <p>YASSER منصة تتيح لك إطلاق متجر، إضافة منتجاتك، واستقبال الطلبات مع الدفع عند الاستلام — بدون أي خبرة تقنية.</p>
+  <a href="<%= user ? '/dashboard' : '/signup' %>" class="btn big">ابدأ الآن مجاناً</a>
+</section>
+<section class="grid three features">
+  <div class="card"><h3>🏪 متجر خاص بك</h3><p>رابط مستقل، اسم، ولون يعبّر عن علامتك التجارية.</p></div>
+  <div class="card"><h3>📦 إدارة المنتجات</h3><p>أضف المنتجات بالصور والأسعار وتابع المخزون تلقائياً.</p></div>
+  <div class="card"><h3>🧾 الطلبات</h3><p>استقبل الطلبات وحدّث حالتها من التأكيد حتى التسليم.</p></div>
+</section>
+<% if (stores.length) { %>
+<h2>متاجر على YASSER</h2>
+<section class="grid three">
+  <% stores.forEach(s => { %>
+    <a class="card store-card" href="/s/<%= s.slug %>" style="border-top:4px solid <%= s.color %>">
+      <h3><%= s.name %></h3><p class="muted"><%= s.description || 'متجر على YASSER' %></p>
+    </a>
+  <% }) %>
+</section>
+<% } %>
+<%- include('partials/footer') %>

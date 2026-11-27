@@ -1,0 +1,17 @@
+<%- include('../partials/header', { title: 'إعدادات المتجر' }) %>
+<section class="card narrow">
+  <h1><%= values.id ? 'إعدادات المتجر' : 'متجر جديد' %></h1>
+  <%- include('../partials/errors') %>
+  <form method="post" action="<%= action %>" class="form">
+    <%- include('../partials/csrf') %>
+    <label>اسم المتجر<input name="name" required value="<%= values.name || '' %>"></label>
+    <label>رابط المتجر (أحرف إنجليزية)<input name="slug" dir="ltr" placeholder="my-shop" value="<%= values.slug || '' %>"></label>
+    <label>الوصف<textarea name="description" rows="3"><%= values.description || '' %></textarea></label>
+    <div class="row">
+      <label>اللون<input name="color" type="color" value="<%= values.color || '#0f766e' %>"></label>
+      <label>العملة<input name="currency" dir="ltr" maxlength="5" value="<%= values.currency || 'MAD' %>"></label>
+    </div>
+    <button class="btn">حفظ</button>
+  </form>
+</section>
+<%- include('../partials/footer') %>

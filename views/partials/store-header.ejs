@@ -1,0 +1,8 @@
+<%- include('head') %>
+<header class="topbar store-bar">
+  <div class="wrap row">
+    <a href="/s/<%= store.slug %>" class="logo"><%= store.name %></a>
+    <a href="/s/<%= store.slug %>/cart" class="btn small">🛒 السلة (<%= cartCount %>)</a>
+  </div>
+</header>
+<main class="wrap">

@@ -1,0 +1,19 @@
+<%- include('../partials/header', { title: 'منتج' }) %>
+<section class="card narrow">
+  <p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p>
+  <h1><%= values.id ? 'تعديل المنتج' : 'منتج جديد' %></h1>
+  <%- include('../partials/errors') %>
+  <form method="post" action="<%= action %>" class="form">
+    <%- include('../partials/csrf') %>
+    <label>الاسم<input name="name" required value="<%= values.name || '' %>"></label>
+    <label>الوصف<textarea name="description" rows="4"><%= values.description || '' %></textarea></label>
+    <div class="row">
+      <label>السعر (<%= store.currency %>)<input name="price" type="number" step="0.01" min="0" required value="<%= values.price ?? '' %>"></label>
+      <label>المخزون<input name="stock" type="number" min="0" value="<%= values.stock ?? 0 %>"></label>
+    </div>
+    <label>رابط الصورة<input name="image_url" type="url" dir="ltr" placeholder="https://..." value="<%= values.image_url || '' %>"></label>
+    <label class="check"><input type="checkbox" name="active" value="1" <%= values.active ? 'checked' : '' %>> منشور في المتجر</label>
+    <button class="btn">حفظ</button>
+  </form>
+</section>
+<%- include('../partials/footer') %>

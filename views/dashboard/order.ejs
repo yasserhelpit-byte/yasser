@@ -1,0 +1,28 @@
+<%- include('../partials/header', { title: 'طلب #' + order.id }) %>
+<p><a href="/dashboard/stores/<%= store.id %>/orders">← الطلبات</a></p>
+<h1>طلب #<%= order.id %> <span class="badge s-<%= order.status %>"><%= STATUSES[order.status] %></span></h1>
+<section class="grid two">
+  <div class="card">
+    <h3>العميل</h3>
+    <p><strong><%= order.customer_name %></strong></p>
+    <p dir="ltr" class="right"><%= order.customer_phone %></p>
+    <p><%= order.customer_address %></p>
+    <% if (order.note) { %><p class="muted">ملاحظة: <%= order.note %></p><% } %>
+  </div>
+  <div class="card">
+    <h3>تحديث الحالة</h3>
+    <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/status" class="form">
+      <%- include('../partials/csrf') %>
+      <select name="status">
+        <% Object.entries(STATUSES).forEach(([k, v]) => { %><option value="<%= k %>" <%= k === order.status ? 'selected' : '' %>><%= v %></option><% }) %>
+      </select>
+      <button class="btn">حفظ</button>
+    </form>
+  </div>
+</section>
+<div class="table-wrap"><table>
+  <tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>المجموع</th></tr>
+  <% items.forEach(i => { %><tr><td><%= i.name %></td><td><%= money(i.price, store.currency) %></td><td><%= i.quantity %></td><td><%= money(i.price * i.quantity, store.currency) %></td></tr><% }) %>
+  <tr><th colspan="3">الإجمالي</th><th><%= money(order.total, store.currency) %></th></tr>
+</table></div>
+<%- include('../partials/footer') %>

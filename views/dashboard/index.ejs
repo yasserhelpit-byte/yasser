@@ -1,0 +1,15 @@
+<%- include('../partials/header', { title: 'لوحة التحكم' }) %>
+<div class="row between"><h1>مرحباً <%= user.name %></h1><a href="/dashboard/stores/new" class="btn">+ متجر جديد</a></div>
+<% if (!stores.length) { %>
+  <section class="card center"><h2>لا توجد متاجر بعد</h2><p>أنشئ متجرك الأول وابدأ البيع.</p><a href="/dashboard/stores/new" class="btn">أنشئ متجراً</a></section>
+<% } %>
+<section class="grid three">
+  <% stores.forEach(s => { %>
+    <a class="card store-card" href="/dashboard/stores/<%= s.id %>" style="border-top:4px solid <%= s.color %>">
+      <h3><%= s.name %></h3>
+      <p class="muted" dir="ltr">/s/<%= s.slug %></p>
+      <p><%= s.product_count %> منتج · <%= s.order_count %> طلب · <%= money(s.revenue, s.currency) %></p>
+    </a>
+  <% }) %>
+</section>
+<%- include('../partials/footer') %>
