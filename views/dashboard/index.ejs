@@ -12,6 +12,7 @@
   <a href="/dashboard/stores/new" class="btn">+ متجر جديد</a>
 </div>
 
+<%- include('../partials/push-banner') %>
 <section class="grid four stats">
   <div class="card stat"><span class="icon">💰</span><span class="muted">إجمالي المبيعات</span><strong><%= money(totals.revenue, currency) %></strong></div>
   <div class="card stat"><span class="icon">🧾</span><span class="muted">الطلبات</span><strong><%= totals.orders %></strong></div>

@@ -1,0 +1,45 @@
+<%- include('../partials/header', { title: 'إعدادات الإشعارات' }) %>
+<div class="page-head-row"><div><h1>🔔 الإشعارات</h1><p class="muted">اختر ما يصلك على هاتفك وبالبريد الإلكتروني. كل الإشعارات تظهر أيضاً في الجرس 🔔.</p></div></div>
+<% if (saved) { %><div class="alert ok">✓ تم الحفظ.</div><% } %>
+
+<section class="card" data-push-state>
+  <h3>📱 هذا الجهاز</h3>
+  <div class="push-off-only">
+    <p class="muted">الإشعارات غير مفعّلة على هذا الجهاز.</p>
+    <button type="button" class="btn" data-push-enable>🔔 فعّل الإشعارات</button>
+    <details class="ios-help"><summary>📱 أستعمل آيفون</summary>
+      <ol><li>افتح هذا الموقع في <strong>Safari</strong>.</li><li>اضغط زر المشاركة ⬆️ ثم <strong>«إضافة إلى الشاشة الرئيسية»</strong>.</li><li>افتح <strong>YASSER</strong> من الشاشة الرئيسية، ثم اضغط «فعّل الإشعارات».</li></ol>
+      <p class="muted small">يتطلب iOS 16.4 أو أحدث.</p>
+    </details>
+  </div>
+  <div class="push-on-only"><p>✓ الإشعارات مفعّلة على هذا الجهاز.</p><button type="button" class="btn ghost small" data-push-test>إرسال إشعار تجريبي</button></div>
+</section>
+
+<form method="post" class="card">
+  <%- include('../partials/csrf') %>
+  <h3>ماذا يصلك؟</h3>
+  <div class="table-wrap"><table class="prefs">
+    <tr><th>النوع</th><th>📱 الهاتف</th><th>✉️ البريد</th></tr>
+    <% Object.entries(KINDS).forEach(([k, d]) => { if (d.adminOnly && !user.isAdmin) return; %>
+      <tr>
+        <td><%= d.icon %> <%= d.label %></td>
+        <td><label class="switch"><input type="checkbox" name="<%= k %>_push" value="1" <%= prefs[k].push ? 'checked' : '' %>><span class="slider"></span></label></td>
+        <td><label class="switch"><input type="checkbox" name="<%= k %>_email" value="1" <%= prefs[k].email ? 'checked' : '' %>><span class="slider"></span></label></td>
+      </tr>
+    <% }) %>
+  </table></div>
+  <p class="muted small">💬 رسائل العملاء: البريد يُرسل عند بداية كل محادثة فقط، لا مع كل رسالة.</p>
+  <button class="btn">💾 حفظ</button>
+</form>
+
+<section class="card">
+  <h3>الأجهزة المفعّلة (<%= devices.length %>)</h3>
+  <% if (!devices.length) { %><p class="muted">لا توجد أجهزة بعد.</p><% } %>
+  <% devices.forEach(d => { %>
+    <div class="row between device-row">
+      <span>📱 <strong><%= d.device || 'جهاز' %></strong> <small class="muted">· منذ <%= d.created_at.slice(0, 10) %></small></span>
+      <form method="post" action="/dashboard/push/unsubscribe" class="inline"><%- include('../partials/csrf') %><input type="hidden" name="id" value="<%= d.id %>"><button class="link danger">إزالة</button></form>
+    </div>
+  <% }) %>
+</section>
+<%- include('../partials/footer') %>

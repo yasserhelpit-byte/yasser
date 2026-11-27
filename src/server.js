@@ -10,6 +10,7 @@ const limiter = require('./limiter');
 const mailer = require('./mailer');
 const sections = require('./sections');
 const aiAds = require('./ai-ads');
+const notifier = require('./notify');
 
 const dns = require('dns').promises;
 const maintenance = require('./maintenance');
@@ -140,6 +141,27 @@ const str = (v, max = 500) => String(v ?? '').trim().slice(0, max);
 const slugify = (s) =>
   str(s, 60).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
 
+// ---------- App manifest & icons (install on the home screen; required for push on iPhone) ----------
+let sharpLib = null;
+try { sharpLib = require('sharp'); } catch {}
+const iconCache = {};
+app.get(/^\/icon-(192|512)\.png$/, async (req, res) => {
+  const size = Number(req.params[0]);
+  if (!iconCache[size] && sharpLib) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#0f766e"/><text x="256" y="345" font-size="300" font-family="Arial, sans-serif" font-weight="bold" fill="#fff" text-anchor="middle">Y</text></svg>`;
+    iconCache[size] = await sharpLib(Buffer.from(svg)).resize(size, size).png().toBuffer();
+  }
+  if (!iconCache[size]) return res.status(404).end();
+  res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }).send(iconCache[size]);
+});
+app.get('/manifest.webmanifest', (req, res) => {
+  res.type('application/manifest+json').json({
+    name: 'YASSER · لوحة التاجر', short_name: 'YASSER', lang: 'ar', dir: 'rtl',
+    start_url: '/dashboard', scope: '/', display: 'standalone', background_color: '#f6f7f9', theme_color: '#0f766e',
+    icons: [192, 512].map((s) => ({ src: `/icon-${s}.png`, sizes: `${s}x${s}`, type: 'image/png', purpose: 'any maskable' })),
+  });
+});
+
 // ---------- Public pages ----------
 app.get('/', (req, res) => {
   const counts = db
@@ -183,6 +205,7 @@ app.post('/signup', (req, res) => {
     .prepare('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)')
     .run(name, email, auth.hashPassword(password));
   auth.login(req, res, Number(lastInsertRowid));
+  notifier.notifyAdmins({ title: `👤 تاجر جديد: ${name}`, body: email, link: `/admin/merchants/${Number(lastInsertRowid)}` });
   res.redirect('/dashboard');
 });
 
@@ -272,6 +295,7 @@ const dash = express.Router();
 dash.use(auth.requireLogin);
 const shell = (req, res, next) => {
   res.locals.shell = true;
+  res.locals.vapidKey = notifier.vapidPublicKey;
   res.locals.path = req.originalUrl.split('?')[0];
   // Sidebar store switcher.
   res.locals.myStores = db.prepare('SELECT id, name, color, logo_url FROM stores WHERE owner_id = ? ORDER BY id').all(req.user.id);
@@ -288,6 +312,57 @@ dash.use((req, res, next) => {
   next();
 });
 
+// ----- Notification center & devices -----
+const notesUnread = (userId) => db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(userId).n;
+dash.use((req, res, next) => { res.locals.notesUnread = notesUnread(req.user.id); next(); });
+dash.get('/notes', (req, res) => {
+  const notes = db.prepare('SELECT id, kind, title, body, link, read_at, created_at FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 30').all(req.user.id);
+  res.json({ unread: notesUnread(req.user.id), notes });
+});
+dash.post('/notes/read', (req, res) => {
+  const id = parseInt(req.body.id, 10);
+  if (id) db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE id = ? AND user_id = ? AND read_at IS NULL").run(id, req.user.id);
+  else db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL").run(req.user.id);
+  res.json({ unread: notesUnread(req.user.id) });
+});
+const deviceName = (ua) => {
+  ua = String(ua || '');
+  const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Mac OS/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'جهاز';
+  const br = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '';
+  return `${os}${br ? ' · ' + br : ''}`;
+};
+dash.post('/push/subscribe', (req, res) => {
+  const endpoint = str(req.body.endpoint, 1000);
+  const p256dh = str(req.body.p256dh, 200);
+  const authKey = str(req.body.auth, 100);
+  if (!/^https:\/\//.test(endpoint) || !p256dh || !authKey) return res.status(400).json({ error: 'اشتراك غير صالح.' });
+  db.prepare(
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, device) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, device = excluded.device`
+  ).run(req.user.id, endpoint, p256dh, authKey, deviceName(req.get('user-agent')));
+  res.json({ ok: true });
+});
+dash.post('/push/unsubscribe', (req, res) => {
+  db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND (endpoint = ? OR id = ?)').run(req.user.id, str(req.body.endpoint, 1000), parseInt(req.body.id, 10) || 0);
+  if ((req.get('accept') || '').includes('json')) return res.json({ ok: true });
+  res.redirect('/dashboard/settings/notifications');
+});
+dash.post('/push/test', async (req, res) => {
+  const sent = await notifier.pushToUser(req.user.id, { title: '🔔 YASSER', body: 'الإشعارات تعمل! ستصلك الطلبات هنا فوراً.', url: '/dashboard', tag: 'test' });
+  res.json({ sent });
+});
+dash.get('/settings/notifications', (req, res) => {
+  const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const devices = db.prepare('SELECT id, device, created_at, last_ok FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC').all(req.user.id);
+  res.render('dashboard/notify-settings', { prefs: notifier.prefsOf(me), KINDS: notifier.KINDS, devices, saved: !!req.query.saved });
+});
+dash.post('/settings/notifications', (req, res) => {
+  const prefs = {};
+  for (const k of Object.keys(notifier.KINDS)) prefs[k] = { push: !!req.body[`${k}_push`], email: !!req.body[`${k}_email`] };
+  db.prepare('UPDATE users SET notify_prefs = ? WHERE id = ?').run(JSON.stringify(prefs), req.user.id);
+  res.redirect('/dashboard/settings/notifications?saved=1');
+});
+
 // Polled by the dashboard every 30s to alert the merchant about new orders.
 dash.get('/notifications', (req, res) => {
   const latest = db
@@ -301,7 +376,7 @@ dash.get('/notifications', (req, res) => {
      JOIN messages m ON m.id = (SELECT MAX(id) FROM messages WHERE conversation_id = c.id AND sender = 'visitor')
      WHERE s.owner_id = ? AND c.unread_merchant > 0 ORDER BY m.id DESC LIMIT 1`
   ).get(req.user.id);
-  res.json({ pending: res.locals.pendingOrders, latest: latest || null, unreadChats: res.locals.unreadChats, latestChat: latestChat || null });
+  res.json({ pending: res.locals.pendingOrders, latest: latest || null, unreadChats: res.locals.unreadChats, latestChat: latestChat || null, notesUnread: res.locals.notesUnread });
 });
 
 function ownStore(req, res, next) {
@@ -371,6 +446,7 @@ dash.post('/stores', (req, res) => {
   const { lastInsertRowid } = db
     .prepare(`INSERT INTO stores (owner_id, ${STORE_FIELDS.join(', ')}) VALUES (?, ${STORE_FIELDS.map(() => '?').join(', ')})`)
     .run(req.user.id, ...STORE_FIELDS.map((f) => values[f]));
+  if (!req.user.isAdmin) notifier.notifyAdmins({ title: `🏪 متجر جديد: ${values.name}`, body: `${req.user.name} · /s/${values.slug}`, link: `/admin/stores/${lastInsertRowid}` });
   res.redirect(`/dashboard/stores/${lastInsertRowid}`);
 });
 
@@ -769,6 +845,12 @@ dash.post('/stores/:storeId/products/:productId/ad', ownStore, async (req, res, 
       return Number(db.prepare('INSERT INTO ads (store_id, product_id, page_id, product_name, language, data, daily_budget, days, demo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(store.id, product.id, page.id, product.name, store.ad_language, JSON.stringify(ad), store.ad_daily_budget, store.ad_days, demo ? 1 : 0).lastInsertRowid);
     });
+    const q = aiQuota(store.id);
+    const month = new Date().toISOString().slice(0, 7);
+    if (!demo && q.cap > 0 && q.spent >= q.cap * 0.8 && getSettings().ai_warned_month !== month) {
+      setSetting('ai_warned_month', month);
+      notifier.notifyAdmins({ title: '✨ رصيد Claude يقترب من السقف', body: `صُرف $${q.spent.toFixed(2)} من $${q.cap} هذا الشهر.`, link: '/admin/settings' });
+    }
     res.redirect(`/dashboard/stores/${store.id}/ads/${id}`);
   } catch (err) {
     next(err);
@@ -940,6 +1022,7 @@ admin.use(shell);
 admin.use((req, res, next) => {
   res.locals.pendingOrders = pendingFor(req.user.id);
   res.locals.unreadChats = unreadChatsFor(req.user.id);
+  res.locals.notesUnread = db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(req.user.id).n;
   next();
 });
 const likeOf = (q) => `%${q.replace(/[%_\\]/g, '\\$&')}%`;
@@ -1485,49 +1568,70 @@ shop.post('/chat', (req, res) => {
   const { lastInsertRowid: mid } = db.prepare("INSERT INTO messages (conversation_id, sender, body) VALUES (?, 'visitor', ?)").run(conv.id, body);
   db.prepare("UPDATE conversations SET status = 'open', unread_merchant = unread_merchant + 1, last_message = ?, last_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
     .run(body.slice(0, 140), conv.id);
-  if (isNew) notifyNewChat(req, conv, body);
+  notifyChat(req, conv, body, isNew);
   res.json({ message: db.prepare(`SELECT ${msgFields} FROM messages WHERE id = ?`).get(mid) });
 });
 
-function notifyNewChat(req, conv, body) {
-  const owner = db.prepare('SELECT email FROM users WHERE id = ?').get(req.store.owner_id);
-  const link = `${baseUrl(req)}/dashboard/stores/${req.store.id}/inbox/${conv.id}`;
+function notifyChat(req, conv, body, isNew) {
+  const path = `/dashboard/stores/${req.store.id}/inbox/${conv.id}`;
+  const link = `${baseUrl(req)}${path}`;
   const who = conv.name || 'زائر';
-  mailer.send({
-    to: owner?.email,
-    subject: `💬 رسالة جديدة من ${who} · ${req.store.name}`,
-    text: `${who} كتب في متجر ${req.store.name}:\n\n${body}\n\nردّ عليه: ${link}`,
-    html: mailer.layout('رسالة جديدة في متجرك', `<p><strong>${mailer.esc(who)}</strong> كتب:</p>
-      <blockquote style="margin:0;padding:12px 16px;background:#f6f7f9;border-radius:8px">${mailer.esc(body)}</blockquote>
-      <p><a href="${mailer.esc(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">الرد على الرسالة</a></p>`),
+  notifier.notify(req.store.owner_id, {
+    kind: 'chat', storeId: req.store.id, link: path, tag: `chat-${conv.id}`, collapse: true,
+    title: `💬 ${who}`, body: body.slice(0, 160),
+    // Email only when a conversation starts, not for every message.
+    email: isNew ? {
+      subject: `💬 رسالة جديدة من ${who} · ${req.store.name}`,
+      text: `${who} كتب في متجر ${req.store.name}:\n\n${body}\n\nردّ عليه: ${link}`,
+      html: mailer.layout('رسالة جديدة في متجرك', `<p><strong>${mailer.esc(who)}</strong> كتب:</p>
+        <blockquote style="margin:0;padding:12px 16px;background:#f6f7f9;border-radius:8px">${mailer.esc(body)}</blockquote>
+        <p><a href="${mailer.esc(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">الرد على الرسالة</a></p>`),
+    } : null,
   });
 }
 
-// Email the merchant about a new order (account email + store contact email).
+// Tell the merchant about a new order: bell + phone push + email (per their preferences).
 function notifyNewOrder(req, orderId) {
   const store = req.store;
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
-  const owner = db.prepare('SELECT email, name FROM users WHERE id = ?').get(store.owner_id);
-  const to = [...new Set([owner?.email, store.email].filter(Boolean))].join(', ');
   const money = app.locals.money;
-  const link = `${baseUrl(req)}/dashboard/stores/${store.id}/orders/${orderId}`;
-  const lines = items.map((i) => `• ${i.name} × ${i.quantity} — ${money(i.price * i.quantity, store.currency)}`).join('\n');
+  const path = `/dashboard/stores/${store.id}/orders/${orderId}`;
+  const link = `${baseUrl(req)}${path}`;
   const e = mailer.esc;
-  mailer.send({
-    to,
-    subject: `🛒 طلب جديد #${orderId} — ${money(order.total, store.currency)} · ${store.name}`,
-    text: `طلب جديد في متجر ${store.name}\n\nالعميل: ${order.customer_name}\nالهاتف: ${order.customer_phone}\nالعنوان: ${order.customer_address}\n\n${lines}\n\nالإجمالي: ${money(order.total, store.currency)}\n\nعرض الطلب: ${link}`,
-    html: mailer.layout(`طلب جديد #${orderId}`, `
-      <p>وصلك طلب جديد في متجر <strong>${e(store.name)}</strong> 🎉</p>
-      <table style="width:100%;border-collapse:collapse;margin:12px 0">
-        ${items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${e(i.name)} × ${i.quantity}</td><td style="text-align:left;border-bottom:1px solid #eee">${e(money(i.price * i.quantity, store.currency))}</td></tr>`).join('')}
-        ${order.shipping ? `<tr><td style="padding:6px 0">التوصيل</td><td style="text-align:left">${e(money(order.shipping, store.currency))}</td></tr>` : ''}
-        <tr><td style="padding:8px 0"><strong>الإجمالي</strong></td><td style="text-align:left"><strong>${e(money(order.total, store.currency))}</strong></td></tr>
-      </table>
-      <p><strong>العميل:</strong> ${e(order.customer_name)}<br><strong>الهاتف:</strong> <span dir="ltr">${e(order.customer_phone)}</span><br><strong>العنوان:</strong> ${e(order.customer_address)}</p>
-      <p><a href="${e(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">عرض الطلب وتأكيده</a></p>`),
+  // A returning customer who received earlier orders is worth knowing about.
+  const delivered = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND customer_phone = ? AND status = 'delivered' AND id != ?")
+    .get(store.id, order.customer_phone, orderId).n;
+  const title = `${delivered ? '⭐ عميل موثوق · ' : '🛒 '}طلب جديد #${orderId} · ${money(order.total, store.currency)}`;
+  const lines = items.map((i) => `• ${i.name} × ${i.quantity} — ${money(i.price * i.quantity, store.currency)}`).join('\n');
+  notifier.notify(store.owner_id, {
+    kind: 'order', storeId: store.id, link: path, tag: `order-${orderId}`,
+    title, body: `${order.customer_name} · ${items.map((i) => i.name).join('، ').slice(0, 120)}`,
+    email: {
+      subject: `${title} · ${store.name}`,
+      text: `طلب جديد في متجر ${store.name}\n\nالعميل: ${order.customer_name}\nالهاتف: ${order.customer_phone}\nالعنوان: ${order.customer_address}\n\n${lines}\n\nالإجمالي: ${money(order.total, store.currency)}\n\nعرض الطلب: ${link}`,
+      html: mailer.layout(`طلب جديد #${orderId}`, `
+        <p>وصلك طلب جديد في متجر <strong>${e(store.name)}</strong> 🎉${delivered ? ' — <strong>عميل موثوق</strong> استلم طلبات سابقة.' : ''}</p>
+        <table style="width:100%;border-collapse:collapse;margin:12px 0">
+          ${items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${e(i.name)} × ${i.quantity}</td><td style="text-align:left;border-bottom:1px solid #eee">${e(money(i.price * i.quantity, store.currency))}</td></tr>`).join('')}
+          ${order.shipping ? `<tr><td style="padding:6px 0">التوصيل</td><td style="text-align:left">${e(money(order.shipping, store.currency))}</td></tr>` : ''}
+          <tr><td style="padding:8px 0"><strong>الإجمالي</strong></td><td style="text-align:left"><strong>${e(money(order.total, store.currency))}</strong></td></tr>
+        </table>
+        <p><strong>العميل:</strong> ${e(order.customer_name)}<br><strong>الهاتف:</strong> <span dir="ltr">${e(order.customer_phone)}</span><br><strong>العنوان:</strong> ${e(order.customer_address)}</p>
+        <p><a href="${e(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">عرض الطلب وتأكيده</a></p>`),
+    },
   });
+  // Products that just dropped to 3 or fewer.
+  for (const i of items) {
+    const p = i.product_id && db.prepare('SELECT id, name, stock FROM products WHERE id = ?').get(i.product_id);
+    if (p && p.stock <= 3 && p.stock + i.quantity > 3) {
+      notifier.notify(store.owner_id, {
+        kind: 'stock', storeId: store.id, link: `/dashboard/stores/${store.id}/products/${p.id}`, tag: `stock-${p.id}`,
+        title: p.stock ? `⚠️ بقي ${p.stock} فقط من «${p.name}»` : `⛔ نفدت كمية «${p.name}»`,
+        body: 'زِد المخزون حتى لا تفوتك الطلبات.',
+      });
+    }
+  }
 }
 
 app.use('/s/:slug', shop);

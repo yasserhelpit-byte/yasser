@@ -1251,3 +1251,47 @@ a.prod-cell { color: var(--text); } a.prod-cell:hover { text-decoration: none; }
 .ad-pick { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line); }
 .ad-pick:last-child { border-bottom: 0; }
 .ad-pick .grow { display: grid; }
+
+/* Notifications */
+.bell { position: relative; }
+.bell-btn { position: relative; width: 40px; height: 40px; border-radius: 10px; border: 0; background: transparent; color: inherit; cursor: pointer; display: grid; place-items: center; }
+.sidebar .bell-btn { color: #cbd5d1; } .sidebar .bell-btn:hover { background: rgb(255 255 255 / 8%); color: #fff; }
+.app-top .bell-btn:hover { background: var(--bg); }
+.bell-count { position: absolute; top: 3px; left: 3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: #dc2626; color: #fff; font-size: 0.68rem; display: grid; place-items: center; }
+.bell-panel { position: absolute; top: 46px; inset-inline-end: auto; inset-inline-start: 0; width: 360px; max-width: calc(100vw - 24px); background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 50px rgb(0 0 0 / 18%); z-index: 70; overflow: hidden; }
+.sidebar .bell-panel { inset-inline-start: auto; inset-inline-end: -220px; }
+.bell-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.bell-head .link { font-size: 0.8rem; }
+.bell-list { max-height: 380px; overflow-y: auto; }
+.bell-item { display: flex; gap: 10px; align-items: flex-start; padding: 11px 14px; border-bottom: 1px solid var(--line); color: var(--text) !important; }
+.bell-item:hover { background: var(--bg); text-decoration: none; }
+.bell-item.unread { background: color-mix(in srgb, var(--brand) 6%, var(--card)); }
+.bell-item.unread strong::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--brand); margin-inline-end: 6px; vertical-align: middle; }
+.bi-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.bi-main strong { font-size: 0.9rem; }
+.bi-main small { color: var(--muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bell-item time { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+.bell-empty { padding: 28px 14px; text-align: center; color: var(--muted); }
+.bell-foot { padding: 10px 14px; display: grid; gap: 8px; justify-items: center; background: var(--bg); }
+.bell-foot a { color: var(--brand) !important; }
+[data-push-state][data-on="1"] .push-off-only, [data-push-state]:not([data-on="1"]) .push-on-only { display: none !important; }
+.push-on-only { color: #15803d; font-weight: 700; font-size: 0.85rem; }
+.side-top { gap: 6px; } .side-top .logo { margin-inline-end: auto; }
+.top-bell { margin-inline-start: auto; }
+.push-banner { display: flex; align-items: center; gap: 14px; padding: 14px 18px; margin-bottom: 18px; border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 12%, var(--card)), var(--card)); border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--line)); }
+.push-banner > div { flex: 1; display: grid; } .push-banner small { color: var(--muted); }
+.pb-ic { font-size: 1.8rem; }
+.pb-x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 1rem; }
+@media (max-width: 600px) { .push-banner { flex-wrap: wrap; } .push-banner .btn { width: 100%; } }
+.prefs td, .prefs th { text-align: center; } .prefs td:first-child, .prefs th:first-child { text-align: right; }
+.prefs .switch { justify-content: center; }
+.device-row { padding: 8px 0; border-bottom: 1px solid var(--line); } .device-row:last-child { border-bottom: 0; }
+.ios-help { margin-top: 12px; } .ios-help summary { cursor: pointer; color: var(--brand); font-weight: 700; } .ios-help ol { line-height: 1.9; }
+.notify-customer { margin-top: 14px; padding: 12px; border-radius: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; display: grid; gap: 6px; }
+.notify-customer p { margin: 0; background: #fff; border-radius: 8px; padding: 8px 10px; }
+/* Bell panel: fixed to the viewport so the sidebar can't clip it and it never widens the page. */
+.bell-panel, .sidebar .bell-panel { position: fixed; top: 14px; right: 272px; left: auto; inset-inline: auto; width: 380px; max-width: calc(100vw - 24px); }
+.bell-panel { right: 272px; left: auto; }
+@media (max-width: 900px) {
+  .bell-panel, .sidebar .bell-panel { top: 64px; right: 10px; left: 10px; width: auto; max-width: none; }
+}

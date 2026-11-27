@@ -136,6 +136,28 @@ CREATE TABLE IF NOT EXISTS ai_usage (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_ai_usage ON ai_usage(created_at);
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  link TEXT NOT NULL DEFAULT '',
+  read_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, id);
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  device TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_ok TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(store_id, customer_phone);
 `);
 
@@ -170,6 +192,7 @@ db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_domain ON stores(custom_do
 addColumn('stores', 'chat_enabled', 'INTEGER NOT NULL DEFAULT 1');
 addColumn('stores', 'chat_greeting', "TEXT NOT NULL DEFAULT ''");
 addColumn('sessions', 'last_seen', 'TEXT');
+addColumn('users', 'notify_prefs', "TEXT NOT NULL DEFAULT '{}'");
 addColumn('stores', 'ad_language', "TEXT NOT NULL DEFAULT 'darija'");
 addColumn('stores', 'ad_daily_budget', 'REAL NOT NULL DEFAULT 50');
 addColumn('stores', 'ad_days', 'INTEGER NOT NULL DEFAULT 5');

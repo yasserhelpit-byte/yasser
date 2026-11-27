@@ -65,6 +65,18 @@
       <button class="btn">حفظ</button>
     </form>
     <p class="muted small">عند الإلغاء تعود الكميات إلى المخزون تلقائياً.</p>
+    <% if (order.status !== 'new') { const statusMsg = {
+      confirmed: `مرحباً ${order.customer_name} 👋\nتم تأكيد طلبك رقم #${order.id} من متجر ${store.name} ✅\nسنقوم بشحنه قريباً، وسنخبرك عند خروجه.`,
+      shipped: `مرحباً ${order.customer_name} 👋\nطلبك رقم #${order.id} في الطريق إليك 🚚\nجهّز مبلغ ${money(order.total, cur)} للدفع عند الاستلام. شكراً لثقتك بـ ${store.name}!`,
+      delivered: `مرحباً ${order.customer_name} 👋\nنتمنى أن يعجبك طلبك من ${store.name} 💚\nيسعدنا رأيك، ولا تتردد في الطلب مرة أخرى.`,
+      cancelled: `مرحباً ${order.customer_name}،\nتم إلغاء طلبك رقم #${order.id} من متجر ${store.name}.\nإذا كان ذلك خطأً أو أردت الطلب من جديد، راسلنا هنا.`,
+    }[order.status]; %>
+      <div class="notify-customer">
+        <strong>📲 أخبر العميل بحالة طلبه</strong>
+        <p class="pre muted small"><%= statusMsg %></p>
+        <a class="btn wa full" target="_blank" rel="noopener" href="https://wa.me/<%= waNumber(order.customer_phone) %>?text=<%= encodeURIComponent(statusMsg) %>">💬 إرسال عبر واتساب</a>
+      </div>
+    <% } %>
   </div>
 </section>
 

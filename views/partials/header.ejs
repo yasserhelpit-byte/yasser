@@ -9,6 +9,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="side-top">
       <a href="/dashboard" class="logo">YASSER</a>
+      <span class="side-bell"><%- include('bell') %></span>
       <button type="button" class="side-close" onclick="document.body.classList.remove('side-open')" aria-label="إغلاق">✕</button>
     </div>
 
@@ -43,6 +44,7 @@
       <div class="side-label">عام</div>
       <a href="/dashboard" class="<%= on('/dashboard', true) %>"><span>🏪</span>متاجري
         <% if (typeof pendingOrders !== 'undefined' && pendingOrders) { %><b class="pending" id="pending-badge" title="طلبات جديدة"><%= pendingOrders %></b><% } %></a>
+      <a href="/dashboard/settings/notifications" class="<%= on('/dashboard/settings/notifications') %>"><span>🔔</span>الإشعارات</a>
       <% if (!cur) { %><a href="/dashboard/stores/new" class="<%= on('/dashboard/stores/new', true) %>"><span>➕</span>متجر جديد</a><% } %>
       <% if (user.isAdmin) { %>
         <div class="side-label">الإدارة</div>
@@ -69,6 +71,7 @@
     <header class="app-top">
       <button type="button" class="burger" onclick="document.body.classList.add('side-open')" aria-label="القائمة"><span></span><span></span><span></span></button>
       <a href="/dashboard" class="logo">YASSER</a>
+      <span class="top-bell"><%- include('bell') %></span>
     </header>
     <% if (platform.notice) { %>
     <div class="notice-bar n-<%= platform.notice_level %>" id="notice-bar" data-key="<%= require_hash(platform.notice) %>" hidden>

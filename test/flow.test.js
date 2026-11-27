@@ -619,3 +619,98 @@ test('hardening: lazy sessions, headers, upload cleanup, backup', async (t) => {
   assert.ok(copy.prepare('SELECT COUNT(*) AS n FROM stores').get().n > 0);
   copy.close();
 });
+
+test('notifications: bell, phone push, preferences, admin alerts', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { db } = require('../src/db');
+  const notify = require('../src/notify');
+  require('../src/limiter').clear();
+  // Capture pushes instead of contacting real push services.
+  const pushes = [];
+  const realTransport = notify.transport.send;
+  t.after(() => { notify.transport.send = realTransport; });
+  notify.transport.send = async (sub, payload) => {
+    if (sub.endpoint.includes('gone')) { const e = new Error('gone'); e.statusCode = 410; throw e; }
+    pushes.push({ endpoint: sub.endpoint, ...JSON.parse(payload) });
+  };
+
+  // An admin, to receive platform alerts.
+  const boss = client(base);
+  await boss('POST', '/signup', { _csrf: csrfOf((await boss('GET', '/signup')).text), name: 'Boss3', email: 'boss3@example.com', password: 'password123' });
+  db.prepare("UPDATE users SET role = 'admin' WHERE email = 'boss3@example.com'").run();
+  const bc = csrfOf((await boss('GET', '/dashboard/stores/new')).text);
+  const bpost = (url, body) => fetch(base + url, { method: 'POST', body: new URLSearchParams(body), headers: { cookie: boss.cookie(), 'x-csrf-token': bc, accept: 'application/json' } });
+  await bpost('/dashboard/push/subscribe', { endpoint: 'https://push.example/boss', p256dh: 'k', auth: 'a' });
+
+  // A merchant signs up -> the admin gets a bell entry and a push.
+  const m = client(base);
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Notif Shop Owner', email: 'notif@example.com', password: 'password123' });
+  assert.ok(pushes.some((p) => p.endpoint.endsWith('/boss') && /تاجر جديد/.test(p.title)));
+  const bossNotes = await (await fetch(base + '/dashboard/notes', { headers: { cookie: boss.cookie() } })).json();
+  assert.ok(bossNotes.unread >= 1);
+
+  // The merchant enables push on two devices (one of them will be gone).
+  const c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const mpost = (url, body) => fetch(base + url, { method: 'POST', body: new URLSearchParams(body || {}), headers: { cookie: m.cookie(), 'x-csrf-token': c, accept: 'application/json', 'user-agent': 'Mozilla/5.0 (Linux; Android 14) Chrome/130.0' } });
+  await mpost('/dashboard/push/subscribe', { endpoint: 'https://push.example/phone', p256dh: 'k', auth: 'a' });
+  await mpost('/dashboard/push/subscribe', { endpoint: 'https://push.example/gone', p256dh: 'k', auth: 'a' });
+  assert.strictEqual((await mpost('/dashboard/push/subscribe', { endpoint: 'javascript:x', p256dh: 'k', auth: 'a' })).status, 400);
+  assert.strictEqual((await (await mpost('/dashboard/push/test')).json()).sent, 2);
+  assert.ok(!db.prepare("SELECT 1 FROM push_subscriptions WHERE endpoint = 'https://push.example/gone'").get(), 'dead device removed');
+  assert.match((await m('GET', '/dashboard/settings/notifications')).text, /Android · Chrome/);
+
+  const sid = (await m('POST', '/dashboard/stores', { _csrf: c, name: 'Notif Shop', slug: 'notif-shop' })).location.match(/\d+$/)[0];
+  assert.ok(pushes.some((p) => /متجر جديد: Notif Shop/.test(p.title)), 'admin told about the new store');
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Candle', price: '40', stock: '4', active: '1' });
+  const candle = db.prepare("SELECT id FROM products WHERE name = 'Candle'").get().id;
+
+  // A customer orders 2 -> order push (with a link to the order) + low-stock push (4 -> 2).
+  pushes.length = 0;
+  const v = client(base);
+  const vc = csrfOf((await v('GET', `/s/notif-shop/p/${candle}`)).text);
+  await v('POST', '/s/notif-shop/cart', { _csrf: vc, product_id: String(candle), quantity: '2' });
+  const done = await v('POST', '/s/notif-shop/checkout', { _csrf: vc, customer_name: 'Hind', customer_phone: '0612121212', customer_address: 'Tetouan, Center' });
+  const oid = done.location.match(/\d+$/)[0];
+  const orderPush = pushes.find((p) => p.endpoint.endsWith('/phone') && /طلب جديد/.test(p.title));
+  assert.ok(orderPush);
+  assert.strictEqual(orderPush.url, `/dashboard/stores/${sid}/orders/${oid}`);
+  assert.ok(pushes.some((p) => /بقي 2 فقط/.test(p.title)), 'low stock alert');
+
+  // Chat: several messages collapse into one bell entry; only the first sends an email.
+  const chatPost = (body) => fetch(base + '/s/notif-shop/chat', { method: 'POST', body: new URLSearchParams({ body, name: 'Hind' }), headers: { cookie: v.cookie(), 'x-csrf-token': vc } });
+  const mailsBefore = sent.length;
+  await chatPost('Bonjour'); await chatPost('Still there?');
+  const uid = db.prepare("SELECT id FROM users WHERE email = 'notif@example.com'").get().id;
+  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND kind = 'chat'").get(uid).n, 1);
+  assert.strictEqual(sent.slice(mailsBefore).filter((x) => /رسالة جديدة/.test(x.subject)).length, 1);
+
+  // Bell: unread count, list, mark all read.
+  let notes = await (await fetch(base + '/dashboard/notes', { headers: { cookie: m.cookie() } })).json();
+  assert.ok(notes.unread >= 3);
+  assert.ok(notes.notes.some((n) => /Still there\?/.test(n.body)));
+  assert.match((await m('GET', '/dashboard')).text, /class="bell-count" >\d+</);
+  notes = await (await mpost('/dashboard/notes/read')).json();
+  assert.strictEqual(notes.unread, 0);
+
+  // Preferences: turning off phone alerts for orders stops order pushes.
+  await m('POST', '/dashboard/settings/notifications', { _csrf: c, chat_push: '1', stock_push: '1', order_email: '1' });
+  pushes.length = 0;
+  require('../src/limiter').clear();
+  const v2 = client(base);
+  const vc2 = csrfOf((await v2('GET', `/s/notif-shop/p/${candle}`)).text);
+  await v2('POST', '/s/notif-shop/cart', { _csrf: vc2, product_id: String(candle), quantity: '1' });
+  await v2('POST', '/s/notif-shop/checkout', { _csrf: vc2, customer_name: 'Omar', customer_phone: '0613131313', customer_address: 'Oujda, Center' });
+  assert.ok(!pushes.some((p) => /طلب جديد/.test(p.title)), 'no order push when turned off');
+  assert.ok(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND kind = 'order'").get(uid).n >= 2, 'still in the bell');
+
+  // Order page offers a WhatsApp status message once the order moves on.
+  await m('POST', `/dashboard/stores/${sid}/orders/${oid}/status`, { _csrf: c, status: 'shipped' });
+  assert.match((await m('GET', `/dashboard/stores/${sid}/orders/${oid}`)).text, /في الطريق إليك/);
+
+  // PWA bits are served.
+  assert.strictEqual((await fetch(base + '/sw.js')).status, 200);
+  assert.strictEqual((await (await fetch(base + '/manifest.webmanifest')).json()).start_url, '/dashboard');
+  assert.strictEqual((await fetch(base + '/icon-192.png')).headers.get('content-type'), 'image/png');
+});
