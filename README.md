@@ -50,6 +50,13 @@ npm run make-admin -- your@email.com
 لإزالة الصلاحية: `npm run make-admin -- your@email.com --remove`.
 يمكن أيضاً وضع البريد في متغير البيئة `ADMIN_EMAILS` (عدة عناوين مفصولة بفاصلة).
 
+## نسيت البريد أو كلمة المرور؟
+
+```bash
+npm run list-users                                   # عرض كل الحسابات وبريد كل حساب
+npm run set-password -- your@email.com "كلمة-مرور-جديدة"   # تعيين كلمة مرور جديدة مباشرة
+```
+
 ## النطاقات الخاصة للتجار
 
 يستطيع كل تاجر ربط نطاقه (مثل `myshop.com`) من **لوحة المتجر ← النطاق**:

@@ -7,7 +7,9 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test",
-    "make-admin": "node scripts/make-admin.js"
+    "make-admin": "node --no-warnings scripts/make-admin.js",
+    "list-users": "node --no-warnings scripts/list-users.js",
+    "set-password": "node --no-warnings scripts/set-password.js"
   },
   "repository": {
     "type": "git",
