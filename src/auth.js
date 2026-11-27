@@ -16,15 +16,24 @@ function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(candidate, Buffer.from(hash, 'hex'));
 }
 
-// Every visitor gets a session (holds the cart); logging in attaches a user.
+// Every visitor gets a session token (cookie). A database row is only written when the session holds
+// something (a cart, or a logged-in user), so bots and one-page visits don't fill the sessions table.
+const TOKEN_RE = /^[a-f0-9]{64}$/;
 function sessionMiddleware(req, res, next) {
   let token = req.cookies[COOKIE];
-  let session = token && db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  let session = TOKEN_RE.test(token || '') ? db.prepare('SELECT * FROM sessions WHERE token = ?').get(token) : null;
   if (!session) {
-    token = crypto.randomBytes(32).toString('hex');
-    db.prepare('INSERT INTO sessions (token) VALUES (?)').run(token);
-    session = { token, user_id: null, cart: '{}' };
-    setCookie(res, token);
+    if (!TOKEN_RE.test(token || '')) {
+      token = crypto.randomBytes(32).toString('hex');
+      setCookie(res, token);
+    }
+    session = { token, user_id: null, cart: '{}', persisted: false };
+  } else {
+    session.persisted = true;
+    // Track activity (at most every 10 minutes) so old sessions can be cleaned up.
+    if (!session.last_seen || Date.now() - Date.parse(session.last_seen + 'Z') > 10 * 60 * 1000) {
+      db.prepare("UPDATE sessions SET last_seen = datetime('now') WHERE token = ?").run(token);
+    }
   }
   req.session = session;
   req.cart = JSON.parse(session.cart || '{}');
@@ -47,7 +56,22 @@ function sessionMiddleware(req, res, next) {
 }
 
 function saveCart(req) {
-  db.prepare('UPDATE sessions SET cart = ? WHERE token = ?').run(JSON.stringify(req.cart), req.session.token);
+  db.prepare(
+    `INSERT INTO sessions (token, cart, last_seen) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(token) DO UPDATE SET cart = excluded.cart, last_seen = excluded.last_seen`
+  ).run(req.session.token, JSON.stringify(req.cart));
+  req.session.persisted = true;
+}
+
+// Remove sessions nobody will come back to. Returns the number of rows deleted.
+function cleanupSessions() {
+  const r = db.prepare(
+    `DELETE FROM sessions WHERE
+       (user_id IS NULL AND cart IN ('{}', '') AND COALESCE(last_seen, created_at) < datetime('now', '-1 day'))
+       OR COALESCE(last_seen, created_at) < datetime('now', '-30 days')`
+  ).run();
+  db.prepare('DELETE FROM password_resets WHERE expires_at < ? OR used = 1').run(Date.now() - 24 * 3600 * 1000);
+  return r.changes;
 }
 
 function setCookie(res, token) {
@@ -62,7 +86,7 @@ function setCookie(res, token) {
 // Issue a fresh session token on login (prevents session fixation); the cart is kept.
 function login(req, res, userId) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sessions (token, user_id, cart) VALUES (?, ?, ?)').run(token, userId, JSON.stringify(req.cart || {}));
+  db.prepare("INSERT INTO sessions (token, user_id, cart, last_seen) VALUES (?, ?, ?, datetime('now'))").run(token, userId, JSON.stringify(req.cart || {}));
   db.prepare('DELETE FROM sessions WHERE token = ?').run(req.session.token);
   setCookie(res, token);
 }
@@ -87,4 +111,4 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { hashPassword, verifyPassword, sessionMiddleware, saveCart, login, logout, logoutEverywhere, requireLogin, requireAdmin };
+module.exports = { hashPassword, verifyPassword, sessionMiddleware, saveCart, login, logout, logoutEverywhere, requireLogin, requireAdmin, cleanupSessions };

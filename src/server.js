@@ -12,12 +12,41 @@ const sections = require('./sections');
 const aiAds = require('./ai-ads');
 
 const dns = require('dns').promises;
+const maintenance = require('./maintenance');
 const app = express();
+app.disable('x-powered-by');
 // Behind one reverse proxy (Codespaces, Render, Railway...): use X-Forwarded-For for req.ip.
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Security headers. Inline scripts/styles are allowed (the views use them); everything else is locked down.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' https: data: blob:",
+  "media-src 'self' https:",
+  "frame-src https://www.youtube-nocookie.com",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join('; ');
+app.use((req, res, next) => {
+  res.set({
+    'Content-Security-Policy': CSP,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+  });
+  if (process.env.NODE_ENV === 'production') res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 }));
 app.use('/uploads', express.static(uploads.uploadsDir, { maxAge: '30d', immutable: true }));
 
 // ---------- Custom domains ----------
@@ -46,12 +75,22 @@ app.use((req, res, next) => {
   if (!req.url.startsWith('/s/')) req.url = `/s/${store.slug}${req.url === '/' ? '' : req.url}`;
   next();
 });
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' })); // page designs can be large
 app.use(cookieParser());
 app.use(auth.sessionMiddleware);
 
 // CSRF: a per-session token derived from the session token, checked on every POST.
-const CSRF_SECRET = process.env.SECRET || crypto.randomBytes(32).toString('hex');
+// SECRET env var, or a random secret generated once and kept in the data directory, so forms keep
+// working across restarts.
+function loadSecret() {
+  if (process.env.SECRET) return process.env.SECRET;
+  const file = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'secret.key');
+  try { return fs.readFileSync(file, 'utf8').trim(); } catch {}
+  const secret = crypto.randomBytes(32).toString('hex');
+  fs.writeFileSync(file, secret, { mode: 0o600 });
+  return secret;
+}
+const CSRF_SECRET = loadSecret();
 app.use((req, res, next) => {
   const csrf = crypto.createHmac('sha256', CSRF_SECRET).update(req.session.token).digest('hex');
   res.locals.csrf = csrf;
@@ -884,8 +923,11 @@ dash.post('/stores/:storeId/uploads', ownStore, (req, res) => {
       fs.unlinkSync(f.path);
       return false;
     });
-    if (!good.length) return res.status(400).json({ error: 'الملفات يجب أن تكون صوراً (JPG, PNG, WEBP, GIF).' });
-    res.json({ urls: good.map((f) => `/uploads/${f.filename}`) });
+    Promise.all(good.map(uploads.processImage)).then((names) => {
+      const urls = names.filter(Boolean).map((n) => `/uploads/${n}`);
+      if (!urls.length) return res.status(400).json({ error: 'الملفات يجب أن تكون صوراً (JPG, PNG, WEBP, GIF).' });
+      res.json({ urls });
+    }).catch((e) => res.status(500).json({ error: 'تعذّر معالجة الصور.' }));
   });
 });
 
@@ -1042,7 +1084,7 @@ admin.get('/merchants', (req, res) => {
     `SELECT u.id, u.name, u.email, u.role, u.suspended, u.created_at,
        (SELECT COUNT(*) FROM stores s WHERE s.owner_id = u.id) AS store_count,
        (SELECT COUNT(*) FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = u.id) AS order_count,
-       (SELECT MAX(created_at) FROM sessions se WHERE se.user_id = u.id) AS last_seen
+       (SELECT MAX(COALESCE(last_seen, created_at)) FROM sessions se WHERE se.user_id = u.id) AS last_seen
      FROM users u WHERE (? = '' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')
      ORDER BY u.id DESC LIMIT 500`
   ).all(q, like, like);
@@ -1063,7 +1105,7 @@ admin.get('/merchants/:id', adminUser, (req, res) => {
        (SELECT COALESCE(SUM(total), 0) FROM orders o WHERE o.store_id = s.id AND o.status != 'cancelled') AS revenue
      FROM stores s WHERE s.owner_id = ? ORDER BY s.id`
   ).all(u.id);
-  const lastSeen = db.prepare('SELECT MAX(created_at) AS t FROM sessions WHERE user_id = ?').get(u.id).t;
+  const lastSeen = db.prepare('SELECT MAX(COALESCE(last_seen, created_at)) AS t FROM sessions WHERE user_id = ?').get(u.id).t;
   res.render('admin/merchant', { u, stores, lastSeen });
 });
 admin.post('/merchants/:id/suspend', adminUser, (req, res) => {
@@ -1498,6 +1540,11 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`YASSER running on http://localhost:${PORT}`));
+  const server = app.listen(PORT, () => console.log(`YASSER running on http://localhost:${PORT}`));
+  maintenance.scheduleMaintenance();
+  // Stop cleanly (finish in-flight requests, close the database) when the host restarts the app.
+  const stop = () => { server.close(() => { db.close(); process.exit(0); }); setTimeout(() => process.exit(0), 10000).unref(); };
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
 }
 module.exports = app;

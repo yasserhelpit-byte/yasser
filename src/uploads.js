@@ -36,6 +36,31 @@ function looksLikeImage(file) {
   );
 }
 
+// Shrink and normalise an uploaded image: fix rotation, fit within 1920px, convert to WebP and drop
+// metadata (EXIF can contain the GPS location where a photo was taken). GIFs are kept as-is (animation).
+// Returns the new filename, or null if the file isn't a decodable image (it is then deleted).
+let sharp = null;
+try { sharp = require('sharp'); } catch { /* optional: without it images are stored unchanged */ }
+async function processImage(file) {
+  if (!sharp || file.mimetype === 'image/gif') return file.filename;
+  const name = crypto.randomBytes(16).toString('hex') + '.webp';
+  const dest = path.join(uploadsDir, name);
+  try {
+    await sharp(file.path, { failOn: 'error', limitInputPixels: 60e6 })
+      .rotate()
+      .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toFile(dest);
+    fs.unlinkSync(file.path);
+    return name;
+  } catch (err) {
+    console.error('Image processing failed:', err.message);
+    fs.rmSync(file.path, { force: true });
+    fs.rmSync(dest, { force: true });
+    return null;
+  }
+}
+
 const isImageUrl = (u) => typeof u === 'string' && (/^\/uploads\/[a-f0-9]{32}\.(jpg|png|webp|gif)$/.test(u) || /^https?:\/\/\S+$/i.test(u));
 
-module.exports = { upload, uploadsDir, looksLikeImage, isImageUrl, MAX_FILES };
+module.exports = { upload, uploadsDir, looksLikeImage, processImage, isImageUrl, MAX_FILES };

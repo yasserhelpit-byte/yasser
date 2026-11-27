@@ -4,12 +4,13 @@
   "description": "YASSER — منصة لإنشاء المتاجر الإلكترونية",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
     "test": "node --test",
-    "make-admin": "node --no-warnings scripts/make-admin.js",
-    "list-users": "node --no-warnings scripts/list-users.js",
-    "set-password": "node --no-warnings scripts/set-password.js"
+    "make-admin": "node --disable-warning=ExperimentalWarning scripts/make-admin.js",
+    "list-users": "node --disable-warning=ExperimentalWarning scripts/list-users.js",
+    "set-password": "node --disable-warning=ExperimentalWarning scripts/set-password.js",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js"
   },
   "repository": {
     "type": "git",
@@ -27,6 +28,7 @@
     "express": "^4.22.3",
     "multer": "^2.5.0",
     "nodemailer": "^10.6.1",
+    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "engines": {

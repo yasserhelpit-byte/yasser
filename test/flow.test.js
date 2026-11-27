@@ -71,7 +71,8 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   assert.match(page.text, /s-confirmed">1</); // stock 3 - 2 = 1 (low-stock badge)
 
   // Image upload: a real PNG is accepted, a fake one is rejected.
-  const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082', 'hex');
+  // A real 2400x1600 PNG: it must come back resized and converted to WebP.
+  const png = await require('sharp')({ create: { width: 2400, height: 1600, channels: 3, background: '#3b82f6' } }).png().toBuffer();
   const upload = async (buf, type) => {
     const fd = new FormData();
     fd.append('files', new Blob([buf], { type }), 'x.png');
@@ -80,8 +81,15 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   let up = await upload(png, 'image/png');
   assert.strictEqual(up.status, 200);
   const { urls } = await up.json();
-  assert.match(urls[0], /^\/uploads\/[a-f0-9]{32}\.png$/);
-  assert.strictEqual((await fetch(base + urls[0])).status, 200);
+  assert.match(urls[0], /^\/uploads\/[a-f0-9]{32}\.webp$/);
+  const stored = Buffer.from(await (await fetch(base + urls[0])).arrayBuffer());
+  const meta = await require('sharp')(stored).metadata();
+  assert.strictEqual(meta.format, 'webp');
+  assert.strictEqual(meta.width, 1920);
+  assert.ok(stored.length < png.length);
+  // A file with a valid PNG header but corrupt data is rejected too.
+  up = await upload(Buffer.concat([png.subarray(0, 40), Buffer.alloc(200)]), 'image/png');
+  assert.strictEqual(up.status, 400);
   up = await upload(Buffer.from('<script>alert(1)</script>'), 'image/png');
   assert.strictEqual(up.status, 400);
 
@@ -94,7 +102,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   const shop2 = client(base);
   const sp = await shop2('GET', '/s/test-shop');
   const shirtId = sp.text.match(/\/p\/(\d+)" class="pcard-name">Shirt</)[1];
-  assert.match(sp.text, /<img src="\/uploads\/[a-f0-9]{32}\.png"/); // uploaded image shown
+  assert.match(sp.text, /<img src="\/uploads\/[a-f0-9]{32}\.webp"/); // uploaded image shown
   assert.doesNotMatch(sp.text, /javascript:/); // unsafe image URL dropped
   const scsrf = csrfOf((await shop2('GET', `/s/test-shop/p/${shirtId}`)).text);
   r = await shop2('POST', '/s/test-shop/cart', { _csrf: scsrf, product_id: shirtId, quantity: '1' });
@@ -557,4 +565,57 @@ test('AI ads: one button builds the ad + landing page, with limits', async (t) =
   assert.match(r.text, /حدّها الشهري/);
   // The landing page was refreshed in place, not duplicated.
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM pages WHERE store_id = ? AND slug LIKE ?').get(sid, 'offer-%').n, 1);
+});
+
+test('hardening: lazy sessions, headers, upload cleanup, backup', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { db } = require('../src/db');
+  const fsp = require('fs');
+  const pth = require('path');
+  require('../src/limiter').clear();
+
+  // Anonymous page views don't create session rows; filling a cart does.
+  const before = db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n;
+  for (let i = 0; i < 5; i++) await fetch(base + '/s/test-shop');
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, before);
+  const v = client(base);
+  const page = await v('GET', '/s/gadget/products');
+  const pen = db.prepare("SELECT id FROM products WHERE name = 'Pen'").get();
+  const store = db.prepare('SELECT slug FROM stores WHERE id = (SELECT store_id FROM products WHERE id = ?)').get(pen.id);
+  const vc = csrfOf((await v('GET', `/s/${store.slug}/p/${pen.id}`)).text);
+  await v('POST', `/s/${store.slug}/cart`, { _csrf: vc, product_id: String(pen.id), quantity: '1' });
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, before + 1);
+  assert.match((await v('GET', `/s/${store.slug}/cart`)).text, /Pen/); // cart survives on the same cookie
+
+  // Security headers.
+  const h = (await fetch(base + '/')).headers;
+  assert.match(h.get('content-security-policy'), /object-src 'none'/);
+  assert.strictEqual(h.get('x-content-type-options'), 'nosniff');
+  assert.strictEqual(h.get('x-powered-by'), null);
+
+  // Unused uploads older than a day are removed; referenced and recent ones stay.
+  const { cleanupUploads, referencedUploads } = require('../src/maintenance');
+  const { uploadsDir } = require('../src/uploads');
+  const mk = (name, ageH) => { const f = pth.join(uploadsDir, name); fsp.writeFileSync(f, 'x'); const t0 = (Date.now() - ageH * 3600e3) / 1000; fsp.utimesSync(f, t0, t0); return f; };
+  const orphanOld = mk('a'.repeat(32) + '.webp', 48);
+  const orphanNew = mk('b'.repeat(32) + '.webp', 1);
+  const used = [...referencedUploads()][0];
+  assert.ok(used, 'some upload is referenced by earlier tests');
+  fsp.utimesSync(pth.join(uploadsDir, used), Date.now() / 1000 - 3 * 86400, Date.now() / 1000 - 3 * 86400);
+  const r = cleanupUploads();
+  assert.ok(r.removed >= 1);
+  assert.ok(!fsp.existsSync(orphanOld));
+  assert.ok(fsp.existsSync(orphanNew));
+  assert.ok(fsp.existsSync(pth.join(uploadsDir, used)));
+
+  // Backup produces a readable copy of the database.
+  const { execFileSync } = require('child_process');
+  const out = execFileSync(process.execPath, ['--disable-warning=ExperimentalWarning', pth.join(__dirname, '..', 'scripts', 'backup.js')], { env: { ...process.env } }).toString();
+  const file = out.match(/Backup written: (\S+\.db)/)[1];
+  const { DatabaseSync } = require('node:sqlite');
+  const copy = new DatabaseSync(file);
+  assert.ok(copy.prepare('SELECT COUNT(*) AS n FROM stores').get().n > 0);
+  copy.close();
 });

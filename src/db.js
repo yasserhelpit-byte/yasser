@@ -169,6 +169,7 @@ addColumn('stores', 'domain_verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_domain ON stores(custom_domain) WHERE custom_domain IS NOT NULL');
 addColumn('stores', 'chat_enabled', 'INTEGER NOT NULL DEFAULT 1');
 addColumn('stores', 'chat_greeting', "TEXT NOT NULL DEFAULT ''");
+addColumn('sessions', 'last_seen', 'TEXT');
 addColumn('stores', 'ad_language', "TEXT NOT NULL DEFAULT 'darija'");
 addColumn('stores', 'ad_daily_budget', 'REAL NOT NULL DEFAULT 50');
 addColumn('stores', 'ad_days', 'INTEGER NOT NULL DEFAULT 5');
