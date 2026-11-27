@@ -217,11 +217,6 @@ html { scroll-behavior: smooth; }
 .steps-l .card { text-align: center; }
 .steps-l b { display: inline-grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 1.3rem; }
 
-.showcase { padding: 0; overflow: hidden; }
-.showcase-top { height: 80px; display: grid; place-items: center; }
-.showcase-top span { width: 48px; height: 48px; border-radius: 12px; background: rgb(255 255 255 / 25%); color: #fff; font-weight: 800; font-size: 1.3rem; display: grid; place-items: center; }
-.showcase h3, .showcase p, .showcase small { padding: 0 20px; }
-.showcase small { display: block; padding-bottom: 18px; }
 
 .price-card { max-width: 420px; margin: 0 auto; border: 2px solid var(--brand); text-align: right; }
 .price-card h3 { margin-top: 0; }

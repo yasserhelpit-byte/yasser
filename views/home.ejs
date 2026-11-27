@@ -87,25 +87,6 @@
   </div>
 </section>
 
-<% if (stores.length) { %>
-<section class="l-section">
-  <div class="l-head">
-    <span class="pill">متاجر على YASSER</span>
-    <h2>تجّار بدأوا البيع معنا</h2>
-  </div>
-  <div class="grid three">
-    <% stores.forEach(s => { %>
-      <a class="card showcase" href="/s/<%= s.slug %>">
-        <div class="showcase-top" style="background: <%= s.color %>"><span><%= s.name.trim().charAt(0).toUpperCase() %></span></div>
-        <h3><%= s.name %></h3>
-        <p class="muted"><%= s.description || 'متجر على YASSER' %></p>
-        <small class="muted"><%= s.product_count %> منتج · زيارة المتجر ←</small>
-      </a>
-    <% }) %>
-  </div>
-</section>
-<% } %>
-
 <section id="pricing" class="l-section">
   <div class="l-head">
     <span class="pill">الأسعار</span>
