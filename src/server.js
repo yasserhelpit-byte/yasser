@@ -41,8 +41,23 @@ const slugify = (s) =>
 
 // ---------- Public pages ----------
 app.get('/', (req, res) => {
-  const stores = db.prepare('SELECT name, slug, description, color FROM stores ORDER BY id DESC LIMIT 6').all();
-  res.render('home', { stores });
+  // Showcase only stores that have at least one published product.
+  const stores = db
+    .prepare(
+      `SELECT s.name, s.slug, s.description, s.color,
+              (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id AND p.active = 1) AS product_count
+       FROM stores s WHERE EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id AND p.active = 1)
+       ORDER BY s.id DESC LIMIT 6`
+    )
+    .all();
+  const counts = db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM stores) AS stores,
+              (SELECT COUNT(*) FROM products WHERE active = 1) AS products,
+              (SELECT COUNT(*) FROM orders) AS orders`
+    )
+    .get();
+  res.render('home', { stores, counts });
 });
 
 app.get('/signup', (req, res) => res.render('signup', { error: null, values: {} }));

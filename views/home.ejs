@@ -1,22 +1,161 @@
-<%- include('partials/header') %>
-<section class="hero">
-  <h1>أنشئ متجرك الإلكتروني في دقائق</h1>
-  <p>YASSER منصة تتيح لك إطلاق متجر، إضافة منتجاتك، واستقبال الطلبات مع الدفع عند الاستلام — بدون أي خبرة تقنية.</p>
-  <a href="<%= user ? '/dashboard' : '/signup' %>" class="btn big">ابدأ الآن مجاناً</a>
+<%- include('partials/head', { title: 'أنشئ متجرك الإلكتروني' }) %>
+<% const cta = user ? '/dashboard' : '/signup'; %>
+<header class="topbar landing-bar">
+  <div class="wrap row between">
+    <a href="/" class="logo">YASSER</a>
+    <nav class="row landing-nav">
+      <a href="#features">المزايا</a>
+      <a href="#how">كيف تعمل</a>
+      <a href="#pricing">الأسعار</a>
+      <a href="#faq">الأسئلة الشائعة</a>
+    </nav>
+    <div class="row">
+      <% if (user) { %>
+        <a href="/dashboard" class="btn small">لوحة التحكم</a>
+      <% } else { %>
+        <a href="/login">دخول</a>
+        <a href="/signup" class="btn small">أنشئ متجرك</a>
+      <% } %>
+    </div>
+  </div>
+</header>
+
+<section class="l-hero">
+  <div class="wrap l-hero-grid">
+    <div>
+      <span class="pill">🚀 منصة عربية للتجارة الإلكترونية</span>
+      <h1>متجرك الإلكتروني<br><span class="hl">جاهز في 5 دقائق</span></h1>
+      <p>أنشئ متجراً احترافياً، أضف منتجاتك، وابدأ باستقبال الطلبات مع الدفع عند الاستلام. لا برمجة، لا استضافة، لا تعقيد.</p>
+      <div class="row">
+        <a href="<%= cta %>" class="btn big">ابدأ مجاناً الآن</a>
+        <a href="#how" class="btn big ghost">كيف تعمل؟</a>
+      </div>
+      <ul class="checks">
+        <li>✓ بدون بطاقة بنكية</li>
+        <li>✓ واجهة عربية بالكامل</li>
+        <li>✓ يعمل على الهاتف</li>
+      </ul>
+    </div>
+
+    <div class="mock" aria-hidden="true">
+      <div class="mock-bar"><i></i><i></i><i></i><span>yasser.shop/s/my-store</span></div>
+      <div class="mock-hero"><b>م</b><strong>متجري</strong><small>أفضل المنتجات بأفضل الأسعار</small></div>
+      <div class="mock-grid">
+        <div><span style="background:#fde68a">👕</span><em>قميص</em><b>120 MAD</b></div>
+        <div><span style="background:#bfdbfe">👟</span><em>حذاء</em><b>350 MAD</b></div>
+        <div><span style="background:#fbcfe8">⌚</span><em>ساعة</em><b>499 MAD</b></div>
+      </div>
+      <div class="mock-toast">🛒 طلب جديد #1024 — 499 MAD</div>
+    </div>
+  </div>
 </section>
-<section class="grid three features">
-  <div class="card"><h3>🏪 متجر خاص بك</h3><p>رابط مستقل، اسم، ولون يعبّر عن علامتك التجارية.</p></div>
-  <div class="card"><h3>📦 إدارة المنتجات</h3><p>أضف المنتجات بالصور والأسعار وتابع المخزون تلقائياً.</p></div>
-  <div class="card"><h3>🧾 الطلبات</h3><p>استقبل الطلبات وحدّث حالتها من التأكيد حتى التسليم.</p></div>
-</section>
-<% if (stores.length) { %>
-<h2>متاجر على YASSER</h2>
-<section class="grid three">
-  <% stores.forEach(s => { %>
-    <a class="card store-card" href="/s/<%= s.slug %>" style="border-top:4px solid <%= s.color %>">
-      <h3><%= s.name %></h3><p class="muted"><%= s.description || 'متجر على YASSER' %></p>
-    </a>
-  <% }) %>
+
+<% if (counts.stores) { %>
+<section class="wrap l-stats">
+  <div><strong><%= counts.stores %></strong><span>متجر تم إنشاؤه</span></div>
+  <div><strong><%= counts.products %></strong><span>منتج معروض</span></div>
+  <div><strong><%= counts.orders %></strong><span>طلب تمت معالجته</span></div>
 </section>
 <% } %>
-<%- include('partials/footer') %>
+
+<main class="wrap">
+<section id="features" class="l-section">
+  <div class="l-head">
+    <span class="pill">المزايا</span>
+    <h2>كل ما تحتاجه لتبيع عبر الإنترنت</h2>
+    <p class="muted">أدوات بسيطة وقوية تجعل إدارة متجرك سهلة من أول يوم.</p>
+  </div>
+  <div class="grid three">
+    <div class="card feat"><span>🏪</span><h3>متجر باسمك</h3><p class="muted">رابط خاص، شعار، ولون يعبّر عن علامتك التجارية.</p></div>
+    <div class="card feat"><span>📦</span><h3>إدارة المنتجات</h3><p class="muted">أضف المنتجات بالصور والأسعار، وأخفِها أو انشرها بنقرة.</p></div>
+    <div class="card feat"><span>📊</span><h3>تتبّع المخزون</h3><p class="muted">يُخصم المخزون تلقائياً مع كل طلب، مع تنبيه عند قرب النفاد.</p></div>
+    <div class="card feat"><span>🧾</span><h3>إدارة الطلبات</h3><p class="muted">تابع كل طلب من «جديد» حتى «تم التسليم» في مكان واحد.</p></div>
+    <div class="card feat"><span>💵</span><h3>الدفع عند الاستلام</h3><p class="muted">الطريقة المفضلة لدى عملائك، بدون حسابات بنكية أو عمولات دفع.</p></div>
+    <div class="card feat"><span>📱</span><h3>متوافق مع الهاتف</h3><p class="muted">متجرك ولوحة تحكمك يعملان بشكل ممتاز على كل الشاشات.</p></div>
+  </div>
+</section>
+
+<section id="how" class="l-section">
+  <div class="l-head">
+    <span class="pill">كيف تعمل</span>
+    <h2>ثلاث خطوات وتبدأ البيع</h2>
+  </div>
+  <div class="grid three steps-l">
+    <div class="card"><b>1</b><h3>أنشئ حسابك</h3><p class="muted">سجّل بالبريد الإلكتروني خلال أقل من دقيقة.</p></div>
+    <div class="card"><b>2</b><h3>أضف منتجاتك</h3><p class="muted">اختر اسم متجرك ولونه، ثم أضف منتجاتك بالأسعار والصور.</p></div>
+    <div class="card"><b>3</b><h3>شارك الرابط</h3><p class="muted">انشر رابط متجرك على واتساب وإنستغرام وفيسبوك واستقبل الطلبات.</p></div>
+  </div>
+</section>
+
+<% if (stores.length) { %>
+<section class="l-section">
+  <div class="l-head">
+    <span class="pill">متاجر على YASSER</span>
+    <h2>تجّار بدأوا البيع معنا</h2>
+  </div>
+  <div class="grid three">
+    <% stores.forEach(s => { %>
+      <a class="card showcase" href="/s/<%= s.slug %>">
+        <div class="showcase-top" style="background: <%= s.color %>"><span><%= s.name.trim().charAt(0).toUpperCase() %></span></div>
+        <h3><%= s.name %></h3>
+        <p class="muted"><%= s.description || 'متجر على YASSER' %></p>
+        <small class="muted"><%= s.product_count %> منتج · زيارة المتجر ←</small>
+      </a>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<section id="pricing" class="l-section">
+  <div class="l-head">
+    <span class="pill">الأسعار</span>
+    <h2>ابدأ مجاناً</h2>
+    <p class="muted">كل المزايا متاحة لك بدون أي رسوم.</p>
+  </div>
+  <div class="price-card card">
+    <h3>الباقة المجانية</h3>
+    <div class="amount">0 <small>درهم / شهرياً</small></div>
+    <ul class="checks col">
+      <li>✓ عدد غير محدود من المنتجات</li>
+      <li>✓ عدد غير محدود من الطلبات</li>
+      <li>✓ أكثر من متجر في حساب واحد</li>
+      <li>✓ لوحة تحكم وإحصائيات</li>
+      <li>✓ تنبيهات المخزون</li>
+    </ul>
+    <a href="<%= cta %>" class="btn big full">أنشئ متجرك الآن</a>
+  </div>
+</section>
+
+<section id="faq" class="l-section">
+  <div class="l-head">
+    <span class="pill">الأسئلة الشائعة</span>
+    <h2>لديك سؤال؟</h2>
+  </div>
+  <div class="faq">
+    <details><summary>هل أحتاج خبرة في البرمجة؟</summary><p>لا. كل شيء يتم من لوحة التحكم بنقرات بسيطة، بدون أي سطر برمجي.</p></details>
+    <details><summary>كيف يدفع العملاء؟</summary><p>حالياً الدفع عند الاستلام: يطلب العميل من متجرك، وتتواصل معه لتأكيد الطلب، ثم يدفع عند وصوله.</p></details>
+    <details><summary>هل يمكنني إنشاء أكثر من متجر؟</summary><p>نعم، يمكنك إدارة عدة متاجر من حساب واحد، ولكل متجر رابطه ومنتجاته وطلباته.</p></details>
+    <details><summary>كيف أشارك متجري مع العملاء؟</summary><p>لكل متجر رابط خاص يمكنك نشره على واتساب وإنستغرام وفيسبوك أو أي مكان آخر.</p></details>
+    <details><summary>هل يعمل المتجر على الهاتف؟</summary><p>نعم، المتجر ولوحة التحكم مصممان ليعملا بشكل ممتاز على الهاتف والحاسوب.</p></details>
+  </div>
+</section>
+
+<section class="l-cta">
+  <h2>جاهز لإطلاق متجرك؟</h2>
+  <p>انضم الآن وابدأ ببيع منتجاتك اليوم.</p>
+  <a href="<%= cta %>" class="btn big light">ابدأ مجاناً</a>
+</section>
+</main>
+
+<footer class="l-foot">
+  <div class="wrap row between">
+    <div><a href="/" class="logo">YASSER</a><p class="muted">منصة عربية لإنشاء المتاجر الإلكترونية.</p></div>
+    <nav class="row">
+      <a href="#features">المزايا</a><a href="#pricing">الأسعار</a><a href="#faq">الأسئلة الشائعة</a>
+      <a href="<%= user ? '/dashboard' : '/login' %>"><%= user ? 'لوحة التحكم' : 'دخول' %></a>
+    </nav>
+  </div>
+  <p class="wrap muted small">© <%= new Date().getFullYear() %> YASSER. جميع الحقوق محفوظة.</p>
+</footer>
+</body>
+</html>
