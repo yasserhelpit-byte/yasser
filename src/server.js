@@ -570,12 +570,13 @@ function adjustStock(orderId, sign) {
 }
 
 // ----- Store design (homepage sections + theme) -----
+const productChoices = (storeId) => db.prepare('SELECT id, name, price, active FROM products WHERE store_id = ? ORDER BY id DESC').all(storeId);
 const storeHome = (store) => {
   const list = sections.sanitize(store.home_sections || '');
   return store.home_sections ? list : sections.DEFAULT_HOME;
 };
 dash.get('/stores/:storeId/design', ownStore, (req, res) => {
-  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true });
+  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id) });
 });
 // Live preview for the design editor: renders the storefront home with unsaved changes.
 dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {
@@ -716,6 +717,7 @@ const PAGE_TEMPLATES = {
     { type: 'faq', title: 'الأسئلة الشائعة', items: [{ q: 'كم يستغرق التوصيل؟', a: 'من 24 إلى 72 ساعة حسب مدينتك.' }, { q: 'كيف أدفع؟', a: 'الدفع نقداً عند الاستلام.' }, { q: 'هل يمكنني استبدال المنتج؟', a: 'نعم، خلال 7 أيام.' }] },
   ] },
 };
+PAGE_TEMPLATES.landing = { title: 'عرض خاص', sections: sections.PRESETS.landing.sections };
 const pageSlug = (s) => str(s, 60).trim().toLowerCase().replace(/[^a-z0-9\u0600-\u06ff-]+/g, '-').replace(/^-+|-+$/g, '');
 const RESERVED = new Set(['products', 'cart', 'checkout', 'thanks', 'p', 'page']);
 
@@ -741,13 +743,13 @@ function ownPage(req, res, next) {
   next();
 }
 dash.get('/stores/:storeId/pages/:pageId', ownStore, ownPage, (req, res) => {
-  res.render('dashboard/page-edit', { page: req.page, sectionsData: sections.sanitize(req.page.sections), error: null, saved: !!req.query.saved });
+  res.render('dashboard/page-edit', { page: req.page, sectionsData: sections.sanitize(req.page.sections), error: null, saved: !!req.query.saved, productChoices: productChoices(req.store.id) });
 });
 dash.post('/stores/:storeId/pages/:pageId', ownStore, ownPage, (req, res) => {
   const title = str(req.body.title, 80);
   const slug = pageSlug(req.body.slug || title);
   const list = sections.sanitize(req.body.sections);
-  const render = (error) => res.status(400).render('dashboard/page-edit', { page: { ...req.page, title, slug }, sectionsData: list, error, saved: false });
+  const render = (error) => res.status(400).render('dashboard/page-edit', { page: { ...req.page, title, slug }, sectionsData: list, error, saved: false, productChoices: productChoices(req.store.id) });
   if (!title) return render('عنوان الصفحة مطلوب.');
   if (!slug || RESERVED.has(slug)) return render('رابط الصفحة غير صالح.');
   if (db.prepare('SELECT 1 FROM pages WHERE store_id = ? AND slug = ? AND id != ?').get(req.store.id, slug, req.page.id)) return render('هذا الرابط مستخدم في صفحة أخرى.');
@@ -1043,6 +1045,8 @@ shop.use((req, res, next) => {
   }
   Object.assign(res.locals, storefrontLocals(store, !!req.customDomain));
   req.base = res.locals.base;
+  res.locals.orderError = str(req.query.order_error, 300);
+  res.locals.pagePath = `${req.base}${req.path === '/' ? '' : req.path}`;
   // Absolute URLs for link previews (og:image must be absolute).
   const origin = req.customDomain ? `https://${req.customDomain}` : baseUrl(req);
   res.locals.abs = (u) => (!u ? '' : /^https?:\/\//.test(u) ? u : origin + u);
@@ -1103,6 +1107,15 @@ function resolveSections(store, list) {
       out.cards = (sec.items?.length ? sec.items.filter((i) => i.name) : cats).map((i) => ({ name: i.name, image: i.image || byName[i.name]?.cover || i.cover || '', n: byName[i.name]?.n || 0 }));
     }
     if (sec.type === 'video') out.videoId = sections.youtubeId(sec.url);
+    if (sec.type === 'product_hero' || sec.type === 'order_form') {
+      // A chosen product, or the newest one in stock as a sensible default.
+      out.product = (sec.product && db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(sec.product, store.id))
+        || db.prepare('SELECT * FROM products WHERE store_id = ? AND active = 1 ORDER BY stock = 0, id DESC LIMIT 1').get(store.id) || null;
+    }
+    if (sec.type === 'countdown') {
+      const end = Date.parse(sec.ends_at ? sec.ends_at + ':00' : '');
+      out.endsAt = Number.isFinite(end) && end > Date.now() ? end : null;
+    }
     return out;
   });
 }
@@ -1189,21 +1202,21 @@ shop.get('/checkout', (req, res) => {
   res.render('store/checkout', { ...cart, error: null, values: {} });
 });
 
-shop.post('/checkout', (req, res) => {
-  const values = {
-    customer_name: str(req.body.customer_name, 100),
-    customer_phone: cleanPhone(req.body.customer_phone),
-    customer_address: str(req.body.customer_address, 500),
-    note: str(req.body.note, 1000),
-  };
-  const cart = cartLines(req);
-  if (!cart.lines.length) return res.redirect(`${req.base}/cart`);
-  const fail = (error, status = 400) => res.status(status).render('store/checkout', { ...cart, error, values });
+const orderValues = (body) => ({
+  customer_name: str(body.customer_name, 100),
+  customer_phone: cleanPhone(body.customer_phone),
+  customer_address: str(body.customer_address, 500),
+  note: str(body.note, 1000),
+});
 
+// Validate and create an order from cart lines. Shared by the cart checkout and landing-page orders.
+// Returns { orderId } or { error, status }.
+function placeOrder(req, cart, values) {
+  const fail = (error, status = 400) => ({ error, status });
+  if (!cart.lines.length) return fail('لا توجد منتجات في الطلب.');
   // Bots: a hidden field humans never fill, and a form submitted impossibly fast.
   const startedAt = Number(req.body._t) || 0;
   if (req.body.website || (startedAt && Date.now() - startedAt < 3000)) return fail('تعذّر إرسال الطلب، أعد المحاولة.');
-
   if (values.customer_name.length < 3) return fail('الرجاء إدخال الاسم الكامل.');
   if (!validPhone(values.customer_phone)) return fail('رقم الهاتف غير صحيح. مثال: 0612345678');
   if (values.customer_address.length < 8) return fail('الرجاء إدخال العنوان الكامل (المدينة، الحي، الشارع).');
@@ -1221,9 +1234,8 @@ shop.post('/checkout', (req, res) => {
     .prepare(`SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND customer_phone = ? AND created_at >= datetime('now', '-1 day')`)
     .get(req.store.id, values.customer_phone).n;
   if (today >= 3) return fail('تجاوزت عدد الطلبات المسموح به اليوم لهذا الرقم. تواصل مع المتجر مباشرة.', 429);
-  let orderId;
   try {
-    orderId = transaction(() => {
+    const orderId = transaction(() => {
       const { lastInsertRowid } = db
         .prepare('INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, shipping, total, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.shipping, cart.total, req.ip || '');
@@ -1235,14 +1247,46 @@ shop.post('/checkout', (req, res) => {
       }
       return Number(lastInsertRowid);
     });
+    notifyNewOrder(req, orderId); // fire and forget
+    return { orderId };
   } catch (err) {
     if (err.message !== 'OUT_OF_STOCK') throw err;
-    return res.status(409).render('store/checkout', { ...cartLines(req), error: 'نفدت كمية أحد المنتجات، راجع السلة.', values });
+    return fail('نفدت الكمية المطلوبة من المنتج.', 409);
   }
+}
+
+shop.post('/checkout', (req, res) => {
+  const values = orderValues(req.body);
+  const cart = cartLines(req);
+  if (!cart.lines.length) return res.redirect(`${req.base}/cart`);
+  const r = placeOrder(req, cart, values);
+  if (r.error) return res.status(r.status).render('store/checkout', { ...cartLines(req), error: r.error, values });
   delete req.cart[req.store.id];
   auth.saveCart(req);
-  notifyNewOrder(req, orderId); // fire and forget
-  res.redirect(`${req.base}/thanks/${orderId}`);
+  res.redirect(`${req.base}/thanks/${r.orderId}`);
+});
+
+// Landing pages: order one product directly (no cart). Answers JSON to fetch(), redirects otherwise.
+shop.post('/quick-order', (req, res) => {
+  const wantsJson = (req.get('accept') || '').includes('application/json');
+  const back = str(req.body.back, 300).startsWith(req.base || '/') ? str(req.body.back, 300) : req.base || '/';
+  const reply = (r) => {
+    if (wantsJson) return res.status(r.error ? r.status : 200).json(r.error ? { error: r.error } : { redirect: `${req.base}/thanks/${r.orderId}` });
+    if (r.error) return res.redirect(`${back}${back.includes('?') ? '&' : '?'}order_error=${encodeURIComponent(r.error)}#order`);
+    res.redirect(`${req.base}/thanks/${r.orderId}`);
+  };
+  const product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.body.product_id, req.store.id);
+  if (!product) return reply({ error: 'المنتج غير متوفر.', status: 404 });
+  const options = JSON.parse(product.options || '[]');
+  const chosen = options.map((o, i) => str(req.body[`opt${i}`], 30));
+  if (options.some((o, i) => !o.values.includes(chosen[i]))) return reply({ error: `الرجاء اختيار ${options.map((o) => o.name).join(' و')}.`, status: 400 });
+  const quantity = Math.min(Math.max(1, parseInt(req.body.quantity, 10) || 1), 20);
+  if (product.stock < quantity) return reply({ error: product.stock ? `المتوفر ${product.stock} فقط.` : 'نفدت الكمية.', status: 409 });
+  const lines = [{ product, quantity, variant: chosen.join(' / '), subtotal: quantity * product.price }];
+  const subtotal = lines[0].subtotal;
+  const { shipping_fee: fee, free_shipping_over: freeOver } = req.store;
+  const shipping = freeOver > 0 && subtotal >= freeOver ? 0 : fee;
+  reply(placeOrder(req, { lines, subtotal, shipping, total: subtotal + shipping }, orderValues(req.body)));
 });
 
 shop.get('/thanks/:orderId', (req, res) => {

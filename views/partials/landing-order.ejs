@@ -1,0 +1,35 @@
+<%
+  // COD order form for one product. Used by the product_hero and order_form sections.
+  const P = product; const opts = json(P.options); const fid = 'lo' + bi;
+%>
+<form class="lo-form" method="post" action="<%= base %>/quick-order" data-price="<%= P.price %>" data-fee="<%= store.shipping_fee %>" data-free="<%= store.free_shipping_over %>" data-cur="<%= store.currency %>" id="<%= fid %>">
+  <%- include('csrf') %>
+  <input type="hidden" name="product_id" value="<%= P.id %>">
+  <input type="hidden" name="back" value="<%= typeof pagePath !== 'undefined' ? pagePath : base %>">
+  <input type="hidden" name="_t" value="<%= Date.now() %>">
+  <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+  <% if (typeof orderError !== 'undefined' && orderError) { %><div class="alert lo-err"><%= orderError %></div><% } else { %><div class="alert lo-err" hidden></div><% } %>
+
+  <% opts.forEach((o, i) => { %>
+    <fieldset class="opt-pick">
+      <legend><%= o.name %></legend>
+      <% o.values.forEach(v => { %><label><input type="radio" name="opt<%= i %>" value="<%= v %>" required><span><%= v %></span></label><% }) %>
+    </fieldset>
+  <% }) %>
+
+  <div class="lo-qty">
+    <span class="b-label">الكمية</span>
+    <div class="stepper"><button type="button" data-step="-1" aria-label="أقل">−</button><input name="quantity" type="number" value="1" min="1" max="<%= Math.min(P.stock, 20) %>" inputmode="numeric" aria-label="الكمية"><button type="button" data-step="1" aria-label="أكثر">+</button></div>
+  </div>
+  <div class="lo-fields">
+    <input name="customer_name" required minlength="3" maxlength="100" placeholder="الاسم الكامل" autocomplete="name">
+    <input name="customer_phone" type="tel" required dir="ltr" inputmode="tel" placeholder="📞 06XXXXXXXX" aria-label="رقم الهاتف" autocomplete="tel">
+    <textarea name="customer_address" required minlength="8" rows="2" maxlength="500" placeholder="المدينة والعنوان الكامل" autocomplete="street-address"></textarea>
+  </div>
+  <div class="lo-total">
+    <span>المجموع <small class="lo-ship"></small></span>
+    <strong class="lo-sum"><%= money(P.price, store.currency) %></strong>
+  </div>
+  <button class="btn big full lo-submit"><%= btnLabel || 'اطلب الآن · الدفع عند الاستلام' %></button>
+  <p class="lo-trust">💵 الدفع عند الاستلام · 🚚 توصيل لكل المدن · 📞 نتصل بك للتأكيد</p>
+</form>

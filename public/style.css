@@ -410,7 +410,8 @@ h4 { margin: 0 0 8px; }
 .toast { position: fixed; bottom: 20px; right: 20px; z-index: 50; background: #111827; color: #fff; padding: 14px 18px; border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / 30%); animation: slide-in .3s ease-out; max-width: calc(100vw - 40px); }
 .toast a { color: #fff; font-weight: 700; }
 @keyframes slide-in { from { transform: translateY(20px); opacity: 0; } }
-.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+/* Honeypot: visually hidden without moving it off-screen (an off-screen element widens RTL pages). */
+.hp { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; opacity: 0; pointer-events: none; }
 
 /* =========================================================
    Storefront v2 — premium theme
@@ -1152,3 +1153,62 @@ a.prod-cell { color: var(--text); } a.prod-cell:hover { text-decoration: none; }
 /* Cart icon: mirrored so the basket opens toward the reading direction in RTL */
 [dir="rtl"] .cart-ic { transform: scaleX(-1); }
 .icon-btn .count { top: 0; left: 0; box-shadow: 0 0 0 2px var(--card); font-weight: 700; }
+
+/* =========================================================
+   Landing pages (product hero, order form, countdown)
+   ========================================================= */
+.sec-ph { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: start; padding-top: 32px; scroll-margin-top: 80px; }
+.ph-gallery { display: grid; gap: 10px; position: sticky; top: 90px; }
+.ph-main { position: relative; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; background: var(--soft); display: grid; place-items: center; }
+.ph-main img { width: 100%; height: 100%; object-fit: cover; }
+.ph-main > span { font-size: 6rem; font-weight: 800; color: var(--brand); }
+.ph-off { top: 14px; right: 14px; font-size: 1rem; padding: 4px 14px; }
+.ph-info h1 { font-size: clamp(1.7rem, 4vw, 2.5rem); line-height: 1.25; margin: 8px 0 10px; }
+.ph-eyebrow { display: inline-block; background: #fef2f2; color: #b91c1c; font-weight: 700; font-size: 0.85rem; padding: 4px 12px; border-radius: 99px; }
+.ph-info .price-row.big .price { font-size: 2rem; color: var(--brand); }
+.ph-info .compare { font-size: 1.1rem; color: var(--muted); }
+.ph-sub { color: var(--muted); font-size: 1.05rem; line-height: 1.85; margin: 12px 0; }
+@media (max-width: 860px) { .sec-ph { grid-template-columns: 1fr; gap: 20px; padding-top: 16px; } .ph-gallery { position: static; } }
+
+.lo-form { display: grid; gap: 14px; background: var(--card); border: 2px solid var(--brand); border-radius: calc(var(--radius) + 4px); padding: 20px; margin-top: 16px; box-shadow: 0 14px 40px color-mix(in srgb, var(--brand) 12%, transparent); }
+.lo-form .opt-pick { margin: 0; }
+.lo-qty { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stepper { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.stepper button { width: 42px; height: 42px; border: 0; background: var(--bg); font-size: 1.3rem; cursor: pointer; color: var(--text); }
+.stepper input { width: 56px; text-align: center; border: 0; border-radius: 0; background: var(--card); padding: 8px 0; -moz-appearance: textfield; }
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.lo-fields { display: grid; gap: 10px; }
+.lo-fields input, .lo-fields textarea { padding: 13px 14px; font-size: 1rem; background: var(--bg); }
+.lo-total { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--soft); border-radius: var(--radius); }
+.lo-total small { color: var(--muted); font-size: 0.8rem; }
+.lo-total strong { font-size: 1.35rem; color: var(--brand); }
+.lo-submit { font-size: 1.15rem; padding: 16px; animation: lo-pulse 2.4s ease-in-out infinite; }
+@keyframes lo-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 45%, transparent); } 50% { box-shadow: 0 0 0 10px transparent; } }
+.lo-submit:disabled { animation: none; opacity: .7; }
+.lo-trust { margin: 0; text-align: center; color: var(--muted); font-size: 0.82rem; }
+
+.sec-of { max-width: 640px; scroll-margin-top: 80px; }
+.of-card { background: var(--card); border: 1px solid var(--line); border-radius: calc(var(--radius) + 6px); padding: 28px 24px; }
+.of-card .sec-head { margin-bottom: 16px; }
+.of-product { display: flex; gap: 14px; align-items: center; }
+.of-product img { width: 72px; height: 72px; border-radius: var(--radius); object-fit: cover; }
+.of-card .lo-form { border-width: 1px; box-shadow: none; }
+
+.sec-cd { padding-top: 32px; }
+.cd-box { display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; background: linear-gradient(135deg, #7f1d1d, #dc2626); color: #fff; border-radius: calc(var(--radius) + 4px); padding: 18px 24px; text-align: center; }
+.cd-box > strong { font-size: 1.15rem; }
+.cd-units { display: flex; gap: 10px; direction: ltr; flex-direction: row-reverse; }
+.cd-units span { display: grid; min-width: 64px; background: rgb(255 255 255 / 14%); border-radius: 10px; padding: 8px 6px; }
+.cd-units b { font-size: 1.7rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cd-units small { font-size: 0.72rem; opacity: .85; }
+
+.ph-sticky { display: none; }
+@media (max-width: 860px) {
+  .ph-sticky { display: flex; position: fixed; inset: auto 0 0 0; z-index: 35; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgb(0 0 0 / 10%); color: var(--text); transition: transform .25s; }
+  .ph-sticky.away { transform: translateY(110%); }
+  .ph-sticky:hover { text-decoration: none; }
+  .ph-sticky span { display: grid; } .ph-sticky b { font-size: 1.15rem; color: var(--brand); } .ph-sticky s { font-size: 0.8rem; color: var(--muted); }
+  .ph-sticky em { font-style: normal; background: var(--brand); color: #fff; font-weight: 700; padding: 12px 20px; border-radius: var(--radius); }
+  .storefront:has(.ph-sticky) .chat { bottom: 84px; }
+}
+.tpl small { font-size: 0.75rem; }

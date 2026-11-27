@@ -432,3 +432,59 @@ test('admin v2: overview, store/merchant pages, reset link, settings, delete', a
   assert.ok(!db.prepare('SELECT 1 FROM stores WHERE id = ?').get(sid));
   assert.strictEqual((await client(base)('GET', '/s/seller-shop')).status, 404);
 });
+
+test('landing page: product hero + direct COD order', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { db } = require('../src/db');
+  require('../src/limiter').clear();
+
+  const m = client(base);
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Lander', email: 'lander@example.com', password: 'password123' });
+  const c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = (await m('POST', '/dashboard/stores', { _csrf: c, name: 'Gadget', slug: 'gadget' })).location.match(/\d+$/)[0];
+  await m('POST', `/dashboard/stores/${sid}/settings`, { _csrf: c, name: 'Gadget', slug: 'gadget', shipping_fee: '25', free_shipping_over: '300' });
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Smart Bottle', price: '199', compare_price: '299', stock: '10', active: '1', opt1_name: 'Color', opt1_values: 'Black, White' });
+  const pid = db.prepare("SELECT id FROM products WHERE name = 'Smart Bottle'").get().id;
+
+  // Create a landing page from the template; it picks the product automatically.
+  const pageUrl = (await m('POST', `/dashboard/stores/${sid}/pages`, { _csrf: c, template: 'landing' })).location;
+  const sections = JSON.parse(db.prepare('SELECT sections FROM pages WHERE id = ?').get(pageUrl.match(/\d+$/)[0]).sections);
+  sections.find((x) => x.type === 'countdown').ends_at = '2020-01-01T00:00'; // past: must be hidden
+  await m('POST', pageUrl, { _csrf: c, title: 'Bottle offer', slug: 'bottle', in_menu: '1', sections: JSON.stringify(sections) });
+  const v = client(base);
+  const page = await v('GET', '/s/gadget/page/bottle');
+  assert.match(page.text, /Smart Bottle/);
+  assert.match(page.text, /action="\/s\/gadget\/quick-order"/);
+  assert.match(page.text, /class="ph-sticky"/);
+  assert.doesNotMatch(page.text, /class="cd-box"/);
+  const vc = csrfOf(page.text);
+
+  const order = (extra) => fetch(base + '/s/gadget/quick-order', {
+    method: 'POST', headers: { cookie: v.cookie(), accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ _csrf: vc, product_id: String(pid), quantity: '2', customer_name: 'Nora', customer_phone: '0644556677', customer_address: 'Agadir, Talborjt', ...extra }),
+  });
+  let r = await order({});
+  assert.strictEqual(r.status, 400); // color not chosen
+  assert.match((await r.json()).error, /Color/);
+  r = await order({ opt0: 'Black', website: 'bot' });
+  assert.strictEqual(r.status, 400); // honeypot
+  r = await order({ opt0: 'Black' });
+  assert.strictEqual(r.status, 200);
+  const { redirect } = await r.json();
+  assert.match(redirect, /^\/s\/gadget\/thanks\/\d+$/);
+  const oid = redirect.match(/\d+$/)[0];
+  const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(oid);
+  assert.strictEqual(o.total, 398); // 2 × 199, free shipping over 300
+  assert.strictEqual(o.shipping, 0);
+  assert.strictEqual(db.prepare('SELECT name FROM order_items WHERE order_id = ?').get(oid).name, 'Smart Bottle (Black)');
+  assert.strictEqual(db.prepare('SELECT stock FROM products WHERE id = ?').get(pid).stock, 8);
+  // Same phone again while pending: refused (fake-order protection is shared with checkout).
+  r = await order({ opt0: 'White' });
+  assert.strictEqual(r.status, 409);
+  // Without JavaScript: redirected back to the page with the error.
+  const noJs = await fetch(base + '/s/gadget/quick-order', { method: 'POST', redirect: 'manual', headers: { cookie: v.cookie(), 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ _csrf: vc, product_id: String(pid), back: '/s/gadget/page/bottle', customer_name: 'X', customer_phone: '1', customer_address: '' }) });
+  assert.match(noJs.headers.get('location'), /^\/s\/gadget\/page\/bottle\?order_error=/);
+});

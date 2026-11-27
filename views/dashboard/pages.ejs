@@ -8,11 +8,11 @@
   <h3>+ صفحة جديدة</h3>
   <p class="muted small">اختر قالباً جاهزاً، ثم عدّل محتواه وصوره كما تريد.</p>
   <div class="tpl-grid">
-    <% const icons = { blank: '📄', about: '👋', contact: '📞', shipping: '🚚', returns: '🔄', faq: '❓' }; %>
+    <% const icons = { blank: '📄', about: '👋', contact: '📞', shipping: '🚚', returns: '🔄', faq: '❓', landing: '🎯' }; %>
     <% Object.entries(templates).forEach(([k, t]) => { %>
       <form method="post" action="/dashboard/stores/<%= store.id %>/pages">
         <%- include('../partials/csrf') %><input type="hidden" name="template" value="<%= k %>">
-        <button class="tpl"><span><%= icons[k] %></span><strong><%= t.title || 'صفحة فارغة' %></strong></button>
+        <button class="tpl"><span><%= icons[k] %></span><strong><%= k === 'landing' ? 'صفحة هبوط لمنتج' : t.title || 'صفحة فارغة' %></strong><% if (k === 'landing') { %><small class="muted">للإعلانات</small><% } %></button>
       </form>
     <% }) %>
   </div>

@@ -47,6 +47,20 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus 
     const id = 'b' + Math.random().toString(36).slice(2);
     let control;
     if (f.t === 'image') return h('div', { class: 'b-field' }, h('span', { class: 'b-label' }, f.l), imageField(obj, f, onChange));
+    if (f.t === 'product') {
+      const list = window.PRODUCTS || [];
+      if (!list.length) return h('div', { class: 'b-field' }, h('span', { class: 'b-label' }, f.l), h('p', { class: 'muted small' }, 'أضف منتجاً أولاً من صفحة المنتجات.'));
+      control = h('select', { id, onchange: (e) => { obj[f.k] = e.target.value; touch(); onChange?.(); } },
+        h('option', { value: '' }, '— أحدث منتج متوفر —'),
+        list.map((p) => h('option', { value: String(p.id), selected: String(obj[f.k]) === String(p.id) }, p.name + (p.active ? '' : ' (مخفي)'))));
+      return h('label', { class: 'b-field', for: id }, h('span', { class: 'b-label' }, f.l), control);
+    }
+    if (f.t === 'datetime') {
+      control = h('input', { id, type: 'datetime-local', dir: 'ltr', onchange: (e) => { obj[f.k] = e.target.value; touch(); onChange?.(); } });
+      control.value = obj[f.k] || '';
+      return h('label', { class: 'b-field', for: id }, h('span', { class: 'b-label' }, f.l), control,
+        h('small', { class: 'muted' }, 'يختفي العدّاد تلقائياً بعد هذا الموعد. اتركه فارغاً لإخفائه.'));
+    }
     if (f.t === 'select') {
       control = h('select', { id, onchange: (e) => { obj[f.k] = e.target.value; touch(); onChange?.(); } },
         Object.entries(f.options).map(([v, l]) => h('option', { value: v, selected: String(obj[f.k]) === v }, l)));

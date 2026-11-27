@@ -71,7 +71,7 @@
       <div class="ed-pane" data-pane="templates" hidden>
         <p class="muted small ed-hint">ابدأ من قالب جاهز، ثم عدّل نصوصه وصوره. سيستبدل القالب الأقسام الحالية (يمكنك عدم الحفظ للتراجع).</p>
         <div class="tpl-list">
-          <% const tplIcons = { classic: '🏠', fashion: '👗', boutique: '💎' }; %>
+          <% const tplIcons = { classic: '🏠', fashion: '👗', boutique: '💎', landing: '🎯' }; %>
           <% Object.entries(presets).forEach(([k, p]) => { %>
             <button type="button" class="tpl-card" data-preset="<%= k %>">
               <span class="tpl-ic"><%= tplIcons[k] || '✨' %></span>
@@ -94,7 +94,7 @@
   </div>
 </form>
 <link href="https://fonts.googleapis.com/css2?<%= Object.values(FONTS).map(f => 'family=' + f.g).join('&') %>&display=swap" rel="stylesheet">
-<script>window.CSRF = <%- js(csrf) %>; window.SCHEMA = <%- js(SCHEMA) %>;</script>
+<script>window.CSRF = <%- js(csrf) %>; window.SCHEMA = <%- js(SCHEMA) %>; window.PRODUCTS = <%- js(productChoices) %>;</script>
 <script src="/upload.js"></script>
 <script src="/builder.js"></script>
 <script>

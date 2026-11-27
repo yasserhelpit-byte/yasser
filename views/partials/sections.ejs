@@ -5,7 +5,61 @@
   function escapeFn(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
   const btn = (b, cls = 'btn') => b.button ? `<a class="${cls}" href="${escapeFn(href(b.link || '/products'))}">${escapeFn(b.button)}</a>` : '';
 %>
+<% let stickyDone = false; %>
 <% blocks.forEach((b, bi) => { %>
+
+<% if (b.type === 'product_hero') { %>
+<section data-idx="<%= b.idx %>" class="sec sec-ph" id="order">
+  <% if (!b.product) { %>
+    <div class="empty-sec"><% if (isOwner || (typeof preview !== 'undefined' && preview)) { %>أضف منتجاً إلى متجرك ثم اختره في هذا القسم.<% } else { %>المنتج غير متوفر حالياً.<% } %></div>
+  <% } else { const P = b.product; const imgs = json(P.images).length ? json(P.images) : (P.image_url ? [P.image_url] : []); %>
+    <div class="ph-gallery">
+      <div class="ph-main <%= imgs.length ? '' : 'ph-bg' %>"><% if (imgs.length) { %><img src="<%= imgs[0] %>" alt="<%= P.name %>"><% } else { %><span><%= P.name.trim().charAt(0) %></span><% } %>
+        <% if (P.compare_price > P.price) { %><em class="tag sale ph-off" dir="ltr">-<%= Math.round((1 - P.price / P.compare_price) * 100) %>%</em><% } %></div>
+      <% if (imgs.length > 1) { %><div class="thumbs"><% imgs.forEach((src, i) => { %><button type="button" class="<%= i === 0 ? 'on' : '' %>" data-src="<%= src %>"><img src="<%= src %>" alt=""></button><% }) %></div><% } %>
+    </div>
+    <div class="ph-info">
+      <% if (b.eyebrow) { %><span class="ph-eyebrow"><%= b.eyebrow %></span><% } %>
+      <h1><%= b.headline || P.name %></h1>
+      <div class="price-row big"><span class="price"><%= money(P.price, store.currency) %></span><% if (P.compare_price > P.price) { %><s class="compare"><%= money(P.compare_price, store.currency) %></s><span class="badge sale" dir="ltr">وفّر <%= money(P.compare_price - P.price, store.currency) %></span><% } %></div>
+      <% if (b.subtitle) { %><p class="ph-sub pre"><%= b.subtitle %></p><% } %>
+      <% if (P.stock > 0 && P.stock <= 5) { %><p class="warn-text">🔥 بقي <%= P.stock %> قطع فقط في المخزون</p><% } %>
+      <% if (P.stock > 0) { %>
+        <%- include('landing-order', { product: P, bi, btnLabel: b.button }) %>
+      <% } else { %><p class="badge s-cancelled">نفدت الكمية</p><% } %>
+    </div>
+    <% if (P.stock > 0 && !stickyDone) { stickyDone = true; %>
+      <a href="#order" class="ph-sticky"><span><b><%= money(P.price, store.currency) %></b><% if (P.compare_price > P.price) { %><s><%= money(P.compare_price, store.currency) %></s><% } %></span><em><%= b.button || 'اطلب الآن' %></em></a>
+    <% } %>
+  <% } %>
+</section>
+<% } %>
+
+<% if (b.type === 'order_form') { %>
+<section data-idx="<%= b.idx %>" class="sec sec-of" <% if (!stickyDone) { %>id="order"<% } %>>
+  <div class="of-card">
+    <div class="sec-head"><h2><%= b.title || 'اطلب الآن والدفع عند الاستلام' %></h2><% if (b.subtitle) { %><p><%= b.subtitle %></p><% } %></div>
+    <% if (!b.product) { %>
+      <div class="empty-sec">أضف منتجاً إلى متجرك ثم اختره في هذا القسم.</div>
+    <% } else if (b.product.stock > 0) { %>
+      <div class="of-product">
+        <% if (b.product.image_url) { %><img src="<%= b.product.image_url %>" alt=""><% } %>
+        <div><strong><%= b.product.name %></strong><div class="price-row"><span class="price"><%= money(b.product.price, store.currency) %></span><% if (b.product.compare_price > b.product.price) { %><s class="compare"><%= money(b.product.compare_price, store.currency) %></s><% } %></div></div>
+      </div>
+      <%- include('landing-order', { product: b.product, bi, btnLabel: b.button }) %>
+    <% } else { %><p class="center badge s-cancelled">نفدت الكمية</p><% } %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'countdown' && b.endsAt) { %>
+<section data-idx="<%= b.idx %>" class="sec sec-cd">
+  <div class="cd-box" data-end="<%= b.endsAt %>">
+    <strong><%= b.title || 'العرض ينتهي خلال' %></strong>
+    <div class="cd-units"><% [['d', 'يوم'], ['h', 'ساعة'], ['m', 'دقيقة'], ['s', 'ثانية']].forEach(([k, l]) => { %><span><b data-u="<%= k %>">00</b><small><%= l %></small></span><% }) %></div>
+  </div>
+</section>
+<% } %>
 
 <% if (b.type === 'hero') { const img = b.image || store.banner_url; %>
 <section data-idx="<%= b.idx %>" class="sec sec-hero full <%= img ? 'has-img' : '' %>" style="<%= bg(img) %>">
@@ -170,6 +224,56 @@ document.addEventListener('click', (e) => { if (e.target.closest('a, button[type
 </script>
 <% } %>
 <script>
+// Landing pages: gallery thumbnails, quantity stepper, live total, ajax order, countdown.
+document.querySelectorAll('.sec-ph .thumbs button').forEach((b) => b.addEventListener('click', () => {
+  const box = b.closest('.ph-gallery'); box.querySelector('.ph-main img').src = b.dataset.src;
+  box.querySelectorAll('.thumbs button').forEach((x) => x.classList.toggle('on', x === b));
+}));
+document.querySelectorAll('.lo-form').forEach((f) => {
+  const qty = f.querySelector('[name=quantity]'), price = +f.dataset.price, fee = +f.dataset.fee, free = +f.dataset.free, cur = f.dataset.cur;
+  const fmt = (n) => n.toFixed(2) + ' ' + cur;
+  const update = () => {
+    const q = Math.max(1, Math.min(+qty.max || 20, +qty.value || 1)); qty.value = q;
+    const sub = q * price, ship = free > 0 && sub >= free ? 0 : fee;
+    f.querySelector('.lo-sum').textContent = fmt(sub + ship);
+    f.querySelector('.lo-ship').textContent = ship ? '(شامل التوصيل ' + fmt(ship) + ')' : '(التوصيل مجاني)';
+  };
+  f.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => { qty.value = +qty.value + +b.dataset.step; update(); }));
+  qty.addEventListener('input', update); update();
+  f.addEventListener('submit', async (e) => {
+    if (!window.fetch) return;
+    e.preventDefault();
+    const btn = f.querySelector('.lo-submit'), err = f.querySelector('.lo-err'), label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'جارٍ إرسال الطلب…'; err.hidden = true;
+    try {
+      const r = await fetch(f.action, { method: 'POST', body: new URLSearchParams(new FormData(f)), headers: { accept: 'application/json' } });
+      const d = await r.json();
+      if (d.redirect) { location.href = d.redirect; return; }
+      err.textContent = d.error || 'تعذّر إرسال الطلب.'; err.hidden = false;
+    } catch { err.textContent = 'تعذّر الاتصال. أعد المحاولة.'; err.hidden = false; }
+    btn.disabled = false; btn.textContent = label;
+  });
+});
+document.querySelectorAll('.cd-box').forEach((box) => {
+  const end = +box.dataset.end, pad = (n) => String(n).padStart(2, '0');
+  const tick = () => {
+    const left = Math.max(0, end - Date.now());
+    if (!left) { box.closest('.sec-cd').hidden = true; return clearInterval(t); }
+    const s = Math.floor(left / 1000);
+    box.querySelector('[data-u=d]').textContent = pad(Math.floor(s / 86400));
+    box.querySelector('[data-u=h]').textContent = pad(Math.floor(s % 86400 / 3600));
+    box.querySelector('[data-u=m]').textContent = pad(Math.floor(s % 3600 / 60));
+    box.querySelector('[data-u=s]').textContent = pad(s % 60);
+  };
+  const t = setInterval(tick, 1000); tick();
+});
+// Hide the sticky order bar while an order form is on screen.
+(() => {
+  const bar = document.querySelector('.ph-sticky'); if (!bar || !('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver((es) => bar.classList.toggle('away', es.some((e) => e.isIntersecting)), { threshold: 0.2 });
+  document.querySelectorAll('.lo-form').forEach((f) => io.observe(f));
+})();
+
 // Auto-advancing slider with arrows, dots and swipe.
 document.querySelectorAll('[data-slider]').forEach((el) => {
   const slides = el.querySelectorAll('.slide'), dots = el.querySelectorAll('.dots button');

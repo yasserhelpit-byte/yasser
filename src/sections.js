@@ -6,6 +6,21 @@ const f = (k, t, l, extra = {}) => ({ k, t, l, ...extra });
 const BTN = [f('button', 'text', 'نص الزر', { max: 40, ph: 'تسوّق الآن' }), f('link', 'link', 'رابط الزر', { ph: '/products أو https://...' })];
 
 const SCHEMA = {
+  product_hero: {
+    label: 'منتج رئيسي + طلب مباشر', icon: '🎯', desc: 'لصفحات الهبوط: صور المنتج وسعره ونموذج الطلب في نفس الصفحة',
+    fields: [f('product', 'product', 'المنتج'), f('eyebrow', 'text', 'شارة صغيرة', { max: 40, ph: '🔥 الأكثر طلباً' }),
+      f('headline', 'text', 'عنوان جذاب (اختياري، بدل اسم المنتج)', { max: 120 }), f('subtitle', 'textarea', 'وصف قصير مقنع', { max: 400 }),
+      f('button', 'text', 'نص زر الطلب', { max: 40, ph: 'اطلب الآن · الدفع عند الاستلام' })],
+  },
+  order_form: {
+    label: 'نموذج طلب', icon: '📝', desc: 'نموذج الدفع عند الاستلام لمنتج واحد (ضعه أيضاً في آخر الصفحة)',
+    fields: [f('product', 'product', 'المنتج'), f('title', 'text', 'العنوان', { max: 80, ph: 'اطلب الآن والدفع عند الاستلام' }),
+      f('subtitle', 'text', 'النص', { max: 200 }), f('button', 'text', 'نص الزر', { max: 40, ph: 'تأكيد الطلب' })],
+  },
+  countdown: {
+    label: 'عدّاد تنازلي للعرض', icon: '⏳', desc: 'يعدّ حتى تاريخ انتهاء عرضك الحقيقي، ويختفي تلقائياً بعده',
+    fields: [f('title', 'text', 'العنوان', { max: 80, ph: 'العرض ينتهي خلال' }), f('ends_at', 'datetime', 'تاريخ ووقت نهاية العرض')],
+  },
   hero: {
     label: 'واجهة المتجر', icon: '🏠', desc: 'الشعار والعنوان والوصف وصورة الغلاف من إعدادات المتجر',
     fields: [f('title', 'text', 'العنوان (اتركه فارغاً لاستعمال شعار المتجر)', { max: 120 }), f('subtitle', 'textarea', 'النص', { max: 300 }), f('image', 'image', 'صورة الخلفية (اختياري)'), ...BTN],
@@ -88,6 +103,8 @@ function cleanField(field, value) {
     case 'image': return isImageUrl(String(v)) ? String(v) : '';
     case 'link': return cleanLink(v);
     case 'select': return Object.hasOwn(field.options, String(v)) ? String(v) : Object.keys(field.options)[0];
+    case 'product': return /^\d{1,9}$/.test(String(v)) ? String(v) : '';
+    case 'datetime': return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(v)) ? String(v) : '';
     default: return String(v).slice(0, field.max || 300);
   }
 }
@@ -149,6 +166,20 @@ const PRESETS = {
       { type: 'products', title: 'مختاراتنا', source: 'newest', limit: '4' },
       { type: 'gallery', title: 'تابعنا على إنستغرام', columns: '4', items: [] },
       { type: 'faq', title: 'الأسئلة الشائعة', items: [item({ q: 'كم يستغرق التوصيل؟', a: 'من 24 إلى 72 ساعة حسب مدينتك.' }), item({ q: 'كيف أدفع؟', a: 'الدفع نقداً عند استلام طلبك.' })] },
+    ],
+  },
+  landing: {
+    label: 'صفحة هبوط (منتج واحد)',
+    sections: [
+      { type: 'product_hero', eyebrow: '🔥 الأكثر طلباً', subtitle: 'اكتب هنا جملتين تشرحان لماذا يحتاج العميل هذا المنتج وما الذي سيتغيّر في حياته.', button: 'اطلب الآن · الدفع عند الاستلام' },
+      { type: 'countdown', title: 'العرض ينتهي خلال' },
+      { type: 'features', title: 'لماذا تختار منتجنا؟', items: [item({ icon: '✨', title: 'الميزة الأولى', text: 'اشرح فائدة واضحة للعميل' }), item({ icon: '💪', title: 'الميزة الثانية', text: 'جودة، متانة، سهولة الاستعمال…' }), item({ icon: '🎁', title: 'الميزة الثالثة', text: 'ما الذي يميّزك عن المنافسين؟' })] },
+      { type: 'image_text', eyebrow: 'كيف يعمل؟', title: 'شرح المنتج بالصور', text: 'ارفع صورة للمنتج أثناء الاستعمال، واشرح خطوات استعماله أو نتيجته.', side: 'start' },
+      { type: 'gallery', title: 'صور المنتج', columns: '3', items: [] },
+      { type: 'testimonials', title: 'آراء عملائنا', items: [item({ name: 'اسم العميل', city: 'المدينة', text: 'ضع هنا رأياً حقيقياً من أحد عملائك (احذف هذا القسم إن لم تكن لديك آراء بعد).', rating: '5' })] },
+      { type: 'features', title: 'اطلب وأنت مطمئن', items: [item({ icon: '💵', title: 'الدفع عند الاستلام', text: 'لا تدفع شيئاً قبل أن يصلك طلبك' }), item({ icon: '🚚', title: 'توصيل لكل المدن', text: 'إلى باب منزلك' }), item({ icon: '📞', title: 'نتصل بك للتأكيد', text: 'قبل الشحن' })] },
+      { type: 'faq', title: 'الأسئلة الشائعة', items: [item({ q: 'كم يستغرق التوصيل؟', a: 'من 24 إلى 72 ساعة حسب مدينتك.' }), item({ q: 'متى أدفع؟', a: 'تدفع نقداً عند استلام طلبك.' }), item({ q: 'هل يمكنني إرجاع المنتج؟', a: 'اكتب هنا سياسة الإرجاع الخاصة بك.' })] },
+      { type: 'order_form', title: 'اطلب الآن والدفع عند الاستلام', subtitle: 'املأ معلوماتك وسنتصل بك لتأكيد الطلب.', button: 'تأكيد الطلب' },
     ],
   },
 };
