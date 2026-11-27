@@ -299,9 +299,26 @@ function cartLines(req) {
   return { lines, total: lines.reduce((a, l) => a + l.subtotal, 0) };
 }
 
+const SORTS = {
+  new: 'id DESC',
+  price_asc: 'price ASC, id DESC',
+  price_desc: 'price DESC, id DESC',
+};
 shop.get('/', (req, res) => {
-  const products = db.prepare('SELECT * FROM products WHERE store_id = ? AND active = 1 ORDER BY id DESC').all(req.store.id);
-  res.render('store/index', { products });
+  const q = str(req.query.q, 100);
+  const sort = SORTS[req.query.sort] ? req.query.sort : 'new';
+  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
+  // In-stock products first, then the chosen order.
+  const products = db
+    .prepare(
+      `SELECT * FROM products WHERE store_id = ? AND active = 1
+         AND (? = '' OR name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')
+       ORDER BY (stock = 0), ${SORTS[sort]}`
+    )
+    .all(req.store.id, q, like, like);
+  const total = db.prepare('SELECT COUNT(*) AS n FROM products WHERE store_id = ? AND active = 1').get(req.store.id).n;
+  const newest = db.prepare('SELECT MAX(id) AS id FROM products WHERE store_id = ? AND active = 1').get(req.store.id).id;
+  res.render('store/index', { products, q, sort, total, newest });
 });
 
 shop.get('/p/:productId', (req, res) => {
