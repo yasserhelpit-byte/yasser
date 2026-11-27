@@ -8,6 +8,7 @@ const auth = require('./auth');
 const uploads = require('./uploads');
 const limiter = require('./limiter');
 const mailer = require('./mailer');
+const sections = require('./sections');
 
 const app = express();
 // Behind one reverse proxy (Codespaces, Render, Railway...): use X-Forwarded-For for req.ip.
@@ -41,6 +42,20 @@ const STATUSES = {
   cancelled: 'ملغى',
 };
 app.locals.STATUSES = STATUSES;
+const FONTS = {
+  tajawal: { label: 'Tajawal · عصري', css: "'Tajawal'", g: 'Tajawal:wght@400;500;700;800' },
+  cairo: { label: 'Cairo · واضح', css: "'Cairo'", g: 'Cairo:wght@400;600;700;800' },
+  almarai: { label: 'Almarai · ناعم', css: "'Almarai'", g: 'Almarai:wght@400;700;800' },
+  plex: { label: 'IBM Plex · أنيق', css: "'IBM Plex Sans Arabic'", g: 'IBM+Plex+Sans+Arabic:wght@400;500;700' },
+  kufi: { label: 'Noto Kufi · فاخر', css: "'Noto Kufi Arabic'", g: 'Noto+Kufi+Arabic:wght@400;600;800' },
+  amiri: { label: 'Amiri · كلاسيكي', css: "'Amiri'", g: 'Amiri:wght@400;700' },
+};
+const RADII = { sharp: { label: 'حادة', v: '2px' }, soft: { label: 'ناعمة', v: '12px' }, round: { label: 'دائرية', v: '22px' } };
+const HEADERS = { classic: 'كلاسيكي (الشعار يميناً)', centered: 'الشعار في الوسط' };
+app.locals.FONTS = FONTS;
+app.locals.RADII = RADII;
+app.locals.HEADERS = HEADERS;
+app.locals.SCHEMA = sections.SCHEMA;
 // Safe for embedding inside <script>: no "</script>" breakout.
 app.locals.js = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
 app.locals.json = (v, fallback = []) => { try { return JSON.parse(v); } catch { return fallback; } };
@@ -481,6 +496,98 @@ function adjustStock(orderId, sign) {
   for (const it of items) upd.run(sign * it.quantity, it.product_id);
 }
 
+// ----- Store design (homepage sections + theme) -----
+const storeHome = (store) => {
+  const list = sections.sanitize(store.home_sections || '');
+  return store.home_sections ? list : sections.DEFAULT_HOME;
+};
+dash.get('/stores/:storeId/design', ownStore, (req, res) => {
+  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved });
+});
+dash.post('/stores/:storeId/design', ownStore, (req, res) => {
+  const list = sections.sanitize(req.body.sections);
+  const font = FONTS[req.body.font] ? req.body.font : 'tajawal';
+  const radius = RADII[req.body.radius] ? req.body.radius : 'soft';
+  const header = HEADERS[req.body.header_style] ? req.body.header_style : 'classic';
+  const color = /^#[0-9a-fA-F]{6}$/.test(req.body.color) ? req.body.color : req.store.color;
+  db.prepare('UPDATE stores SET home_sections = ?, font = ?, radius = ?, header_style = ?, color = ? WHERE id = ?')
+    .run(JSON.stringify(list), font, radius, header, color, req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/design?saved=1`);
+});
+
+// ----- Custom pages -----
+const PAGE_TEMPLATES = {
+  blank: { title: '', sections: [{ type: 'text' }] },
+  about: { title: 'من نحن', sections: [
+    { type: 'banner', title: 'من نحن', height: 's', align: 'center' },
+    { type: 'image_text', eyebrow: 'قصتنا', title: 'بدأنا بشغف', text: 'اكتب هنا قصة متجرك: كيف بدأت، وما الذي يميز منتجاتك، ولماذا يثق بك عملاؤك.', side: 'start' },
+    { type: 'features', title: 'قيمنا', items: [{ icon: '💎', title: 'الجودة', text: 'منتجات مختارة بعناية' }, { icon: '🤝', title: 'الثقة', text: 'نحترم وعودنا' }, { icon: '❤️', title: 'الاهتمام', text: 'رضاك أولويتنا' }] },
+  ] },
+  contact: { title: 'اتصل بنا', sections: [
+    { type: 'text', title: 'تواصل معنا', text: 'يسعدنا الرد على أسئلتك. تواصل معنا عبر واتساب أو الهاتف وسنجيبك في أقرب وقت.', align: 'center' },
+  ] },
+  shipping: { title: 'سياسة التوصيل', sections: [
+    { type: 'text', title: 'التوصيل', text: '• نوصل إلى جميع المدن.\n• مدة التوصيل من 24 إلى 72 ساعة.\n• الدفع عند الاستلام.\n\nعدّل هذا النص حسب سياستك.' },
+  ] },
+  returns: { title: 'سياسة الاستبدال والإرجاع', sections: [
+    { type: 'text', title: 'الاستبدال والإرجاع', text: '• يمكنك استبدال المنتج خلال 7 أيام من الاستلام.\n• يجب أن يكون المنتج بحالته الأصلية.\n\nعدّل هذا النص حسب سياستك.' },
+  ] },
+  faq: { title: 'الأسئلة الشائعة', sections: [
+    { type: 'faq', title: 'الأسئلة الشائعة', items: [{ q: 'كم يستغرق التوصيل؟', a: 'من 24 إلى 72 ساعة حسب مدينتك.' }, { q: 'كيف أدفع؟', a: 'الدفع نقداً عند الاستلام.' }, { q: 'هل يمكنني استبدال المنتج؟', a: 'نعم، خلال 7 أيام.' }] },
+  ] },
+};
+const pageSlug = (s) => str(s, 60).trim().toLowerCase().replace(/[^a-z0-9\u0600-\u06ff-]+/g, '-').replace(/^-+|-+$/g, '');
+const RESERVED = new Set(['products', 'cart', 'checkout', 'thanks', 'p', 'page']);
+
+dash.get('/stores/:storeId/pages', ownStore, (req, res) => {
+  const pages = db.prepare('SELECT * FROM pages WHERE store_id = ? ORDER BY position, id').all(req.store.id);
+  res.render('dashboard/pages', { pages, templates: PAGE_TEMPLATES });
+});
+dash.post('/stores/:storeId/pages', ownStore, (req, res) => {
+  const tpl = PAGE_TEMPLATES[req.body.template] || PAGE_TEMPLATES.blank;
+  const title = str(req.body.title, 80) || tpl.title || 'صفحة جديدة';
+  let slug = pageSlug(title) || 'page';
+  if (RESERVED.has(slug)) slug += '-1';
+  for (let i = 2; db.prepare('SELECT 1 FROM pages WHERE store_id = ? AND slug = ?').get(req.store.id, slug); i++) slug = `${pageSlug(title) || 'page'}-${i}`;
+  const pos = db.prepare('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM pages WHERE store_id = ?').get(req.store.id).p;
+  const { lastInsertRowid } = db.prepare('INSERT INTO pages (store_id, title, slug, sections, position) VALUES (?, ?, ?, ?, ?)')
+    .run(req.store.id, title, slug, JSON.stringify(sections.sanitize(tpl.sections)), pos);
+  res.redirect(`/dashboard/stores/${req.store.id}/pages/${lastInsertRowid}`);
+});
+function ownPage(req, res, next) {
+  const page = db.prepare('SELECT * FROM pages WHERE id = ? AND store_id = ?').get(req.params.pageId, req.store.id);
+  if (!page) return res.status(404).render('message', { title: 'غير موجود', message: 'الصفحة غير موجودة.' });
+  req.page = page;
+  next();
+}
+dash.get('/stores/:storeId/pages/:pageId', ownStore, ownPage, (req, res) => {
+  res.render('dashboard/page-edit', { page: req.page, sectionsData: sections.sanitize(req.page.sections), error: null, saved: !!req.query.saved });
+});
+dash.post('/stores/:storeId/pages/:pageId', ownStore, ownPage, (req, res) => {
+  const title = str(req.body.title, 80);
+  const slug = pageSlug(req.body.slug || title);
+  const list = sections.sanitize(req.body.sections);
+  const render = (error) => res.status(400).render('dashboard/page-edit', { page: { ...req.page, title, slug }, sectionsData: list, error, saved: false });
+  if (!title) return render('عنوان الصفحة مطلوب.');
+  if (!slug || RESERVED.has(slug)) return render('رابط الصفحة غير صالح.');
+  if (db.prepare('SELECT 1 FROM pages WHERE store_id = ? AND slug = ? AND id != ?').get(req.store.id, slug, req.page.id)) return render('هذا الرابط مستخدم في صفحة أخرى.');
+  db.prepare('UPDATE pages SET title = ?, slug = ?, sections = ?, in_menu = ?, in_footer = ? WHERE id = ?')
+    .run(title, slug, JSON.stringify(list), req.body.in_menu ? 1 : 0, req.body.in_footer ? 1 : 0, req.page.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/pages/${req.page.id}?saved=1`);
+});
+dash.post('/stores/:storeId/pages/:pageId/move', ownStore, ownPage, (req, res) => {
+  const pages = db.prepare('SELECT id FROM pages WHERE store_id = ? ORDER BY position, id').all(req.store.id).map((p) => p.id);
+  const i = pages.indexOf(req.page.id);
+  const j = req.body.dir === 'up' ? i - 1 : i + 1;
+  if (j >= 0 && j < pages.length) [pages[i], pages[j]] = [pages[j], pages[i]];
+  transaction(() => pages.forEach((id, k) => db.prepare('UPDATE pages SET position = ? WHERE id = ?').run(k, id)));
+  res.redirect(`/dashboard/stores/${req.store.id}/pages`);
+});
+dash.post('/stores/:storeId/pages/:pageId/delete', ownStore, ownPage, (req, res) => {
+  db.prepare('DELETE FROM pages WHERE id = ?').run(req.page.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/pages`);
+});
+
 // Image upload (used by product and store forms via fetch). Returns { urls: [...] }.
 dash.post('/stores/:storeId/uploads', ownStore, (req, res) => {
   uploads.upload.array('files', uploads.MAX_FILES)(req, res, (err) => {
@@ -510,6 +617,11 @@ shop.use((req, res, next) => {
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);
   res.locals.isOwner = !!req.user && req.user.id === store.owner_id;
+  res.locals.menuPages = db.prepare('SELECT title, slug, in_menu, in_footer FROM pages WHERE store_id = ? ORDER BY position, id').all(store.id);
+  res.locals.font = FONTS[store.font] || FONTS.tajawal;
+  res.locals.radius = (RADII[store.radius] || RADII.soft).v;
+  // Store-relative links: "/products" -> "/s/<slug>/products".
+  res.locals.href = (link) => (link && link.startsWith('/') ? `/s/${store.slug}${link === '/' ? '' : link}` : link);
   next();
 });
 
@@ -541,9 +653,51 @@ const SORTS = {
   price_asc: 'price ASC, id DESC',
   price_desc: 'price DESC, id DESC',
 };
+// Load the data each section needs (products, categories...).
+function resolveSections(store, list) {
+  return list.filter((sec) => !sec.hidden).map((sec) => {
+    const out = { ...sec };
+    if (sec.type === 'products') {
+      const limit = Number(sec.limit) || 8;
+      const base = `SELECT p.* FROM products p WHERE p.store_id = ? AND p.active = 1`;
+      let rows;
+      if (sec.source === 'sale') rows = db.prepare(`${base} AND p.compare_price > p.price ORDER BY p.stock = 0, p.id DESC LIMIT ?`).all(store.id, limit);
+      else if (sec.source === 'category') rows = db.prepare(`${base} AND p.category = ? ORDER BY p.stock = 0, p.id DESC LIMIT ?`).all(store.id, sec.category, limit);
+      else if (sec.source === 'best') rows = db.prepare(
+        `${base} ORDER BY p.stock = 0, (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+           WHERE oi.product_id = p.id AND o.status != 'cancelled') DESC, p.id DESC LIMIT ?`).all(store.id, limit);
+      else rows = db.prepare(`${base} ORDER BY p.stock = 0, p.id DESC LIMIT ?`).all(store.id, limit);
+      out.products = rows;
+      out.moreLink = sec.source === 'sale' ? '/products?sale=1' : sec.source === 'category' && sec.category ? `/products?c=${encodeURIComponent(sec.category)}` : '/products';
+    }
+    if (sec.type === 'categories') {
+      // No items configured: build cards automatically from the store's categories.
+      const cats = db.prepare(
+        `SELECT category AS name, COUNT(*) AS n, (SELECT image_url FROM products q WHERE q.store_id = p.store_id AND q.category = p.category AND q.active = 1 AND q.image_url != '' ORDER BY q.id DESC LIMIT 1) AS cover
+         FROM products p WHERE store_id = ? AND active = 1 AND category != '' GROUP BY category ORDER BY n DESC LIMIT 8`).all(store.id);
+      const byName = Object.fromEntries(cats.map((c) => [c.name, c]));
+      out.cards = (sec.items?.length ? sec.items.filter((i) => i.name) : cats).map((i) => ({ name: i.name, image: i.image || byName[i.name]?.cover || i.cover || '', n: byName[i.name]?.n || 0 }));
+    }
+    if (sec.type === 'video') out.videoId = sections.youtubeId(sec.url);
+    return out;
+  });
+}
+
 shop.get('/', (req, res) => {
+  const list = req.store.home_sections ? sections.sanitize(req.store.home_sections) : sections.DEFAULT_HOME;
+  res.render('store/home', { blocks: resolveSections(req.store, list), pageTitle: null });
+});
+
+shop.get('/page/:pageSlug', (req, res) => {
+  const page = db.prepare('SELECT * FROM pages WHERE store_id = ? AND slug = ?').get(req.store.id, req.params.pageSlug);
+  if (!page) return res.status(404).render('message', { title: 'غير موجود', message: 'الصفحة غير موجودة.' });
+  res.render('store/home', { blocks: resolveSections(req.store, sections.sanitize(page.sections)), pageTitle: page.title });
+});
+
+shop.get('/products', (req, res) => {
   const q = str(req.query.q, 100);
   const c = str(req.query.c, 60);
+  const sale = req.query.sale ? 1 : 0;
   const sort = SORTS[req.query.sort] ? req.query.sort : 'new';
   const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
   // In-stock products first, then the chosen order.
@@ -552,9 +706,10 @@ shop.get('/', (req, res) => {
       `SELECT * FROM products WHERE store_id = ? AND active = 1
          AND (? = '' OR name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')
          AND (? = '' OR category = ?)
+         AND (? = 0 OR compare_price > price)
        ORDER BY (stock = 0), ${SORTS[sort]}`
     )
-    .all(req.store.id, q, like, like, c, c);
+    .all(req.store.id, q, like, like, c, c, sale);
   const total = db.prepare('SELECT COUNT(*) AS n FROM products WHERE store_id = ? AND active = 1').get(req.store.id).n;
   const newest = db.prepare('SELECT MAX(id) AS id FROM products WHERE store_id = ? AND active = 1').get(req.store.id).id;
   const categories = db
@@ -563,7 +718,7 @@ shop.get('/', (req, res) => {
        WHERE store_id = ? AND active = 1 AND category != '' GROUP BY category ORDER BY category`
     )
     .all(req.store.id);
-  res.render('store/index', { products, q, c, sort, total, newest, categories });
+  res.render('store/products', { products, q, c, sale, sort, total, newest, categories });
 });
 
 shop.get('/p/:productId', (req, res) => {

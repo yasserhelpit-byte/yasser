@@ -1,0 +1,26 @@
+<% const pimgs = json(p.images); const second = pimgs[1]; const hasOpts = json(p.options).length; %>
+<div class="pcard <%= p.stock ? '' : 'soldout' %>">
+  <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="pcard-img">
+    <% if (p.image_url) { %>
+      <img src="<%= p.image_url %>" alt="<%= p.name %>" loading="lazy">
+      <% if (second) { %><img src="<%= second %>" alt="" loading="lazy" class="alt"><% } %>
+    <% } else { %><span class="ph"><%= p.name.trim().charAt(0) %></span><% } %>
+    <% if (!p.stock) { %><em class="tag out">نفدت الكمية</em>
+    <% } else if (p.compare_price > p.price) { %><em class="tag sale" dir="ltr">-<%= Math.round((1 - p.price / p.compare_price) * 100) %>%</em>
+    <% } else if (typeof newest !== 'undefined' && p.id === newest) { %><em class="tag">جديد</em><% } %>
+  </a>
+  <div class="pcard-body">
+    <% if (p.category) { %><small class="pcard-cat"><%= p.category %></small><% } %>
+    <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="pcard-name"><%= p.name %></a>
+    <div class="price-row"><span class="price"><%= money(p.price, store.currency) %></span><% if (p.compare_price > p.price) { %><s class="compare"><%= money(p.compare_price, store.currency) %></s><% } %></div>
+  </div>
+  <% if (p.stock && hasOpts) { %>
+    <a href="/s/<%= store.slug %>/p/<%= p.id %>" class="pcard-btn">اختر الخيارات</a>
+  <% } else if (p.stock) { %>
+    <form method="post" action="/s/<%= store.slug %>/cart">
+      <%- include('csrf') %>
+      <input type="hidden" name="product_id" value="<%= p.id %>"><input type="hidden" name="quantity" value="1">
+      <button class="pcard-btn">أضف إلى السلة</button>
+    </form>
+  <% } %>
+</div>

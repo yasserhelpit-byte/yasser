@@ -1,0 +1,59 @@
+<%- include('../partials/header', { title: 'تصميم المتجر' }) %>
+<p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p>
+<div class="row between">
+  <div><h1>🎨 تصميم المتجر</h1><p class="muted">صمّم صفحتك الرئيسية بالأقسام، واختر الخط والأسلوب.</p></div>
+  <div class="row">
+    <a href="/dashboard/stores/<%= store.id %>/pages" class="btn ghost">📄 الصفحات</a>
+    <a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">معاينة ↗</a>
+  </div>
+</div>
+<% if (saved) { %><div class="alert ok">✓ تم حفظ التصميم. <a href="/s/<%= store.slug %>" target="_blank">شاهد متجرك ↗</a></div><% } %>
+
+<form method="post" class="design-grid">
+  <%- include('../partials/csrf') %>
+  <input type="hidden" name="sections" id="sections-input">
+  <div>
+    <section class="card">
+      <div class="row between">
+        <h3>🏠 أقسام الصفحة الرئيسية</h3>
+        <div class="row preset-row">
+          <select id="preset-select" aria-label="قالب جاهز"><% Object.entries(presets).forEach(([k, p]) => { %><option value="<%= k %>"><%= p.label %></option><% }) %></select>
+          <button type="button" class="btn small ghost" id="preset-apply">استعمال قالب جاهز</button>
+        </div>
+      </div>
+      <p class="muted small">اضغط على أي قسم لتعديله. رتّب الأقسام بالأسهم ↑ ↓، أو أخفِها بـ 👁️.</p>
+      <div id="builder" class="builder"></div>
+    </section>
+  </div>
+  <aside class="design-side">
+    <section class="card form">
+      <h3>🎨 الأسلوب</h3>
+      <label>اللون الرئيسي<input type="color" name="color" value="<%= store.color %>"></label>
+      <div class="b-label">الخط</div>
+      <div class="font-picks">
+        <% Object.entries(FONTS).forEach(([k, f]) => { %>
+          <label class="font-pick"><input type="radio" name="font" value="<%= k %>" <%= store.font === k ? 'checked' : '' %>><span style="font-family: <%- f.css %>, sans-serif"><b>أبجد هوز</b><small><%= f.label %></small></span></label>
+        <% }) %>
+      </div>
+      <div class="b-label">شكل الزوايا</div>
+      <div class="seg">
+        <% Object.entries(RADII).forEach(([k, r]) => { %><label><input type="radio" name="radius" value="<%= k %>" <%= store.radius === k ? 'checked' : '' %>><span style="border-radius: <%= r.v %>"><%= r.label %></span></label><% }) %>
+      </div>
+      <div class="b-label">رأس الصفحة</div>
+      <div class="seg">
+        <% Object.entries(HEADERS).forEach(([k, l]) => { %><label><input type="radio" name="header_style" value="<%= k %>" <%= store.header_style === k ? 'checked' : '' %>><span><%= l %></span></label><% }) %>
+      </div>
+      <p class="muted small">الشعار وصورة الغلاف وشريط الإعلانات في <a href="/dashboard/stores/<%= store.id %>/settings">إعدادات المتجر</a>.</p>
+    </section>
+  </aside>
+  <div class="save-bar pf-save"><a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">معاينة ↗</a><button class="btn big">💾 حفظ التصميم</button></div>
+</form>
+<link href="https://fonts.googleapis.com/css2?<%= Object.values(FONTS).map(f => 'family=' + f.g).join('&') %>&display=swap" rel="stylesheet">
+<script>window.CSRF = <%- js(csrf) %>; window.SCHEMA = <%- js(SCHEMA) %>;</script>
+<script src="/upload.js"></script>
+<script src="/builder.js"></script>
+<script>
+initBuilder({ root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: <%- js(sectionsData) %>,
+  uploadUrl: '/dashboard/stores/<%= store.id %>/uploads', presets: <%- js(presets) %> });
+</script>
+<%- include('../partials/footer') %>

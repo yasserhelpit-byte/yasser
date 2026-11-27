@@ -71,6 +71,18 @@ CREATE TABLE IF NOT EXISTS password_resets (
   expires_at INTEGER NOT NULL,
   used INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS pages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  sections TEXT NOT NULL DEFAULT '[]',
+  in_menu INTEGER NOT NULL DEFAULT 1,
+  in_footer INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (store_id, slug)
+);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(store_id, customer_phone);
 `);
 
@@ -94,6 +106,10 @@ for (const [col, def] of [
   ['shipping_fee', 'REAL NOT NULL DEFAULT 0'],
   ['free_shipping_over', 'REAL NOT NULL DEFAULT 0'],
 ]) addColumn('stores', col, def);
+addColumn('stores', 'home_sections', "TEXT NOT NULL DEFAULT ''");
+addColumn('stores', 'font', "TEXT NOT NULL DEFAULT 'tajawal'");
+addColumn('stores', 'radius', "TEXT NOT NULL DEFAULT 'soft'");
+addColumn('stores', 'header_style', "TEXT NOT NULL DEFAULT 'classic'");
 addColumn('products', 'category', "TEXT NOT NULL DEFAULT ''");
 addColumn('products', 'compare_price', 'REAL NOT NULL DEFAULT 0');
 addColumn('products', 'images', "TEXT NOT NULL DEFAULT '[]'");

@@ -1,0 +1,44 @@
+<%- include('../partials/header', { title: 'الصفحات' }) %>
+<p><a href="/dashboard/stores/<%= store.id %>">← <%= store.name %></a></p>
+<div class="row between">
+  <div><h1>📄 صفحات المتجر</h1><p class="muted">أضف صفحات مثل «من نحن» و«سياسة الإرجاع». تظهر في قائمة المتجر وأسفله.</p></div>
+  <a href="/dashboard/stores/<%= store.id %>/design" class="btn ghost">🎨 تصميم الصفحة الرئيسية</a>
+</div>
+
+<section class="card">
+  <h3>+ صفحة جديدة</h3>
+  <p class="muted small">اختر قالباً جاهزاً، ثم عدّل محتواه وصوره كما تريد.</p>
+  <div class="tpl-grid">
+    <% const icons = { blank: '📄', about: '👋', contact: '📞', shipping: '🚚', returns: '🔄', faq: '❓' }; %>
+    <% Object.entries(templates).forEach(([k, t]) => { %>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/pages">
+        <%- include('../partials/csrf') %><input type="hidden" name="template" value="<%= k %>">
+        <button class="tpl"><span><%= icons[k] %></span><strong><%= t.title || 'صفحة فارغة' %></strong></button>
+      </form>
+    <% }) %>
+  </div>
+</section>
+
+<h2>صفحاتك</h2>
+<% if (!pages.length) { %>
+  <div class="card center empty"><div class="big-icon">📄</div><p class="muted">لا توجد صفحات بعد. اختر قالباً من الأعلى.</p></div>
+<% } else { %>
+<div class="table-wrap"><table>
+  <tr><th>الصفحة</th><th>الرابط</th><th>في القائمة</th><th>في الأسفل</th><th></th></tr>
+  <% pages.forEach((p, i) => { %>
+  <tr>
+    <td><a href="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>"><strong><%= p.title %></strong></a></td>
+    <td><a href="/s/<%= store.slug %>/page/<%= p.slug %>" target="_blank" class="muted small">/page/<%= p.slug %> ↗</a></td>
+    <td><%= p.in_menu ? '✓' : '—' %></td><td><%= p.in_footer ? '✓' : '—' %></td>
+    <td><div class="row">
+      <% ['up', 'down'].forEach(dir => { if ((dir === 'up' && i > 0) || (dir === 'down' && i < pages.length - 1)) { %>
+        <form method="post" action="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>/move" class="inline"><%- include('../partials/csrf') %><input type="hidden" name="dir" value="<%= dir %>"><button class="link"><%= dir === 'up' ? '↑' : '↓' %></button></form>
+      <% } }) %>
+      <a href="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>">تعديل</a>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>/delete" class="inline" onsubmit="return confirm('حذف الصفحة؟')"><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
+    </div></td>
+  </tr>
+  <% }) %>
+</table></div>
+<% } %>
+<%- include('../partials/footer') %>

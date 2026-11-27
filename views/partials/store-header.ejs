@@ -1,27 +1,46 @@
 <%- include('head') %>
+<div class="storefront">
 <% if (isOwner) { %>
 <div class="owner-bar">
   <div class="wrap row between">
     <span>👁️ أنت تشاهد متجرك كما يراه العملاء</span>
     <span class="row">
       <a href="/dashboard/stores/<%= store.id %>">لوحة المتجر</a>
-      <a href="/dashboard/stores/<%= store.id %>/settings">🎨 تخصيص المتجر</a>
-      <a href="/dashboard/stores/<%= store.id %>/products/new">+ منتج</a>
+      <a href="/dashboard/stores/<%= store.id %>/design">🎨 تصميم الصفحة الرئيسية</a>
+      <a href="/dashboard/stores/<%= store.id %>/pages">📄 الصفحات</a>
     </span>
   </div>
 </div>
 <% } %>
 <% if (store.announcement) { %><div class="announce"><%= store.announcement %></div><% } %>
-<header class="topbar store-bar">
-  <div class="wrap row between">
-    <a href="/s/<%= store.slug %>" class="logo store-logo">
+<header class="sf-head <%= store.header_style === 'centered' ? 'centered' : '' %>">
+  <div class="wrap sf-head-row">
+    <details class="mnav">
+      <summary aria-label="القائمة"><span></span><span></span><span></span></summary>
+      <nav>
+        <a href="/s/<%= store.slug %>">الرئيسية</a>
+        <a href="/s/<%= store.slug %>/products">كل المنتجات</a>
+        <% menuPages.filter(p => p.in_menu).forEach(p => { %><a href="/s/<%= store.slug %>/page/<%= p.slug %>"><%= p.title %></a><% }) %>
+      </nav>
+    </details>
+    <a href="/s/<%= store.slug %>" class="brand">
       <% if (store.logo_url) { %><img src="<%= store.logo_url %>" alt=""><% } %>
       <span><%= store.name %></span>
     </a>
-    <a href="/s/<%= store.slug %>/cart" class="cart-btn" aria-label="السلة">
-      🛒 <span>السلة</span>
-      <% if (cartCount) { %><b class="count"><%= cartCount %></b><% } %>
-    </a>
+    <nav class="snav">
+      <a href="/s/<%= store.slug %>">الرئيسية</a>
+      <a href="/s/<%= store.slug %>/products">كل المنتجات</a>
+      <% menuPages.filter(p => p.in_menu).forEach(p => { %><a href="/s/<%= store.slug %>/page/<%= p.slug %>"><%= p.title %></a><% }) %>
+    </nav>
+    <div class="head-actions">
+      <a href="/s/<%= store.slug %>/products" class="icon-btn" aria-label="بحث">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </a>
+      <a href="/s/<%= store.slug %>/cart" class="icon-btn" aria-label="السلة">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7h12l-1 13H7L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
+        <% if (cartCount) { %><b class="count"><%= cartCount %></b><% } %>
+      </a>
+    </div>
   </div>
 </header>
 <main class="wrap">

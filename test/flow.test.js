@@ -92,7 +92,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   assert.strictEqual(r.location, storeUrl);
   const shop2 = client(base);
   const sp = await shop2('GET', '/s/test-shop');
-  const shirtId = sp.text.match(/\/p\/(\d+)" class="name">Shirt</)[1];
+  const shirtId = sp.text.match(/\/p\/(\d+)" class="pcard-name">Shirt</)[1];
   assert.match(sp.text, /<img src="\/uploads\/[a-f0-9]{32}\.png"/); // uploaded image shown
   assert.doesNotMatch(sp.text, /javascript:/); // unsafe image URL dropped
   const scsrf = csrfOf((await shop2('GET', `/s/test-shop/p/${shirtId}`)).text);
@@ -111,7 +111,7 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
 
   // Fake-order protection.
   await merchant('POST', `${storeUrl}/products`, { _csrf: csrf, name: 'Pen', price: '5', stock: '50', active: '1' });
-  const penId = (await merchant('GET', '/s/test-shop')).text.match(/\/p\/(\d+)" class="name">Pen</)[1];
+  const penId = (await merchant('GET', '/s/test-shop')).text.match(/\/p\/(\d+)" class="pcard-name">Pen</)[1];
   const bot = client(base);
   const bcsrf = csrfOf((await bot('GET', '/s/test-shop/p/' + penId)).text);
   await bot('POST', '/s/test-shop/cart', { _csrf: bcsrf, product_id: penId, quantity: '1' });
@@ -131,6 +131,37 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   assert.match(page.text, /أول طلب من هذا الرقم/);
   const notif = JSON.parse((await merchant('GET', '/dashboard/notifications')).text);
   assert.ok(notif.pending >= 1 && notif.latest.id >= Number(orderId));
+
+  // Homepage designer: sections are sanitized (bad links/images/types dropped) and rendered.
+  const design = [
+    { type: 'banner', title: 'Big Sale', image: 'javascript:alert(1)', link: 'javascript:alert(1)', button: 'Go', height: 'zzz' },
+    { type: 'evil', html: '<script>' },
+    { type: 'gallery', title: 'Our Photos', items: [{ image: urls[0], caption: '<b>hi</b>' }] },
+    { type: 'products', title: 'Picks', source: 'newest', limit: '4' },
+    { type: 'text', title: 'Hidden one', hidden: true },
+  ];
+  r = await merchant('POST', `${storeUrl}/design`, { _csrf: csrf, sections: JSON.stringify(design), font: 'cairo', radius: 'round', header_style: 'centered', color: '#112233' });
+  assert.match(r.location, /design\?saved=1/);
+  page = await shop2('GET', '/s/test-shop');
+  assert.match(page.text, /Big Sale/);
+  assert.match(page.text, /Our Photos/);
+  assert.match(page.text, /&lt;b&gt;hi&lt;\/b&gt;/); // captions are escaped
+  assert.doesNotMatch(page.text, /javascript:|Hidden one|<script>alert/);
+  assert.match(page.text, /family=Cairo/);
+  assert.match(page.text, /store-head centered/);
+
+  // Custom pages: created from a template, shown in the menu, editable, reserved slugs refused.
+  r = await merchant('POST', `${storeUrl}/pages`, { _csrf: csrf, template: 'about' });
+  const pageUrl = r.location;
+  assert.match(pageUrl, /\/pages\/\d+$/);
+  r = await merchant('POST', pageUrl, { _csrf: csrf, title: 'About us', slug: 'about-us', in_menu: '1', sections: JSON.stringify([{ type: 'text', title: 'Hello from about', text: 'Story' }]) });
+  assert.match(r.location, /saved=1/);
+  page = await shop2('GET', '/s/test-shop/page/about-us');
+  assert.match(page.text, /Hello from about/);
+  assert.match((await shop2('GET', '/s/test-shop')).text, /\/s\/test-shop\/page\/about-us">About us</);
+  r = await merchant('POST', pageUrl, { _csrf: csrf, title: 'X', slug: 'products', sections: '[]' });
+  assert.match(r.text, /رابط الصفحة غير صالح/);
+  assert.strictEqual((await shop2('GET', '/s/test-shop/products')).status, 200);
 
   // Another merchant cannot see the store.
   const other = client(base);

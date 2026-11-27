@@ -1,0 +1,11 @@
+<%- include('../partials/store-header', { title: pageTitle || null }) %>
+</main>
+<div class="page-blocks">
+  <% if (pageTitle && !(blocks[0] && ['banner', 'slider', 'hero'].includes(blocks[0].type))) { %>
+    <div class="wrap page-title"><h1><%= pageTitle %></h1></div>
+  <% } %>
+  <%- include('../partials/sections', { blocks }) %>
+  <% if (!blocks.length) { %><div class="wrap empty-sec">هذه الصفحة فارغة.</div><% } %>
+</div>
+<main class="wrap">
+<%- include('../partials/store-footer') %>

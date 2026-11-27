@@ -1,0 +1,38 @@
+<%- include('../partials/store-header', { title: 'كل المنتجات' }) %>
+<div class="page-title">
+  <h1><%= sale ? 'العروض والتخفيضات' : c ? c : 'كل المنتجات' %></h1>
+  <p class="muted"><%= products.length %> منتج</p>
+</div>
+
+<% if (categories.length) { %>
+<nav class="chips">
+  <a href="/s/<%= store.slug %>/products?sort=<%= sort %>" class="<%= c || sale ? '' : 'on' %>">الكل <small><%= total %></small></a>
+  <% categories.forEach(cat => { %>
+    <a href="/s/<%= store.slug %>/products?c=<%= encodeURIComponent(cat.name) %>&sort=<%= sort %>" class="<%= c === cat.name ? 'on' : '' %>"><%= cat.name %> <small><%= cat.n %></small></a>
+  <% }) %>
+  <a href="/s/<%= store.slug %>/products?sale=1&sort=<%= sort %>" class="<%= sale ? 'on' : '' %>">🔥 العروض</a>
+</nav>
+<% } %>
+
+<form class="shop-tools" method="get" action="/s/<%= store.slug %>/products">
+  <% if (c) { %><input type="hidden" name="c" value="<%= c %>"><% } %>
+  <% if (sale) { %><input type="hidden" name="sale" value="1"><% } %>
+  <input type="search" name="q" value="<%= q %>" placeholder="ابحث عن منتج..." aria-label="بحث">
+  <select name="sort" onchange="this.form.submit()" aria-label="ترتيب">
+    <option value="new" <%= sort === 'new' ? 'selected' : '' %>>الأحدث</option>
+    <option value="price_asc" <%= sort === 'price_asc' ? 'selected' : '' %>>السعر: من الأقل</option>
+    <option value="price_desc" <%= sort === 'price_desc' ? 'selected' : '' %>>السعر: من الأعلى</option>
+  </select>
+  <button class="btn">بحث</button>
+</form>
+<% if (q) { %><p class="muted">نتائج البحث عن «<%= q %>» · <a href="/s/<%= store.slug %>/products">مسح</a></p><% } %>
+
+<% if (!products.length) { %>
+  <div class="empty-sec">
+    <% if (q || c || sale) { %>لا توجد منتجات مطابقة.
+    <% } else if (isOwner) { %>متجرك جاهز، بقي أن تضيف منتجاتك! <a href="/dashboard/stores/<%= store.id %>/products/new">+ أضف أول منتج</a>
+    <% } else { %>لا توجد منتجات حالياً، عد قريباً!<% } %>
+  </div>
+<% } %>
+<div class="pgrid"><% products.forEach(p => { %><%- include('../partials/product-card', { p }) %><% }) %></div>
+<%- include('../partials/store-footer') %>

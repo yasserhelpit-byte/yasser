@@ -1,0 +1,177 @@
+<%
+  // Renders the merchant's page sections. `blocks` come from resolveSections() on the server.
+  const bg = (img) => img ? `background-image:url('${img.replace(/'/g, '%27')}')` : '';
+  const head = (b) => (b.title || b.subtitle) ? `<div class="sec-head">${b.title ? `<h2>${escapeFn(b.title)}</h2>` : ''}${b.subtitle ? `<p>${escapeFn(b.subtitle)}</p>` : ''}</div>` : '';
+  function escapeFn(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+  const btn = (b, cls = 'btn') => b.button ? `<a class="${cls}" href="${escapeFn(href(b.link || '/products'))}">${escapeFn(b.button)}</a>` : '';
+%>
+<% blocks.forEach((b, bi) => { %>
+
+<% if (b.type === 'hero') { const img = b.image || store.banner_url; %>
+<section class="sec sec-hero full <%= img ? 'has-img' : '' %>" style="<%= bg(img) %>">
+  <div class="wrap hero-inner">
+    <% if (store.logo_url) { %><img class="hero-logo" src="<%= store.logo_url %>" alt="<%= store.name %>"><% } %>
+    <h1><%= b.title || store.tagline || store.name %></h1>
+    <p><%= b.subtitle || store.description || 'مرحباً بك في متجرنا! تصفح منتجاتنا واطلب بسهولة.' %></p>
+    <%- btn({ button: b.button || 'تسوّق الآن', link: b.link || '/products' }, 'btn light big') %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'slider' && b.items.length) { %>
+<section class="sec sec-slider full h-<%= b.height %>" data-slider>
+  <div class="slides">
+    <% b.items.forEach((it, i) => { %>
+      <div class="slide <%= i === 0 ? 'on' : '' %> <%= it.image ? 'has-img' : '' %>" style="<%= bg(it.image) %>">
+        <div class="wrap slide-inner">
+          <% if (it.title) { %><h2><%= it.title %></h2><% } %>
+          <% if (it.subtitle) { %><p><%= it.subtitle %></p><% } %>
+          <%- btn(it, 'btn light big') %>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+  <% if (b.items.length > 1) { %>
+    <button class="sl-nav prev" type="button" aria-label="السابق">›</button>
+    <button class="sl-nav next" type="button" aria-label="التالي">‹</button>
+    <div class="dots"><% b.items.forEach((it, i) => { %><button type="button" class="<%= i === 0 ? 'on' : '' %>" aria-label="شريحة <%= i + 1 %>"></button><% }) %></div>
+  <% } %>
+</section>
+<% } %>
+
+<% if (b.type === 'banner') { %>
+<section class="sec sec-banner full h-<%= b.height %> al-<%= b.align %> <%= b.image ? 'has-img' : '' %>" style="<%= bg(b.image) %>">
+  <div class="wrap banner-inner">
+    <% if (b.title) { %><h2><%= b.title %></h2><% } %>
+    <% if (b.subtitle) { %><p><%= b.subtitle %></p><% } %>
+    <%- btn(b, 'btn light big') %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'image_text') { %>
+<section class="sec sec-it side-<%= b.side %>">
+  <div class="it-img <%= b.image ? '' : 'ph-bg' %>"><% if (b.image) { %><img src="<%= b.image %>" alt="" loading="lazy"><% } %></div>
+  <div class="it-text">
+    <% if (b.eyebrow) { %><span class="eyebrow"><%= b.eyebrow %></span><% } %>
+    <% if (b.title) { %><h2><%= b.title %></h2><% } %>
+    <% if (b.text) { %><p class="pre"><%= b.text %></p><% } %>
+    <%- btn(b) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'products') { %>
+<section class="sec sec-products" id="<%= bi === 0 ? 'products' : '' %>">
+  <%- head(b) %>
+  <% if (!b.products.length) { %>
+    <div class="empty-sec">
+      <% if (isOwner) { %>لا توجد منتجات مطابقة لهذا القسم بعد. <a href="/dashboard/stores/<%= store.id %>/products/new">+ أضف منتجاً</a> <small>(تظهر لك فقط)</small>
+      <% } else { %>منتجات جديدة قريباً ✨<% } %>
+    </div>
+  <% } else { %>
+    <div class="pgrid"><% b.products.forEach(p => { %><%- include('product-card', { p }) %><% }) %></div>
+    <div class="sec-more"><a href="<%= href(b.moreLink) %>" class="btn ghost">عرض الكل ←</a></div>
+  <% } %>
+</section>
+<% } %>
+
+<% if (b.type === 'categories' && (b.cards.length || isOwner)) { %>
+<section class="sec sec-cats">
+  <%- head(b) %>
+  <% if (!b.cards.length) { %><div class="empty-sec">أضف تصنيفات لمنتجاتك لتظهر هنا تلقائياً. <small>(تظهر لك فقط)</small></div><% } %>
+  <div class="cat-grid n-<%= Math.min(b.cards.length, 4) %>">
+    <% b.cards.forEach(c => { %>
+      <a class="cat-card <%= c.image ? '' : 'ph-bg' %>" href="<%= href('/products?c=' + encodeURIComponent(c.name)) %>" style="<%= bg(c.image) %>">
+        <span><strong><%= c.name %></strong><% if (c.n) { %><small><%= c.n %> منتج</small><% } %></span>
+      </a>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'gallery' && (b.items.length || isOwner)) { %>
+<section class="sec sec-gallery">
+  <%- head(b) %>
+  <% if (!b.items.length) { %><div class="empty-sec">أضف صوراً لهذا المعرض من «تصميم المتجر». <small>(تظهر لك فقط)</small></div><% } %>
+  <div class="gal-grid cols-<%= b.columns %>">
+    <% b.items.filter(it => it.image).forEach(it => { %>
+      <% if (it.link) { %><a href="<%= href(it.link) %>" class="gal-item"><% } else { %><div class="gal-item"><% } %>
+        <img src="<%= it.image %>" alt="<%= it.caption %>" loading="lazy">
+        <% if (it.caption) { %><span class="cap"><%= it.caption %></span><% } %>
+      <% if (it.link) { %></a><% } else { %></div><% } %>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'features' && b.items.length) { %>
+<section class="sec sec-features">
+  <%- head(b) %>
+  <div class="feat-grid">
+    <% b.items.forEach(it => { %>
+      <div class="feat-item"><span class="feat-icon"><%= it.icon || '✓' %></span><div><strong><%= it.title %></strong><% if (it.text) { %><small><%= it.text %></small><% } %></div></div>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'testimonials' && b.items.length) { %>
+<section class="sec sec-testi">
+  <%- head(b) %>
+  <div class="testi-grid">
+    <% b.items.forEach(it => { %>
+      <figure class="testi">
+        <div class="stars" aria-label="<%= it.rating %> من 5"><%= '★'.repeat(+it.rating) %><span><%= '★'.repeat(5 - it.rating) %></span></div>
+        <blockquote><%= it.text %></blockquote>
+        <figcaption>
+          <% if (it.image) { %><img src="<%= it.image %>" alt=""><% } else { %><span class="avatar-ph"><%= (it.name || '؟').charAt(0) %></span><% } %>
+          <span><strong><%= it.name %></strong><% if (it.city) { %><small><%= it.city %></small><% } %></span>
+        </figcaption>
+      </figure>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'text' && (b.title || b.text)) { %>
+<section class="sec sec-text al-<%= b.align %>">
+  <% if (b.title) { %><h2><%= b.title %></h2><% } %>
+  <% if (b.text) { %><div class="pre prose"><%= b.text %></div><% } %>
+</section>
+<% } %>
+
+<% if (b.type === 'video' && b.videoId) { %>
+<section class="sec sec-video">
+  <% if (b.title) { %><div class="sec-head"><h2><%= b.title %></h2></div><% } %>
+  <div class="video-box"><iframe src="https://www.youtube-nocookie.com/embed/<%= b.videoId %>" title="<%= b.title || 'video' %>" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
+</section>
+<% } %>
+
+<% if (b.type === 'faq' && b.items.length) { %>
+<section class="sec sec-faq">
+  <%- head(b) %>
+  <div class="faq">
+    <% b.items.filter(it => it.q).forEach(it => { %><details><summary><%= it.q %></summary><p class="pre"><%= it.a %></p></details><% }) %>
+  </div>
+</section>
+<% } %>
+
+<% }) %>
+<script>
+// Auto-advancing slider with arrows, dots and swipe.
+document.querySelectorAll('[data-slider]').forEach((el) => {
+  const slides = el.querySelectorAll('.slide'), dots = el.querySelectorAll('.dots button');
+  if (slides.length < 2) return;
+  let i = 0, timer;
+  const go = (n) => { slides[i].classList.remove('on'); dots[i]?.classList.remove('on'); i = (n + slides.length) % slides.length; slides[i].classList.add('on'); dots[i]?.classList.add('on'); };
+  const auto = () => { clearInterval(timer); timer = setInterval(() => go(i + 1), 5500); };
+  el.querySelector('.next').onclick = () => { go(i + 1); auto(); };
+  el.querySelector('.prev').onclick = () => { go(i - 1); auto(); };
+  dots.forEach((d, k) => (d.onclick = () => { go(k); auto(); }));
+  let x0 = null;
+  el.addEventListener('touchstart', (e) => (x0 = e.touches[0].clientX), { passive: true });
+  el.addEventListener('touchend', (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) { go(i + (dx < 0 ? -1 : 1)); auto(); } x0 = null; });
+  auto();
+});
+</script>
