@@ -1,58 +1,186 @@
 <%- include('../partials/header', { title: 'تصميم المتجر' }) %>
-<div class="row between">
-  <div><h1>🎨 تصميم المتجر</h1><p class="muted">صمّم صفحتك الرئيسية بالأقسام، واختر الخط والأسلوب.</p></div>
-  <div class="row">
-    <a href="/dashboard/stores/<%= store.id %>/pages" class="btn ghost">📄 الصفحات</a>
-    <a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">معاينة ↗</a>
-  </div>
-</div>
-<% if (saved) { %><div class="alert ok">✓ تم حفظ التصميم. <a href="/s/<%= store.slug %>" target="_blank">شاهد متجرك ↗</a></div><% } %>
-
-<form method="post" class="design-grid">
+<form method="post" class="editor" id="editor">
   <%- include('../partials/csrf') %>
   <input type="hidden" name="sections" id="sections-input">
-  <div>
-    <section class="card">
-      <div class="row between">
-        <h3>🏠 أقسام الصفحة الرئيسية</h3>
-        <div class="row preset-row">
-          <select id="preset-select" aria-label="قالب جاهز"><% Object.entries(presets).forEach(([k, p]) => { %><option value="<%= k %>"><%= p.label %></option><% }) %></select>
-          <button type="button" class="btn small ghost" id="preset-apply">استعمال قالب جاهز</button>
+
+  <!-- Top bar -->
+  <div class="ed-bar">
+    <div class="ed-title">
+      <strong>🎨 تصميم المتجر</strong>
+      <span class="ed-status" id="ed-status"><%= saved ? '✓ تم الحفظ' : '' %></span>
+    </div>
+    <div class="ed-devices" role="group" aria-label="حجم المعاينة">
+      <button type="button" data-device="desktop" class="on" title="حاسوب"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
+      <button type="button" data-device="mobile" title="هاتف"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg></button>
+    </div>
+    <div class="ed-actions">
+      <a href="/s/<%= store.slug %>" target="_blank" class="btn ghost small">فتح المتجر ↗</a>
+      <button class="btn" id="save-btn">💾 حفظ</button>
+    </div>
+  </div>
+
+  <div class="ed-body">
+    <!-- Editing panel -->
+    <aside class="ed-panel">
+      <div class="ed-tabs" role="tablist">
+        <button type="button" class="on" data-tab="sections">الأقسام</button>
+        <button type="button" data-tab="style">الأسلوب</button>
+        <button type="button" data-tab="templates">القوالب</button>
+      </div>
+
+      <div class="ed-pane" data-pane="sections">
+        <p class="muted small ed-hint">اضغط على قسم لتعديله. اسحب ⋮⋮ لتغيير الترتيب.</p>
+        <div id="builder" class="builder"></div>
+      </div>
+
+      <div class="ed-pane" data-pane="style" hidden>
+        <div class="form">
+          <div>
+            <div class="b-label">اللون الرئيسي</div>
+            <div class="swatches">
+              <% ['#0f766e', '#111827', '#1e3a8a', '#7c2d12', '#9d174d', '#6d28d9', '#b45309', '#15803d'].forEach(c => { %>
+                <button type="button" class="swatch <%= store.color === c ? 'on' : '' %>" data-color="<%= c %>" style="background: <%= c %>" aria-label="<%= c %>"></button>
+              <% }) %>
+              <label class="swatch custom" title="لون مخصص"><input type="color" name="color" id="color-input" value="<%= store.color %>"></label>
+            </div>
+          </div>
+          <div>
+            <div class="b-label">الخط</div>
+            <div class="font-picks">
+              <% Object.entries(FONTS).forEach(([k, f]) => { %>
+                <label class="font-pick"><input type="radio" name="font" value="<%= k %>" <%= store.font === k ? 'checked' : '' %>><span style="font-family: <%- f.css %>, sans-serif"><b>أبجد هوز</b><small><%= f.label %></small></span></label>
+              <% }) %>
+            </div>
+          </div>
+          <div>
+            <div class="b-label">شكل الزوايا</div>
+            <div class="seg">
+              <% Object.entries(RADII).forEach(([k, r]) => { %><label><input type="radio" name="radius" value="<%= k %>" <%= store.radius === k ? 'checked' : '' %>><span style="border-radius: <%= r.v %>"><%= r.label %></span></label><% }) %>
+            </div>
+          </div>
+          <div>
+            <div class="b-label">رأس الصفحة</div>
+            <div class="seg">
+              <% Object.entries(HEADERS).forEach(([k, l]) => { %><label><input type="radio" name="header_style" value="<%= k %>" <%= store.header_style === k ? 'checked' : '' %>><span><%= l %></span></label><% }) %>
+            </div>
+          </div>
+          <p class="muted small">الشعار وصورة الغلاف وشريط الإعلانات في <a href="/dashboard/stores/<%= store.id %>/settings">الإعدادات</a>.</p>
         </div>
       </div>
-      <p class="muted small">اضغط على أي قسم لتعديله. رتّب الأقسام بالأسهم ↑ ↓، أو أخفِها بـ 👁️.</p>
-      <div id="builder" class="builder"></div>
-    </section>
+
+      <div class="ed-pane" data-pane="templates" hidden>
+        <p class="muted small ed-hint">ابدأ من قالب جاهز، ثم عدّل نصوصه وصوره. سيستبدل القالب الأقسام الحالية (يمكنك عدم الحفظ للتراجع).</p>
+        <div class="tpl-list">
+          <% const tplIcons = { classic: '🏠', fashion: '👗', boutique: '💎' }; %>
+          <% Object.entries(presets).forEach(([k, p]) => { %>
+            <button type="button" class="tpl-card" data-preset="<%= k %>">
+              <span class="tpl-ic"><%= tplIcons[k] || '✨' %></span>
+              <span><strong><%= p.label %></strong><small><%= p.sections.map(s => SCHEMA[s.type].label).join(' · ') %></small></span>
+            </button>
+          <% }) %>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Live preview -->
+    <div class="ed-stage">
+      <div class="ed-frame" id="frame-wrap">
+        <div class="ed-browser"><i></i><i></i><i></i><span dir="ltr">/s/<%= store.slug %></span><em id="pv-loading" hidden>جارٍ التحديث…</em></div>
+        <iframe id="preview" title="معاينة المتجر" sandbox="allow-scripts"></iframe>
+      </div>
+    </div>
   </div>
-  <aside class="design-side">
-    <section class="card form">
-      <h3>🎨 الأسلوب</h3>
-      <label>اللون الرئيسي<input type="color" name="color" value="<%= store.color %>"></label>
-      <div class="b-label">الخط</div>
-      <div class="font-picks">
-        <% Object.entries(FONTS).forEach(([k, f]) => { %>
-          <label class="font-pick"><input type="radio" name="font" value="<%= k %>" <%= store.font === k ? 'checked' : '' %>><span style="font-family: <%- f.css %>, sans-serif"><b>أبجد هوز</b><small><%= f.label %></small></span></label>
-        <% }) %>
-      </div>
-      <div class="b-label">شكل الزوايا</div>
-      <div class="seg">
-        <% Object.entries(RADII).forEach(([k, r]) => { %><label><input type="radio" name="radius" value="<%= k %>" <%= store.radius === k ? 'checked' : '' %>><span style="border-radius: <%= r.v %>"><%= r.label %></span></label><% }) %>
-      </div>
-      <div class="b-label">رأس الصفحة</div>
-      <div class="seg">
-        <% Object.entries(HEADERS).forEach(([k, l]) => { %><label><input type="radio" name="header_style" value="<%= k %>" <%= store.header_style === k ? 'checked' : '' %>><span><%= l %></span></label><% }) %>
-      </div>
-      <p class="muted small">الشعار وصورة الغلاف وشريط الإعلانات في <a href="/dashboard/stores/<%= store.id %>/settings">إعدادات المتجر</a>.</p>
-    </section>
-  </aside>
-  <div class="save-bar pf-save"><a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">معاينة ↗</a><button class="btn big">💾 حفظ التصميم</button></div>
 </form>
 <link href="https://fonts.googleapis.com/css2?<%= Object.values(FONTS).map(f => 'family=' + f.g).join('&') %>&display=swap" rel="stylesheet">
 <script>window.CSRF = <%- js(csrf) %>; window.SCHEMA = <%- js(SCHEMA) %>;</script>
 <script src="/upload.js"></script>
 <script src="/builder.js"></script>
 <script>
-initBuilder({ root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: <%- js(sectionsData) %>,
-  uploadUrl: '/dashboard/stores/<%= store.id %>/uploads', presets: <%- js(presets) %> });
+(function () {
+  const form = document.getElementById('editor');
+  const iframe = document.getElementById('preview');
+  const status = document.getElementById('ed-status');
+  const loading = document.getElementById('pv-loading');
+  const presets = <%- js(presets) %>;
+  let focusIdx = null, timer = null, seq = 0;
+
+  // Re-render the preview with the current (unsaved) design.
+  async function refresh() {
+    const my = ++seq;
+    loading.hidden = false;
+    const body = new URLSearchParams(new FormData(form));
+    body.set('sections', builder.value());
+    try {
+      const r = await fetch(location.pathname + '/preview', { method: 'POST', body });
+      const html = await r.text();
+      if (my !== seq) return; // a newer refresh is on its way
+      iframe.srcdoc = html;
+      iframe.onload = () => { loading.hidden = true; if (focusIdx !== null) iframe.contentWindow.postMessage({ focus: focusIdx, instant: true }, '*'); };
+    } catch { loading.hidden = true; }
+  }
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, 450); };
+  const changed = () => { status.textContent = '● تغييرات غير محفوظة'; status.className = 'ed-status dirty'; schedule(); };
+
+  const builder = initBuilder({
+    root: document.getElementById('builder'),
+    input: document.getElementById('sections-input'),
+    data: <%- js(sectionsData) %>,
+    uploadUrl: '/dashboard/stores/<%= store.id %>/uploads',
+    onChange: changed,
+    onFocus: (i) => { focusIdx = i; iframe.contentWindow?.postMessage({ focus: i }, '*'); },
+  });
+
+  // Style controls
+  form.querySelectorAll('input[name=font], input[name=radius], input[name=header_style]').forEach((el) => el.addEventListener('change', () => { builder.markDirty(); changed(); }));
+  const colorInput = document.getElementById('color-input');
+  colorInput.addEventListener('input', () => { document.querySelectorAll('.swatch').forEach((s) => s.classList.remove('on')); builder.markDirty(); changed(); });
+  document.querySelectorAll('.swatch[data-color]').forEach((b) => b.addEventListener('click', () => {
+    colorInput.value = b.dataset.color;
+    document.querySelectorAll('.swatch').forEach((s) => s.classList.toggle('on', s === b));
+    builder.markDirty(); changed();
+  }));
+
+  // Tabs
+  document.querySelectorAll('.ed-tabs button').forEach((t) => t.addEventListener('click', () => {
+    document.querySelectorAll('.ed-tabs button').forEach((x) => x.classList.toggle('on', x === t));
+    document.querySelectorAll('.ed-pane').forEach((p) => (p.hidden = p.dataset.pane !== t.dataset.tab));
+  }));
+
+  // Templates: rebuild the builder with the preset's sections.
+  document.querySelectorAll('.tpl-card').forEach((b) => b.addEventListener('click', () => {
+    const p = presets[b.dataset.preset];
+    if (!confirm(`استبدال الأقسام الحالية بقالب «${p.label}»؟`)) return;
+    document.getElementById('builder').replaceWith(Object.assign(document.createElement('div'), { id: 'builder', className: 'builder' }));
+    Object.assign(builder, initBuilder({
+      root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: p.sections,
+      uploadUrl: '/dashboard/stores/<%= store.id %>/uploads', onChange: changed,
+      onFocus: (i) => { focusIdx = i; iframe.contentWindow?.postMessage({ focus: i }, '*'); },
+    }));
+    builder.markDirty(); changed();
+    document.querySelector('.ed-tabs [data-tab=sections]').click();
+  }));
+
+  // Device toggle. Desktop renders at a real 1280px width, scaled down to fit the stage.
+  const wrap = document.getElementById('frame-wrap');
+  function fit() {
+    if (wrap.classList.contains('mobile')) { iframe.style.cssText = ''; return; }
+    const w = wrap.clientWidth, h = wrap.clientHeight - wrap.querySelector('.ed-browser').offsetHeight;
+    const scale = Math.min(1, w / 1280);
+    iframe.style.cssText = `width:${1280}px;height:${h / scale}px;transform:scale(${scale});transform-origin:top right;flex:none`;
+  }
+  addEventListener('resize', fit);
+  document.querySelectorAll('.ed-devices button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.ed-devices button').forEach((x) => x.classList.toggle('on', x === b));
+    wrap.classList.toggle('mobile', b.dataset.device === 'mobile');
+    setTimeout(fit, 320); fit();
+  }));
+  fit();
+
+  // Ctrl/Cmd+S saves
+  addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); form.requestSubmit(); } });
+  form.addEventListener('submit', () => { document.getElementById('save-btn').textContent = 'جارٍ الحفظ…'; });
+
+  refresh();
+})();
 </script>
 <%- include('../partials/footer') %>

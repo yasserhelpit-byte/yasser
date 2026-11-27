@@ -8,7 +8,7 @@
 <% blocks.forEach((b, bi) => { %>
 
 <% if (b.type === 'hero') { const img = b.image || store.banner_url; %>
-<section class="sec sec-hero full <%= img ? 'has-img' : '' %>" style="<%= bg(img) %>">
+<section data-idx="<%= b.idx %>" class="sec sec-hero full <%= img ? 'has-img' : '' %>" style="<%= bg(img) %>">
   <div class="wrap hero-inner">
     <% if (store.logo_url) { %><img class="hero-logo" src="<%= store.logo_url %>" alt="<%= store.name %>"><% } %>
     <h1><%= b.title || store.tagline || store.name %></h1>
@@ -19,7 +19,7 @@
 <% } %>
 
 <% if (b.type === 'slider' && b.items.length) { %>
-<section class="sec sec-slider full h-<%= b.height %>" data-slider>
+<section data-idx="<%= b.idx %>" class="sec sec-slider full h-<%= b.height %>" data-slider>
   <div class="slides">
     <% b.items.forEach((it, i) => { %>
       <div class="slide <%= i === 0 ? 'on' : '' %> <%= it.image ? 'has-img' : '' %>" style="<%= bg(it.image) %>">
@@ -40,7 +40,7 @@
 <% } %>
 
 <% if (b.type === 'banner') { %>
-<section class="sec sec-banner full h-<%= b.height %> al-<%= b.align %> <%= b.image ? 'has-img' : '' %>" style="<%= bg(b.image) %>">
+<section data-idx="<%= b.idx %>" class="sec sec-banner full h-<%= b.height %> al-<%= b.align %> <%= b.image ? 'has-img' : '' %>" style="<%= bg(b.image) %>">
   <div class="wrap banner-inner">
     <% if (b.title) { %><h2><%= b.title %></h2><% } %>
     <% if (b.subtitle) { %><p><%= b.subtitle %></p><% } %>
@@ -50,7 +50,7 @@
 <% } %>
 
 <% if (b.type === 'image_text') { %>
-<section class="sec sec-it side-<%= b.side %>">
+<section data-idx="<%= b.idx %>" class="sec sec-it side-<%= b.side %>">
   <div class="it-img <%= b.image ? '' : 'ph-bg' %>"><% if (b.image) { %><img src="<%= b.image %>" alt="" loading="lazy"><% } %></div>
   <div class="it-text">
     <% if (b.eyebrow) { %><span class="eyebrow"><%= b.eyebrow %></span><% } %>
@@ -62,7 +62,7 @@
 <% } %>
 
 <% if (b.type === 'products') { %>
-<section class="sec sec-products" id="<%= bi === 0 ? 'products' : '' %>">
+<section data-idx="<%= b.idx %>" class="sec sec-products" id="<%= bi === 0 ? 'products' : '' %>">
   <%- head(b) %>
   <% if (!b.products.length) { %>
     <div class="empty-sec">
@@ -77,7 +77,7 @@
 <% } %>
 
 <% if (b.type === 'categories' && (b.cards.length || isOwner)) { %>
-<section class="sec sec-cats">
+<section data-idx="<%= b.idx %>" class="sec sec-cats">
   <%- head(b) %>
   <% if (!b.cards.length) { %><div class="empty-sec">أضف تصنيفات لمنتجاتك لتظهر هنا تلقائياً. <small>(تظهر لك فقط)</small></div><% } %>
   <div class="cat-grid n-<%= Math.min(b.cards.length, 4) %>">
@@ -91,7 +91,7 @@
 <% } %>
 
 <% if (b.type === 'gallery' && (b.items.length || isOwner)) { %>
-<section class="sec sec-gallery">
+<section data-idx="<%= b.idx %>" class="sec sec-gallery">
   <%- head(b) %>
   <% if (!b.items.length) { %><div class="empty-sec">أضف صوراً لهذا المعرض من «تصميم المتجر». <small>(تظهر لك فقط)</small></div><% } %>
   <div class="gal-grid cols-<%= b.columns %>">
@@ -106,7 +106,7 @@
 <% } %>
 
 <% if (b.type === 'features' && b.items.length) { %>
-<section class="sec sec-features">
+<section data-idx="<%= b.idx %>" class="sec sec-features">
   <%- head(b) %>
   <div class="feat-grid">
     <% b.items.forEach(it => { %>
@@ -117,7 +117,7 @@
 <% } %>
 
 <% if (b.type === 'testimonials' && b.items.length) { %>
-<section class="sec sec-testi">
+<section data-idx="<%= b.idx %>" class="sec sec-testi">
   <%- head(b) %>
   <div class="testi-grid">
     <% b.items.forEach(it => { %>
@@ -135,21 +135,21 @@
 <% } %>
 
 <% if (b.type === 'text' && (b.title || b.text)) { %>
-<section class="sec sec-text al-<%= b.align %>">
+<section data-idx="<%= b.idx %>" class="sec sec-text al-<%= b.align %>">
   <% if (b.title) { %><h2><%= b.title %></h2><% } %>
   <% if (b.text) { %><div class="pre prose"><%= b.text %></div><% } %>
 </section>
 <% } %>
 
 <% if (b.type === 'video' && b.videoId) { %>
-<section class="sec sec-video">
+<section data-idx="<%= b.idx %>" class="sec sec-video">
   <% if (b.title) { %><div class="sec-head"><h2><%= b.title %></h2></div><% } %>
   <div class="video-box"><iframe src="https://www.youtube-nocookie.com/embed/<%= b.videoId %>" title="<%= b.title || 'video' %>" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
 </section>
 <% } %>
 
 <% if (b.type === 'faq' && b.items.length) { %>
-<section class="sec sec-faq">
+<section data-idx="<%= b.idx %>" class="sec sec-faq">
   <%- head(b) %>
   <div class="faq">
     <% b.items.filter(it => it.q).forEach(it => { %><details><summary><%= it.q %></summary><p class="pre"><%= it.a %></p></details><% }) %>
@@ -158,6 +158,17 @@
 <% } %>
 
 <% }) %>
+<% if (typeof preview !== 'undefined' && preview) { %>
+<script>
+// Design editor preview: scroll to and highlight the section being edited; keep clicks inside the preview.
+addEventListener('message', (e) => {
+  const el = document.querySelector('[data-idx="' + e.data?.focus + '"]');
+  document.querySelectorAll('.pv-focus').forEach((x) => x.classList.remove('pv-focus'));
+  if (el) { el.classList.add('pv-focus'); el.scrollIntoView({ behavior: e.data.instant ? 'auto' : 'smooth', block: 'start' }); }
+});
+document.addEventListener('click', (e) => { if (e.target.closest('a, button[type=submit], form button')) e.preventDefault(); }, true);
+</script>
+<% } %>
 <script>
 // Auto-advancing slider with arrows, dots and swipe.
 document.querySelectorAll('[data-slider]').forEach((el) => {

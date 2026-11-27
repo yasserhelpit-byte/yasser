@@ -67,7 +67,7 @@
     <% if (cur && cur.suspended) { %>
     <div class="acting-bar off">⛔ هذا المتجر موقوف من إدارة المنصة ولا يظهر للعملاء. تواصل مع الإدارة لمعرفة السبب.</div>
     <% } %>
-    <main class="app-content">
+    <main class="app-content <%= typeof wide !== 'undefined' && wide ? 'wide' : '' %>">
 <% } else { %>
 <header class="topbar">
   <div class="wrap row">

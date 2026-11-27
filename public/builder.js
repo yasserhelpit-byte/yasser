@@ -1,7 +1,7 @@
 // Section builder for the store homepage and custom pages.
 // Needs: window.SCHEMA, window.CSRF, setupDropzone() from upload.js.
 // Usage: initBuilder({ root, input, data, uploadUrl, presets })
-function initBuilder({ root, input, data, uploadUrl, presets }) {
+function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus }) {
   const SCHEMA = window.SCHEMA;
   let sections = JSON.parse(JSON.stringify(data || []));
   const open = new Set(); // indexes of expanded sections
@@ -17,7 +17,8 @@ function initBuilder({ root, input, data, uploadUrl, presets }) {
     for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
     return el;
   };
-  const touch = () => { dirty = true; input.value = JSON.stringify(sections); };
+  const touch = () => { dirty = true; input.value = JSON.stringify(sections); onChange?.(); };
+  let dragFrom = null;
   const blank = (fields) => Object.fromEntries(fields.map((f) => [f.k, f.t === 'select' ? Object.keys(f.options)[0] : '']));
 
   // ----- image field with upload -----
@@ -112,7 +113,12 @@ function initBuilder({ root, input, data, uploadUrl, presets }) {
       const def = SCHEMA[sec.type];
       const isOpen = open.has(i);
       const summary = sec.title || (sec.items && sec.items[0] && (sec.items[0].title || sec.items[0].name)) || def.desc;
-      const head = h('div', { class: 'b-head', onclick: (e) => { if (e.target.closest('button')) return; isOpen ? open.delete(i) : open.add(i); render(); } },
+      const head = h('div', { class: 'b-head', onclick: (e) => {
+          if (e.target.closest('button')) return;
+          if (isOpen) open.delete(i); else { open.clear(); open.add(i); onFocus?.(i); }
+          render();
+        } },
+        h('span', { class: 'b-grip', title: 'اسحب لتغيير الترتيب' }, '⋮⋮'),
         h('span', { class: 'b-icon' }, def.icon),
         h('span', { class: 'b-title' }, h('strong', {}, def.label), h('small', {}, summary)),
         h('span', { class: 'b-tools' },
@@ -122,6 +128,21 @@ function initBuilder({ root, input, data, uploadUrl, presets }) {
           h('button', { type: 'button', class: 'b-ic danger', title: 'حذف', onclick: () => { if (confirm('حذف هذا القسم؟')) { sections.splice(i, 1); open.clear(); touch(); render(); } } }, '✕'),
           h('span', { class: 'b-chev' }, isOpen ? '▴' : '▾')));
       const card = h('div', { class: 'b-sec' + (sec.hidden ? ' hidden-sec' : '') + (isOpen ? ' open' : ''), id: 'sec-' + i }, head);
+      // Drag and drop to reorder (closed cards only, so text inputs stay selectable).
+      if (!isOpen) {
+        card.draggable = true;
+        card.addEventListener('dragstart', (e) => { dragFrom = i; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+        card.addEventListener('dragend', () => { card.classList.remove('dragging'); root.querySelectorAll('.drop-over').forEach((x) => x.classList.remove('drop-over')); });
+      }
+      card.addEventListener('dragover', (e) => { if (dragFrom === null) return; e.preventDefault(); card.classList.add('drop-over'); });
+      card.addEventListener('dragleave', () => card.classList.remove('drop-over'));
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (dragFrom === null || dragFrom === i) return;
+        const [moved] = sections.splice(dragFrom, 1);
+        sections.splice(i, 0, moved);
+        dragFrom = null; open.clear(); touch(); render(); onFocus?.(i);
+      });
       if (isOpen) {
         const body = h('div', { class: 'b-body' }, h('p', { class: 'muted small' }, def.desc), def.fields.map((f) => field(sec, f, () => {})));
         if (def.items) body.append(h('h4', { class: 'b-items-title' }, 'العناصر'), itemsEditor(sec, def));
@@ -134,7 +155,7 @@ function initBuilder({ root, input, data, uploadUrl, presets }) {
       Object.entries(SCHEMA).map(([type, def]) => h('button', { type: 'button', class: 'b-pick', onclick: () => {
         const sec = { type, hidden: false, ...blank(def.fields) };
         if (def.items) sec.items = [];
-        sections.push(sec); open.clear(); open.add(sections.length - 1); touch(); render(sections.length - 1);
+        sections.push(sec); open.clear(); open.add(sections.length - 1); touch(); render(sections.length - 1); onFocus?.(sections.length - 1);
       } }, h('span', {}, def.icon), h('strong', {}, def.label), h('small', {}, def.desc))));
     root.append(h('details', { class: 'b-add' }, h('summary', { class: 'btn' }, '+ إضافة قسم'), picker));
     if (focus != null) document.getElementById('sec-' + focus)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -151,4 +172,5 @@ function initBuilder({ root, input, data, uploadUrl, presets }) {
   window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   input.value = JSON.stringify(sections);
   render();
+  return { isDirty: () => dirty, markDirty: () => { dirty = true; }, value: () => JSON.stringify(sections) };
 }

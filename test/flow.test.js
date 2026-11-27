@@ -151,6 +151,13 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   assert.match(page.text, /family=Cairo/);
   assert.match(page.text, /sf-head centered/);
 
+  // Live preview renders unsaved changes without saving them.
+  r = await merchant('POST', `${storeUrl}/design/preview`, { _csrf: csrf, sections: JSON.stringify([{ type: 'text', title: 'Draft only' }]), color: '#abcdef', font: 'amiri' });
+  assert.match(r.text, /Draft only/);
+  assert.match(r.text, /--brand:#abcdef/);
+  assert.match(r.text, /data-idx="0"/);
+  assert.doesNotMatch((await shop2('GET', '/s/test-shop')).text, /Draft only/);
+
   // Custom pages: created from a template, shown in the menu, editable, reserved slugs refused.
   r = await merchant('POST', `${storeUrl}/pages`, { _csrf: csrf, template: 'about' });
   const pageUrl = r.location;

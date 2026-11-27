@@ -531,8 +531,23 @@ const storeHome = (store) => {
   return store.home_sections ? list : sections.DEFAULT_HOME;
 };
 dash.get('/stores/:storeId/design', ownStore, (req, res) => {
-  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved });
+  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true });
 });
+// Live preview for the design editor: renders the storefront home with unsaved changes.
+dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {
+  const draft = {
+    ...req.store,
+    color: /^#[0-9a-fA-F]{6}$/.test(req.body.color) ? req.body.color : req.store.color,
+    font: FONTS[req.body.font] ? req.body.font : req.store.font,
+    radius: RADII[req.body.radius] ? req.body.radius : req.store.radius,
+    header_style: HEADERS[req.body.header_style] ? req.body.header_style : req.store.header_style,
+  };
+  const list = sections.sanitize(req.body.sections);
+  Object.assign(res.locals, storefrontLocals(draft), { store: draft, cartCount: 0, isOwner: false, preview: true });
+  res.set('Cache-Control', 'no-store');
+  res.render('store/home', { blocks: resolveSections(draft, list), pageTitle: null });
+});
+
 dash.post('/stores/:storeId/design', ownStore, (req, res) => {
   const list = sections.sanitize(req.body.sections);
   const font = FONTS[req.body.font] ? req.body.font : 'tajawal';
@@ -706,6 +721,17 @@ admin.post('/merchants/:id/suspend', (req, res) => {
 app.use('/admin', admin);
 
 // ---------- Storefront ----------
+// Theme + navigation values every storefront page needs (also used by the editor preview).
+function storefrontLocals(store) {
+  return {
+    menuPages: db.prepare('SELECT title, slug, in_menu, in_footer FROM pages WHERE store_id = ? ORDER BY position, id').all(store.id),
+    font: FONTS[store.font] || FONTS.tajawal,
+    radius: (RADII[store.radius] || RADII.soft).v,
+    // Store-relative links: "/products" -> "/s/<slug>/products".
+    href: (link) => (link && link.startsWith('/') ? `/s/${store.slug}${link === '/' ? '' : link}` : link),
+  };
+}
+
 const shop = express.Router({ mergeParams: true });
 shop.use((req, res, next) => {
   const store = db.prepare('SELECT * FROM stores WHERE slug = ?').get(req.params.slug);
@@ -717,11 +743,7 @@ shop.use((req, res, next) => {
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);
   res.locals.isOwner = !!req.user && req.user.id === store.owner_id;
-  res.locals.menuPages = db.prepare('SELECT title, slug, in_menu, in_footer FROM pages WHERE store_id = ? ORDER BY position, id').all(store.id);
-  res.locals.font = FONTS[store.font] || FONTS.tajawal;
-  res.locals.radius = (RADII[store.radius] || RADII.soft).v;
-  // Store-relative links: "/products" -> "/s/<slug>/products".
-  res.locals.href = (link) => (link && link.startsWith('/') ? `/s/${store.slug}${link === '/' ? '' : link}` : link);
+  Object.assign(res.locals, storefrontLocals(store));
   next();
 });
 
@@ -755,7 +777,7 @@ const SORTS = {
 };
 // Load the data each section needs (products, categories...).
 function resolveSections(store, list) {
-  return list.filter((sec) => !sec.hidden).map((sec) => {
+  return list.map((sec, idx) => ({ ...sec, idx })).filter((sec) => !sec.hidden).map((sec) => {
     const out = { ...sec };
     if (sec.type === 'products') {
       const limit = Number(sec.limit) || 8;
