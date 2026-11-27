@@ -369,7 +369,11 @@ dash.get('/stores/:storeId', ownStore, (req, res) => {
   const host = req.get('x-forwarded-host') || req.get('host');
   const proto = req.get('x-forwarded-proto') || req.protocol;
   const storeUrl = `${proto}://${host}/s/${req.store.slug}`;
-  res.render('dashboard/store', { products, orders, stats, days, max, topProducts, storeUrl });
+  const today = db
+    .prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total END), 0) AS revenue FROM orders WHERE store_id = ? AND date(created_at) = date('now')`)
+    .get(id);
+  const pageCount = db.prepare('SELECT COUNT(*) AS n FROM pages WHERE store_id = ?').get(id).n;
+  res.render('dashboard/store', { products, orders, stats, days, max, topProducts, storeUrl, today, pageCount });
 });
 
 dash.get('/stores/:storeId/settings', ownStore, (req, res) =>

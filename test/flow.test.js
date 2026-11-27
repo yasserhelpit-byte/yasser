@@ -66,7 +66,8 @@ test('merchant creates a store, customer orders, stock decreases', async (t) => 
   assert.match(r.location, /\/s\/test-shop\/thanks\/\d+/);
 
   page = await merchant('GET', storeUrl);
-  assert.match(page.text, /Ali/);
+  assert.match(page.text, /Ali/); // recent orders on the overview
+  page = await merchant('GET', `${storeUrl}/products`);
   assert.match(page.text, /s-confirmed">1</); // stock 3 - 2 = 1 (low-stock badge)
 
   // Image upload: a real PNG is accepted, a fake one is rejected.

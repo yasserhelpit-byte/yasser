@@ -1,120 +1,142 @@
 <%- include('../partials/header', { title: store.name }) %>
 <%
   const DAYS = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const cur = store.currency;
+  const sid = store.id;
   const published = products.filter(p => p.active).length;
+  const lowStock = products.filter(p => p.active && p.stock <= 3);
   const steps = [
-    { done: products.length > 0, label: 'أضف أول منتج', href: `/dashboard/stores/${store.id}/products/new` },
-    { done: products.some(p => p.image_url), label: 'أضف صورة لمنتج', href: products[0] ? `/dashboard/stores/${store.id}/products/${products[0].id}` : `/dashboard/stores/${store.id}/products/new` },
-    { done: !!store.description, label: 'اكتب وصفاً للمتجر', href: `/dashboard/stores/${store.id}/settings` },
-    { done: stats.count > 0, label: 'استقبل أول طلب', href: '#share' },
+    { done: products.length > 0, icon: '📦', label: 'أضف أول منتج', hint: 'منتجاتك هي قلب متجرك', href: `/dashboard/stores/${sid}/products/new` },
+    { done: !!store.logo_url, icon: '🏷️', label: 'ارفع شعار متجرك', hint: 'يظهر في أعلى المتجر', href: `/dashboard/stores/${sid}/settings` },
+    { done: !!store.home_sections, icon: '🎨', label: 'صمّم الصفحة الرئيسية', hint: 'اختر قالباً وأضف صورك', href: `/dashboard/stores/${sid}/design` },
+    { done: pageCount > 0, icon: '📄', label: 'أضف صفحة «من نحن»', hint: 'تبني ثقة العملاء', href: `/dashboard/stores/${sid}/pages` },
+    { done: !!store.whatsapp, icon: '💬', label: 'أضف رقم واتساب', hint: 'ليتواصل معك العملاء', href: `/dashboard/stores/${sid}/settings` },
+    { done: stats.count > 0, icon: '🚀', label: 'استقبل أول طلب', hint: 'شارك رابط متجرك', href: '#share' },
   ];
   const doneCount = steps.filter(s => s.done).length;
+  const pct = Math.round(doneCount / steps.length * 100);
   const shareText = encodeURIComponent(`تسوّق من متجري ${store.name}: ${storeUrl}`);
+  const hasSales = days.some(d => d.total > 0);
 %>
 
-<section class="card store-head">
-  <div class="store-banner"><span class="avatar"><%= store.name.trim().charAt(0).toUpperCase() %></span></div>
-  <div class="store-head-body">
+<!-- Header -->
+<div class="ov-head">
+  <div class="ov-id">
+    <span class="ov-logo" style="background: <%= store.color %>"><% if (store.logo_url) { %><img src="<%= store.logo_url %>" alt=""><% } else { %><%= store.name.trim().charAt(0).toUpperCase() %><% } %></span>
     <div>
-      <h1><%= store.name %></h1>
-      <p class="muted"><%= store.description || 'لا يوجد وصف بعد' %></p>
-    </div>
-    <div class="row">
-      <a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">عرض المتجر ↗</a>
-      <a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">+ منتج</a>
+      <div class="row ov-title"><h1><%= store.name %></h1><span class="badge <%= store.suspended ? 's-cancelled' : 's-delivered' %>"><%= store.suspended ? '● موقوف' : '● نشط' %></span></div>
+      <p class="muted"><%= store.description || 'أضف وصفاً قصيراً لمتجرك من الإعدادات' %></p>
     </div>
   </div>
-  <div id="share" class="share">
-    <span class="muted">🔗 رابط متجرك:</span>
-    <input id="store-url" readonly dir="ltr" value="<%= storeUrl %>" onclick="this.select()">
-    <button type="button" class="btn small ghost" onclick="navigator.clipboard.writeText(document.getElementById('store-url').value).then(() => { this.textContent = '✓ تم النسخ'; setTimeout(() => this.textContent = 'نسخ', 2000) })">نسخ</button>
-    <a class="btn small wa" target="_blank" rel="noopener" href="https://wa.me/?text=<%= shareText %>">مشاركة على واتساب</a>
+  <div class="row">
+    <a href="/s/<%= store.slug %>" target="_blank" class="btn ghost">عرض المتجر ↗</a>
+    <a href="/dashboard/stores/<%= sid %>/products/new" class="btn">+ منتج جديد</a>
   </div>
-</section>
+</div>
 
-<section class="grid four stats">
-  <div class="card stat"><span class="icon">💰</span><span class="muted">المبيعات</span><strong><%= money(stats.revenue, store.currency) %></strong></div>
-  <div class="card stat"><span class="icon">🧾</span><span class="muted">الطلبات</span><strong><%= stats.count %></strong></div>
-  <div class="card stat"><span class="icon">⏳</span><span class="muted">بانتظار المعالجة</span><strong><%= stats.pending %></strong></div>
-  <div class="card stat"><span class="icon">🛍️</span><span class="muted">متوسط قيمة الطلب</span><strong><%= money(stats.avg, store.currency) %></strong></div>
+<!-- KPIs -->
+<section class="kpis">
+  <div class="kpi"><span class="kpi-ic c1">💰</span><div><small>المبيعات</small><strong><%= money(stats.revenue, cur) %></strong><em>اليوم: <%= money(today.revenue, cur) %></em></div></div>
+  <div class="kpi"><span class="kpi-ic c2">🧾</span><div><small>الطلبات</small><strong><%= stats.count %></strong><em>اليوم: <%= today.orders %></em></div></div>
+  <a class="kpi <%= stats.pending ? 'alert-kpi' : '' %>" href="/dashboard/stores/<%= sid %>/orders"><span class="kpi-ic c3">⏳</span><div><small>بانتظار التأكيد</small><strong><%= stats.pending %></strong><em><%= stats.pending ? 'اضغط لمعالجتها ←' : 'لا شيء معلّق' %></em></div></a>
+  <div class="kpi"><span class="kpi-ic c4">🛍️</span><div><small>متوسط قيمة الطلب</small><strong><%= money(stats.avg, cur) %></strong><em><%= published %> منتج منشور</em></div></div>
 </section>
 
 <% if (doneCount < steps.length) { %>
-<section class="card onboarding">
-  <div class="row between"><h3>🚀 جهّز متجرك</h3><span class="muted"><%= doneCount %> / <%= steps.length %></span></div>
-  <div class="progress"><span style="width: <%= Math.round(doneCount / steps.length * 100) %>%"></span></div>
-  <ul class="steps">
-    <% steps.forEach(s => { %>
-      <li class="<%= s.done ? 'done' : '' %>"><span class="tick"><%= s.done ? '✓' : '' %></span>
-        <% if (s.done) { %><span><%= s.label %></span><% } else { %><a href="<%= s.href %>"><%= s.label %> ←</a><% } %></li>
+<!-- Setup -->
+<section class="card setup">
+  <div class="setup-head">
+    <div class="ring" style="--p: <%= pct %>"><span><%= pct %>%</span></div>
+    <div><h3>جهّز متجرك للانطلاق</h3><p class="muted"><%= doneCount %> من <%= steps.length %> خطوات مكتملة. أكمل الباقي ليبدو متجرك احترافياً.</p></div>
+  </div>
+  <div class="setup-grid">
+    <% steps.forEach((s, i) => { %>
+      <a href="<%= s.href %>" class="step <%= s.done ? 'done' : '' %>">
+        <span class="step-ic"><%= s.done ? '✓' : s.icon %></span>
+        <span><strong><%= s.label %></strong><small><%= s.done ? 'تم' : s.hint %></small></span>
+      </a>
     <% }) %>
-  </ul>
+  </div>
 </section>
 <% } %>
 
-<section class="grid side">
-  <div class="card">
-    <div class="row between"><h3>المبيعات — آخر 7 أيام</h3><span class="muted small"><%= store.currency %></span></div>
-    <div class="bars">
-      <% days.forEach(d => { %>
-        <div class="bar" title="<%= d.day %>: <%= money(d.total, store.currency) %>">
-          <small><%= d.total ? Math.round(d.total) : '' %></small>
-          <span style="height: <%= Math.max(3, Math.round(d.total / max * 100)) %>%" class="<%= d.total ? '' : 'zero' %>"></span>
-          <em><%= DAYS[new Date(d.day + 'T12:00:00Z').getUTCDay()] %></em>
+<div class="ov-grid">
+  <!-- Main column -->
+  <div class="ov-col">
+    <section class="card">
+      <div class="card-head"><h3>المبيعات · آخر 7 أيام</h3><span class="muted small"><%= cur %></span></div>
+      <% if (!hasSales) { %>
+        <div class="chart-empty"><span>📈</span><p>ستظهر مبيعاتك هنا بعد أول طلب.</p></div>
+      <% } else { %>
+      <div class="bars">
+        <% days.forEach(d => { %>
+          <div class="bar" title="<%= d.day %>: <%= money(d.total, cur) %>">
+            <small><%= d.total ? Math.round(d.total) : '' %></small>
+            <span style="height: <%= Math.max(3, Math.round(d.total / max * 100)) %>%" class="<%= d.total ? '' : 'zero' %>"></span>
+            <em><%= DAYS[new Date(d.day + 'T12:00:00Z').getUTCDay()] %></em>
+          </div>
+        <% }) %>
+      </div>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>آخر الطلبات</h3><a href="/dashboard/stores/<%= sid %>/orders">عرض الكل ←</a></div>
+      <% if (!orders.length) { %>
+        <div class="chart-empty"><span>📭</span><p>لا توجد طلبات بعد. شارك رابط متجرك لتبدأ.</p></div>
+      <% } else { %>
+        <div class="list">
+          <% orders.slice(0, 6).forEach(o => { %>
+            <a class="list-row" href="/dashboard/stores/<%= sid %>/orders/<%= o.id %>">
+              <span class="list-av"><%= o.customer_name.trim().charAt(0) %></span>
+              <span class="list-main"><strong><%= o.customer_name %></strong><small>#<%= o.id %> · <%= o.created_at.slice(0, 16) %></small></span>
+              <span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span>
+              <strong class="list-amt"><%= money(o.total, cur) %></strong>
+            </a>
+          <% }) %>
         </div>
+      <% } %>
+    </section>
+  </div>
+
+  <!-- Side column -->
+  <div class="ov-col">
+    <section class="card share-card" id="share">
+      <h3>🔗 رابط متجرك</h3>
+      <div class="copy-row">
+        <input id="store-url" readonly dir="ltr" value="<%= storeUrl %>" onclick="this.select()">
+        <button type="button" class="btn small" onclick="navigator.clipboard.writeText(document.getElementById('store-url').value).then(() => { this.textContent = '✓'; setTimeout(() => this.textContent = 'نسخ', 2000) })">نسخ</button>
+      </div>
+      <a class="btn wa full" target="_blank" rel="noopener" href="https://wa.me/?text=<%= shareText %>">مشاركة على واتساب</a>
+    </section>
+
+    <section class="card">
+      <h3>⚡ إجراءات سريعة</h3>
+      <div class="quick">
+        <a href="/dashboard/stores/<%= sid %>/products/new"><span>📦</span>منتج جديد</a>
+        <a href="/dashboard/stores/<%= sid %>/design"><span>🎨</span>التصميم</a>
+        <a href="/dashboard/stores/<%= sid %>/pages"><span>📄</span>الصفحات</a>
+        <a href="/dashboard/stores/<%= sid %>/settings"><span>⚙️</span>الإعدادات</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>🏆 الأكثر مبيعاً</h3>
+      <% if (!topProducts.length) { %>
+        <p class="muted small">ستظهر هنا منتجاتك الأكثر مبيعاً بعد أول طلب.</p>
+      <% } else { topProducts.forEach((t, i) => { %>
+        <div class="top-row"><b><%= i + 1 %></b><span><%= t.name %></span><small class="muted"><%= t.qty %> مبيع</small></div>
+      <% }) } %>
+    </section>
+
+    <% if (lowStock.length) { %>
+    <section class="card warn-card">
+      <h3>⚠️ مخزون منخفض</h3>
+      <% lowStock.slice(0, 5).forEach(p => { %>
+        <p class="row between"><a href="/dashboard/stores/<%= sid %>/products/<%= p.id %>"><%= p.name %></a><span class="badge <%= p.stock ? 's-confirmed' : 's-cancelled' %>"><%= p.stock ? 'متبقي ' + p.stock : 'نفد' %></span></p>
       <% }) %>
-    </div>
+    </section>
+    <% } %>
   </div>
-  <div class="card">
-    <h3>الأكثر مبيعاً</h3>
-    <% if (!topProducts.length) { %>
-      <p class="muted">ستظهر هنا منتجاتك الأكثر مبيعاً بعد أول طلب.</p>
-    <% } else { topProducts.forEach((t, i) => { %>
-      <div class="top-row"><b><%= i + 1 %></b><span><%= t.name %></span><small class="muted"><%= t.qty %> مبيع</small></div>
-    <% }) } %>
-  </div>
-</section>
-
-<div class="row between"><h2>المنتجات <small class="muted">(<%= published %> منشور من <%= products.length %>)</small></h2><a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">+ منتج</a></div>
-<% if (!products.length) { %>
-  <section class="card center empty">
-    <div class="big-icon">📦</div>
-    <h3>لا توجد منتجات بعد</h3>
-    <p class="muted">أضف أول منتج ليظهر في متجرك ويبدأ العملاء بالطلب.</p>
-    <a href="/dashboard/stores/<%= store.id %>/products/new" class="btn">أضف منتجاً</a>
-  </section>
-<% } else { %>
-<div class="table-wrap"><table>
-  <tr><th>المنتج</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th></th></tr>
-  <% products.forEach(p => { %>
-  <tr>
-    <td><div class="prod-cell">
-      <span class="thumb"><% if (p.image_url) { %><img src="<%= p.image_url %>" alt=""><% } else { %><%= p.name.trim().charAt(0) %><% } %></span>
-      <a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>"><%= p.name %></a>
-    </div></td>
-    <td><%= money(p.price, store.currency) %></td>
-    <td><span class="badge <%= p.stock === 0 ? 's-cancelled' : p.stock <= 3 ? 's-confirmed' : 's-delivered' %>"><%= p.stock === 0 ? 'نفد' : p.stock %></span></td>
-    <td><span class="badge <%= p.active ? 's-new' : '' %>"><%= p.active ? 'منشور' : 'مخفي' %></span></td>
-    <td><div class="row">
-      <a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>">تعديل</a>
-      <form method="post" action="/dashboard/stores/<%= store.id %>/products/<%= p.id %>/delete" class="inline" onsubmit="return confirm('حذف المنتج؟')">
-        <%- include('../partials/csrf') %><button class="link danger">حذف</button>
-      </form>
-    </div></td>
-  </tr>
-  <% }) %>
-</table></div>
-<% } %>
-
-<div class="row between"><h2>آخر الطلبات</h2><a href="/dashboard/stores/<%= store.id %>/orders">كل الطلبات ←</a></div>
-<% if (!orders.length) { %>
-  <section class="card center empty">
-    <div class="big-icon">📭</div>
-    <h3>لا توجد طلبات بعد</h3>
-    <p class="muted">شارك رابط متجرك مع عملائك لتبدأ باستقبال الطلبات.</p>
-    <a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=<%= shareText %>">شارك على واتساب</a>
-  </section>
-<% } else { %>
-<%- include('orders-table', { orders }) %>
-<% } %>
+</div>
 <%- include('../partials/footer') %>
