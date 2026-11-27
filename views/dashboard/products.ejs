@@ -27,6 +27,7 @@
     <td><span class="badge <%= p.stock === 0 ? 's-cancelled' : p.stock <= 3 ? 's-confirmed' : 's-delivered' %>"><%= p.stock === 0 ? 'نفد' : p.stock %></span></td>
     <td><span class="badge <%= p.active ? 's-new' : '' %>"><%= p.active ? 'منشور' : 'مخفي' %></span></td>
     <td><div class="row">
+      <%- include('../partials/ai-launch', { p, compact: true }) %>
       <a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>">تعديل</a>
       <a href="/s/<%= store.slug %>/p/<%= p.id %>" target="_blank" class="muted">عرض ↗</a>
       <form method="post" action="/dashboard/stores/<%= store.id %>/products/<%= p.id %>/delete" class="inline" onsubmit="return confirm('حذف المنتج؟')"><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
@@ -35,4 +36,5 @@
   <% }) %>
 </table></div>
 <% } %>
+<%- include('../partials/ai-overlay') %>
 <%- include('../partials/footer') %>

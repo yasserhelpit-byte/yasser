@@ -9,6 +9,7 @@ const uploads = require('./uploads');
 const limiter = require('./limiter');
 const mailer = require('./mailer');
 const sections = require('./sections');
+const aiAds = require('./ai-ads');
 
 const dns = require('dns').promises;
 const app = express();
@@ -334,7 +335,7 @@ dash.post('/stores', (req, res) => {
   res.redirect(`/dashboard/stores/${lastInsertRowid}`);
 });
 
-const STORE_FIELDS = 'name, slug, description, color, currency, logo_url, banner_url, tagline, announcement, whatsapp, phone, email, instagram, facebook, tiktok, city, shipping_fee, free_shipping_over'.split(', ');
+const STORE_FIELDS = 'name, slug, description, color, currency, logo_url, banner_url, tagline, announcement, whatsapp, phone, email, instagram, facebook, tiktok, city, shipping_fee, free_shipping_over, ad_language, ad_daily_budget, ad_days'.split(', ');
 const url = (v) => (/^https?:\/\//i.test(str(v, 1000)) ? str(v, 1000) : '');
 const money0 = (v) => Math.max(0, Number(v) || 0);
 // Accept a full profile URL or just a username for social links.
@@ -364,6 +365,9 @@ function readStoreForm(body) {
     city: str(body.city, 100),
     shipping_fee: money0(body.shipping_fee),
     free_shipping_over: money0(body.free_shipping_over),
+    ad_language: aiAds.LANGUAGES[body.ad_language] ? body.ad_language : 'darija',
+    ad_daily_budget: Math.min(Math.max(10, Number(body.ad_daily_budget) || 50), 100000),
+    ad_days: Math.min(Math.max(1, parseInt(body.ad_days, 10) || 5), 60),
   };
 }
 
@@ -658,6 +662,103 @@ dash.post('/stores/:storeId/chat-settings', ownStore, (req, res) => {
   res.redirect(`/dashboard/stores/${req.store.id}/inbox`);
 });
 
+// ----- AI ads ("Launch an ad") -----
+const monthStart = "datetime('now', 'start of month')";
+function aiQuota(storeId) {
+  const st = getSettings();
+  const usedStore = db.prepare(`SELECT COUNT(*) AS n FROM ai_usage WHERE store_id = ? AND kind = 'ad' AND ok = 1 AND created_at >= ${monthStart}`).get(storeId).n;
+  const spent = db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS c FROM ai_usage WHERE created_at >= ${monthStart}`).get().c;
+  const perStore = Math.max(0, parseInt(st.ai_per_store_month, 10) || 0);
+  const cap = Math.max(0, Number(st.ai_cap_usd_month) || 0);
+  let blocked = null;
+  if (st.ai_enabled !== '1') blocked = 'ميزة الإعلانات الذكية متوقفة حالياً من إدارة المنصة.';
+  else if (aiAds.isConfigured() && usedStore >= perStore) blocked = `استعملت ${perStore} إعلانات هذا الشهر، وهو الحد المسموح. يتجدد الرصيد أول الشهر القادم.`;
+  else if (aiAds.isConfigured() && spent >= cap) blocked = 'وصلت المنصة إلى حدّها الشهري لإنشاء الإعلانات. حاول الشهر القادم أو تواصل مع الدعم.';
+  return { usedStore, perStore, left: Math.max(0, perStore - usedStore), spent, cap, blocked, demo: !aiAds.isConfigured() };
+}
+const AI_LIVE = new Set(); // stores with a generation in progress (one at a time per store)
+
+// Build (or refresh) the product's landing page from Claude's copy. Returns the page row.
+function upsertAdLanding(store, product, ad) {
+  const L = ad.landing;
+  const list = sections.sanitize([
+    { type: 'product_hero', product: String(product.id), eyebrow: L.eyebrow, headline: L.headline, subtitle: L.subtitle, button: 'اطلب الآن · الدفع عند الاستلام' },
+    { type: 'features', title: 'لماذا تختار منتجنا؟', items: L.benefits },
+    { type: 'features', title: 'اطلب وأنت مطمئن', items: [
+      { icon: '💵', title: 'الدفع عند الاستلام', text: 'لا تدفع حتى يصلك طلبك' },
+      { icon: '🚚', title: store.shipping_fee > 0 ? `التوصيل ${store.shipping_fee} ${store.currency}` : 'توصيل مجاني', text: store.free_shipping_over > 0 ? `مجاني فوق ${store.free_shipping_over} ${store.currency}` : 'إلى باب منزلك' },
+      { icon: '📞', title: 'نتصل بك للتأكيد', text: 'قبل الشحن' },
+    ] },
+    { type: 'faq', title: 'الأسئلة الشائعة', items: L.faq },
+    { type: 'order_form', product: String(product.id), title: 'اطلب الآن والدفع عند الاستلام', subtitle: 'املأ معلوماتك وسنتصل بك لتأكيد الطلب.', button: 'تأكيد الطلب' },
+  ]);
+  const slug = `offer-${product.id}`;
+  const existing = db.prepare('SELECT * FROM pages WHERE store_id = ? AND slug = ?').get(store.id, slug);
+  if (existing) {
+    db.prepare('UPDATE pages SET title = ?, sections = ? WHERE id = ?').run(product.name.slice(0, 80), JSON.stringify(list), existing.id);
+    return db.prepare('SELECT * FROM pages WHERE id = ?').get(existing.id);
+  }
+  const pos = db.prepare('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM pages WHERE store_id = ?').get(store.id).p;
+  const { lastInsertRowid } = db.prepare('INSERT INTO pages (store_id, title, slug, sections, in_menu, in_footer, position) VALUES (?, ?, ?, ?, 0, 0, ?)')
+    .run(store.id, product.name.slice(0, 80), slug, JSON.stringify(list), pos);
+  return db.prepare('SELECT * FROM pages WHERE id = ?').get(lastInsertRowid);
+}
+
+dash.post('/stores/:storeId/products/:productId/ad', ownStore, async (req, res, next) => {
+  const store = req.store;
+  const product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ?').get(req.params.productId, store.id);
+  const fail = (message) => res.status(400).render('message', { title: 'تعذّر إنشاء الإعلان', message });
+  if (!product) return fail('المنتج غير موجود.');
+  if (!product.active || product.stock <= 0) return fail('لا يمكن الإعلان عن منتج مخفي أو نفدت كميته.');
+  const quota = aiQuota(store.id);
+  if (quota.blocked) return fail(quota.blocked);
+  if (AI_LIVE.has(store.id) || !limiter.hit(`ai-ad:${store.id}`, 3, MIN)) return fail('يتم إنشاء إعلان آخر الآن. انتظر قليلاً ثم أعد المحاولة.');
+  AI_LIVE.add(store.id);
+  try {
+    let result;
+    try {
+      result = await aiAds.generateAd({ store, product, language: store.ad_language });
+    } catch (err) {
+      if (err.usage) db.prepare("INSERT INTO ai_usage (store_id, kind, input_tokens, output_tokens, cost_usd, ok) VALUES (?, 'ad', ?, ?, ?, 0)").run(store.id, err.usage.input, err.usage.output, err.usage.cost);
+      return fail(err.message);
+    }
+    const { ad, usage, demo } = result;
+    const page = upsertAdLanding(store, product, ad);
+    const id = transaction(() => {
+      db.prepare('INSERT INTO ai_usage (store_id, kind, input_tokens, output_tokens, cost_usd) VALUES (?, ?, ?, ?, ?)')
+        .run(store.id, demo ? 'ad-demo' : 'ad', usage.input, usage.output, usage.cost);
+      return Number(db.prepare('INSERT INTO ads (store_id, product_id, page_id, product_name, language, data, daily_budget, days, demo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(store.id, product.id, page.id, product.name, store.ad_language, JSON.stringify(ad), store.ad_daily_budget, store.ad_days, demo ? 1 : 0).lastInsertRowid);
+    });
+    res.redirect(`/dashboard/stores/${store.id}/ads/${id}`);
+  } catch (err) {
+    next(err);
+  } finally {
+    AI_LIVE.delete(store.id);
+  }
+});
+
+dash.get('/stores/:storeId/ads', ownStore, (req, res) => {
+  const ads = db.prepare(
+    `SELECT a.*, p.image_url, p.images FROM ads a LEFT JOIN products p ON p.id = a.product_id WHERE a.store_id = ? ORDER BY a.id DESC LIMIT 100`
+  ).all(req.store.id);
+  const products = db.prepare('SELECT id, name, image_url, price, stock FROM products WHERE store_id = ? AND active = 1 AND stock > 0 ORDER BY id DESC').all(req.store.id);
+  res.render('dashboard/ads', { ads, products, quota: aiQuota(req.store.id) });
+});
+
+dash.get('/stores/:storeId/ads/:adId', ownStore, (req, res) => {
+  const row = db.prepare('SELECT * FROM ads WHERE id = ? AND store_id = ?').get(req.params.adId, req.store.id);
+  if (!row) return res.status(404).render('message', { title: 'غير موجود', message: 'الإعلان غير موجود.' });
+  const ad = JSON.parse(row.data);
+  const product = row.product_id ? db.prepare('SELECT * FROM products WHERE id = ?').get(row.product_id) : null;
+  const page = row.page_id ? db.prepare('SELECT * FROM pages WHERE id = ?').get(row.page_id) : null;
+  const imgs = product ? (JSON.parse(product.images || '[]').length ? JSON.parse(product.images) : product.image_url ? [product.image_url] : []) : [];
+  const origin = req.store.domain_verified ? `https://${req.store.custom_domain}` : `${baseUrl(req)}/s/${req.store.slug}`;
+  const landingUrl = page ? `${origin}/page/${page.slug}?utm_source=facebook&utm_medium=paid&utm_campaign=yasser-ad-${row.id}` : origin;
+  const image = imgs[ad.image_index] || imgs[0] || '';
+  res.render('dashboard/ad', { row, ad, product, page, image, imageAbs: image && !/^https?:/.test(image) ? baseUrl(req) + image : image, landingUrl, LANGUAGES: aiAds.LANGUAGES, CTAS: aiAds.CTAS, quota: aiQuota(req.store.id) });
+});
+
 // ----- Custom domain -----
 const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/;
 function cleanDomain(v) {
@@ -812,6 +913,12 @@ function series(sql, days) {
   return days.map((d) => ({ day: d, v: rows[d] || 0 }));
 }
 
+function aiUsageMonth() {
+  const r = db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(SUM(input_tokens), 0) AS inp, COALESCE(SUM(output_tokens), 0) AS outp
+                        FROM ai_usage WHERE kind = 'ad' AND created_at >= ${monthStart}`).get();
+  return { ...r, configured: aiAds.isConfigured(), model: aiAds.MODEL, settings: getSettings() };
+}
+
 // ----- Overview -----
 admin.get('/', (req, res) => {
   const period = [7, 30, 90].includes(Number(req.query.p)) ? Number(req.query.p) : 30;
@@ -867,7 +974,7 @@ admin.get('/', (req, res) => {
     empty: db.prepare(`SELECT s.id, s.name, s.created_at, u.name AS owner FROM stores s JOIN users u ON u.id = s.owner_id
                        WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = s.id) ORDER BY s.id DESC LIMIT 5`).all(),
   };
-  res.render('admin/overview', { period, cur, prev, totals, funnel, charts, topStores, activity, attention });
+  res.render('admin/overview', { period, cur, prev, totals, funnel, charts, topStores, activity, attention, ai: aiUsageMonth() });
 });
 
 // ----- Stores -----
@@ -1002,9 +1109,12 @@ admin.get('/orders', (req, res) => {
 });
 
 // ----- Platform settings -----
-admin.get('/settings', (req, res) => res.render('admin/settings', { saved: !!req.query.saved }));
+admin.get('/settings', (req, res) => res.render('admin/settings', { saved: !!req.query.saved, ai: aiUsageMonth() }));
 admin.post('/settings', (req, res) => {
   setSetting('signups_open', req.body.signups_open ? '1' : '0');
+  setSetting('ai_enabled', req.body.ai_enabled ? '1' : '0');
+  setSetting('ai_per_store_month', String(Math.min(Math.max(0, parseInt(req.body.ai_per_store_month, 10) || 0), 1000)));
+  setSetting('ai_cap_usd_month', String(Math.min(Math.max(0, Number(req.body.ai_cap_usd_month) || 0), 100000)));
   setSetting('notice', str(req.body.notice, 400));
   setSetting('notice_level', ['info', 'warning', 'success'].includes(req.body.notice_level) ? req.body.notice_level : 'info');
   setSetting('support_whatsapp', str(req.body.support_whatsapp, 20).replace(/\D/g, ''));

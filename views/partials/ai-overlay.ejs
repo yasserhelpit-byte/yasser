@@ -1,0 +1,22 @@
+<div class="ai-overlay" id="ai-overlay" hidden role="status" aria-live="polite">
+  <div class="ai-box">
+    <div class="ai-spark">✨</div>
+    <h3>Claude يجهّز إعلانك…</h3>
+    <ul class="ai-steps">
+      <li>👀 يدرس صور المنتج ووصفه</li>
+      <li>✍️ يكتب نص الإعلان</li>
+      <li>🎯 يختار الجمهور المناسب</li>
+      <li>📄 يبني صفحة الهبوط</li>
+    </ul>
+    <small class="muted">قد يستغرق ذلك حتى دقيقة. لا تغلق الصفحة.</small>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.ai-launch').forEach((f) => f.addEventListener('submit', () => {
+  const o = document.getElementById('ai-overlay'); o.hidden = false;
+  const items = o.querySelectorAll('.ai-steps li'); let i = 0;
+  items.forEach((li) => li.classList.remove('on')); items[0].classList.add('on');
+  setInterval(() => { if (i < items.length - 1) { items[++i].classList.add('on'); } }, 6000);
+  f.querySelectorAll('button').forEach((b) => (b.disabled = true));
+}));
+</script>

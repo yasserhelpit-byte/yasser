@@ -1,0 +1,5 @@
+<% /* One-button "launch an ad" form + the waiting overlay. Locals: p (product), compact (bool). */ %>
+<form method="post" action="/dashboard/stores/<%= store.id %>/products/<%= p.id %>/ad" class="ai-launch inline">
+  <%- include('csrf') %>
+  <button class="btn <%= typeof compact !== 'undefined' && compact ? 'small' : '' %> ai-btn" <%= !p.active || p.stock <= 0 ? 'disabled title="المنتج مخفي أو نفدت كميته"' : '' %>>🚀 أطلق إعلاناً</button>
+</form>

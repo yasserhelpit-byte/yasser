@@ -1,0 +1,76 @@
+<%- include('../partials/header', { title: 'إعلان ' + row.product_name }) %>
+<%
+  const genders = { all: 'الجميع', women: 'نساء', men: 'رجال' };
+  const copyText = ad.primary_text + '\n\n' + ad.headline + '\n' + landingUrl;
+%>
+<p><a href="/dashboard/stores/<%= store.id %>/ads">← الإعلانات</a></p>
+<div class="page-head-row">
+  <div><h1>🚀 إعلانك جاهز</h1><p class="muted"><%= row.product_name %> · <%= LANGUAGES[row.language] ? LANGUAGES[row.language].label : '' %></p></div>
+</div>
+<% if (row.demo) { %><div class="alert">🧪 <strong>إعلان تجريبي:</strong> مفتاح Claude غير مضبوط على الخادم بعد، فهذا نموذج عام. بعد ضبطه سيكتب Claude إعلاناً مخصصاً لمنتجك.</div><% } %>
+
+<div class="ad-grid">
+  <!-- Facebook-style preview -->
+  <div class="fb-card" aria-label="معاينة الإعلان">
+    <div class="fb-head">
+      <span class="fb-av" style="background: <%= store.color %>"><% if (store.logo_url) { %><img src="<%= store.logo_url %>" alt=""><% } else { %><%= store.name.trim().charAt(0).toUpperCase() %><% } %></span>
+      <span><strong><%= store.name %></strong><small>إعلان مُموَّل · 🌐</small></span>
+    </div>
+    <div class="fb-text pre"><%= ad.primary_text %></div>
+    <div class="fb-img"><% if (image) { %><img src="<%= image %>" alt=""><% } else { %><span>📦</span><% } %></div>
+    <div class="fb-foot">
+      <span><small dir="ltr"><%= (landingUrl.split('/')[2] || '').toUpperCase() %></small><strong><%= ad.headline %></strong><small><%= ad.description %></small></span>
+      <em><%= CTAS[ad.cta] %></em>
+    </div>
+  </div>
+
+  <div class="ad-side">
+    <!-- The one main action -->
+    <section class="card ad-main">
+      <h3>📣 انشر إعلانك</h3>
+      <div class="ad-budget">
+        <div><small>الميزانية</small><strong><%= money(row.daily_budget, store.currency) %> / يوم</strong></div>
+        <div><small>المدة</small><strong><%= row.days %> أيام</strong></div>
+        <div><small>الحد الأقصى</small><strong><%= money(row.daily_budget * row.days, store.currency) %></strong></div>
+      </div>
+      <button type="button" class="btn big full" id="copy-ad">📋 نسخ الإعلان</button>
+      <p class="muted small center">النشر المباشر على فيسبوك وإنستغرام بضغطة واحدة قادم قريباً. حالياً: انسخ الإعلان والصقه في مدير الإعلانات.</p>
+      <details class="ad-howto">
+        <summary>كيف أنشره؟ (3 خطوات)</summary>
+        <ol>
+          <li>افتح <a href="https://adsmanager.facebook.com" target="_blank" rel="noopener">مدير إعلانات فيسبوك</a> واضغط «إنشاء» ← هدف «المبيعات» أو «الزيارات».</li>
+          <li>اختر الجمهور والميزانية كما هو مقترح هنا.</li>
+          <li>في الإعلان: ارفع <a href="<%= image %>" download>الصورة</a>، والصق النص والعنوان، وضع رابط صفحة الهبوط.</li>
+        </ol>
+      </details>
+    </section>
+
+    <section class="card">
+      <h3>🎯 الجمهور المقترح</h3>
+      <div class="chips-row">
+        <span class="chip">🇲🇦 <%= ad.audience.cities.length ? ad.audience.cities.join('، ') : 'كل المغرب' %></span>
+        <span class="chip">👤 <%= ad.audience.age_min %>–<%= ad.audience.age_max %> سنة</span>
+        <span class="chip">⚧ <%= genders[ad.audience.gender] %></span>
+        <% ad.audience.interests.forEach(i => { %><span class="chip" dir="ltr"><%= i %></span><% }) %>
+      </div>
+      <% if (ad.strategy) { %><p class="ad-why">💡 <%= ad.strategy %></p><% } %>
+    </section>
+
+    <section class="card">
+      <h3>📄 صفحة الهبوط</h3>
+      <p class="muted small">أنشأها Claude لهذا المنتج. العميل يطلب منها مباشرة.</p>
+      <div class="copy-row"><input readonly dir="ltr" value="<%= landingUrl %>" onclick="this.select()"><a class="btn small ghost" href="<%= landingUrl %>" target="_blank">فتح ↗</a></div>
+      <% if (page) { %><a class="small" href="/dashboard/stores/<%= store.id %>/pages/<%= page.id %>">✏️ تعديل الصفحة</a><% } %>
+    </section>
+  </div>
+</div>
+<textarea id="ad-copy-src" hidden><%= copyText %></textarea>
+<script>
+document.getElementById('copy-ad').addEventListener('click', function () {
+  navigator.clipboard.writeText(document.getElementById('ad-copy-src').value).then(() => {
+    this.textContent = '✓ تم نسخ النص والعنوان والرابط';
+    setTimeout(() => (this.textContent = '📋 نسخ الإعلان'), 2500);
+  });
+});
+</script>
+<%- include('../partials/footer') %>

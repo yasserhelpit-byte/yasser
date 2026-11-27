@@ -9,6 +9,17 @@
     <p class="muted small">عند الإغلاق تظهر صفحة التسجيل برسالة «التسجيل مغلق حالياً»، ويبقى التجار الحاليون قادرين على الدخول.</p>
   </section>
   <section class="card form">
+    <h3>✨ الإعلانات الذكية (Claude)</h3>
+    <% if (!ai.configured) { %><div class="alert">⚠️ مفتاح Claude غير مضبوط على الخادم (المتغير <code>ANTHROPIC_API_KEY</code>). التجار يحصلون على إعلانات تجريبية فقط.</div>
+    <% } else { %><div class="alert ok">✓ Claude متصل (<span dir="ltr"><%= ai.model %></span>). هذا الشهر: <strong><%= ai.n %></strong> إعلان · التكلفة التقديرية <strong dir="ltr">$<%= ai.cost.toFixed(2) %></strong> من سقف <span dir="ltr">$<%= ai.settings.ai_cap_usd_month %></span></div><% } %>
+    <label class="switch"><input type="checkbox" name="ai_enabled" value="1" <%= platform.ai_enabled === '1' ? 'checked' : '' %>><span class="slider"></span> تفعيل زر «🚀 أطلق إعلاناً» للتجار</label>
+    <div class="row">
+      <label>إعلانات لكل متجر شهرياً<input name="ai_per_store_month" type="number" min="0" max="1000" value="<%= platform.ai_per_store_month %>"></label>
+      <label>سقف التكلفة الشهري للمنصة ($)<input name="ai_cap_usd_month" type="number" min="0" step="1" dir="ltr" value="<%= platform.ai_cap_usd_month %>"></label>
+    </div>
+    <p class="muted small">عند الوصول إلى السقف يتوقف الزر لكل المتاجر حتى بداية الشهر القادم.</p>
+  </section>
+  <section class="card form">
     <h3>📢 إعلان لكل التجار</h3>
     <p class="muted small">يظهر شريطاً أعلى لوحة تحكم كل التجار (مثلاً: صيانة، ميزة جديدة، عرض). اتركه فارغاً لإخفائه.</p>
     <textarea name="notice" rows="3" maxlength="400" placeholder="مثال: 🎉 أضفنا الدردشة المباشرة! فعّلها من صفحة الرسائل."><%= platform.notice %></textarea>

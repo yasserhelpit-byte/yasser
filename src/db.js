@@ -110,6 +110,32 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS ads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  page_id INTEGER REFERENCES pages(id) ON DELETE SET NULL,
+  product_name TEXT NOT NULL,
+  language TEXT NOT NULL,
+  data TEXT NOT NULL,
+  daily_budget REAL NOT NULL,
+  days INTEGER NOT NULL,
+  demo INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'ready',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ads_store ON ads(store_id, id);
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER REFERENCES stores(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  ok INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ai_usage ON ai_usage(created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(store_id, customer_phone);
 `);
 
@@ -143,6 +169,9 @@ addColumn('stores', 'domain_verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_domain ON stores(custom_domain) WHERE custom_domain IS NOT NULL');
 addColumn('stores', 'chat_enabled', 'INTEGER NOT NULL DEFAULT 1');
 addColumn('stores', 'chat_greeting', "TEXT NOT NULL DEFAULT ''");
+addColumn('stores', 'ad_language', "TEXT NOT NULL DEFAULT 'darija'");
+addColumn('stores', 'ad_daily_budget', 'REAL NOT NULL DEFAULT 50');
+addColumn('stores', 'ad_days', 'INTEGER NOT NULL DEFAULT 5');
 addColumn('stores', 'home_sections', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'font', "TEXT NOT NULL DEFAULT 'tajawal'");
 addColumn('stores', 'radius', "TEXT NOT NULL DEFAULT 'soft'");
@@ -157,7 +186,7 @@ addColumn('orders', 'ip', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
 
 // Platform-wide settings (key/value).
-const SETTING_DEFAULTS = { signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '' };
+const SETTING_DEFAULTS = { ai_enabled: '1', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '' };
 function getSettings() {
   const out = { ...SETTING_DEFAULTS };
   for (const r of db.prepare('SELECT key, value FROM settings').all()) out[r.key] = r.value;

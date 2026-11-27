@@ -488,3 +488,73 @@ test('landing page: product hero + direct COD order', async (t) => {
     body: new URLSearchParams({ _csrf: vc, product_id: String(pid), back: '/s/gadget/page/bottle', customer_name: 'X', customer_phone: '1', customer_address: '' }) });
   assert.match(noJs.headers.get('location'), /^\/s\/gadget\/page\/bottle\?order_error=/);
 });
+
+test('AI ads: one button builds the ad + landing page, with limits', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { db, setSetting } = require('../src/db');
+  const aiAds = require('../src/ai-ads');
+  require('../src/limiter').clear();
+  // An earlier test saved the admin settings form without these fields; start from known values.
+  setSetting('ai_enabled', '1'); setSetting('ai_cap_usd_month', '20'); setSetting('ai_per_store_month', '10');
+
+  const m = client(base);
+  await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Adder', email: 'adder@example.com', password: 'password123' });
+  const c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = (await m('POST', '/dashboard/stores', { _csrf: c, name: 'Ad Shop', slug: 'ad-shop' })).location.match(/\d+$/)[0];
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Desk Lamp', price: '120', stock: '9', active: '1' });
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Hidden Thing', price: '10', stock: '9' }); // not active
+  const lamp = db.prepare("SELECT id FROM products WHERE name = 'Desk Lamp'").get().id;
+  const hidden = db.prepare("SELECT id FROM products WHERE name = 'Hidden Thing'").get().id;
+
+  // Demo mode (no API key): works, clearly labelled, builds a hidden landing page that takes orders.
+  assert.strictEqual(aiAds.isConfigured(), false);
+  let r = await m('POST', `/dashboard/stores/${sid}/products/${lamp}/ad`, { _csrf: c });
+  assert.match(r.location, new RegExp(`/dashboard/stores/${sid}/ads/\\d+$`));
+  let page = await m('GET', r.location);
+  assert.match(page.text, /🧪/); // demo banner
+  assert.match(page.text, /نسخ الإعلان/);
+  assert.match(page.text, new RegExp(`/s/ad-shop/page/offer-${lamp}\\?utm_source=facebook`));
+  const landing = db.prepare('SELECT * FROM pages WHERE store_id = ? AND slug = ?').get(sid, `offer-${lamp}`);
+  assert.ok(landing && landing.in_menu === 0);
+  assert.match((await client(base)('GET', `/s/ad-shop/page/offer-${lamp}`)).text, /action="\/s\/ad-shop\/quick-order"/);
+  // Hidden products can't be advertised; other merchants can't see the ad.
+  assert.strictEqual((await m('POST', `/dashboard/stores/${sid}/products/${hidden}/ad`, { _csrf: c })).status, 400);
+  const o = client(base);
+  await o('POST', '/signup', { _csrf: csrfOf((await o('GET', '/signup')).text), name: 'Spy', email: 'spy@example.com', password: 'password123' });
+  assert.strictEqual((await o('GET', r.location)).status, 404);
+
+  // "Configured" mode with a stubbed Claude: usage is recorded and the per-store limit applies.
+  const real = { gen: aiAds.generateAd, conf: aiAds.isConfigured };
+  t.after(() => { aiAds.generateAd = real.gen; aiAds.isConfigured = real.conf; setSetting('ai_per_store_month', '10'); setSetting('ai_cap_usd_month', '20'); });
+  aiAds.isConfigured = () => true;
+  aiAds.generateAd = async (args) => {
+    const demo = await real.gen(args); // same shape as a real answer
+    return { ad: { ...demo.ad, headline: 'Claude headline' }, usage: { input: 3000, output: 1500, cost: 0.042 }, demo: false };
+  };
+  setSetting('ai_per_store_month', '2');
+  for (let i = 0; i < 2; i++) {
+    require('../src/limiter').clear();
+    r = await m('POST', `/dashboard/stores/${sid}/products/${lamp}/ad`, { _csrf: c });
+    assert.match(r.location, /\/ads\/\d+$/);
+  }
+  page = await m('GET', r.location);
+  assert.doesNotMatch(page.text, /🧪/); // no demo banner
+  assert.match(page.text, /Claude headline/);
+  require('../src/limiter').clear();
+  r = await m('POST', `/dashboard/stores/${sid}/products/${lamp}/ad`, { _csrf: c });
+  assert.strictEqual(r.status, 400);
+  assert.match(r.text, /الحد المسموح/);
+  const used = db.prepare("SELECT COUNT(*) AS n, SUM(cost_usd) AS c FROM ai_usage WHERE store_id = ? AND kind = 'ad'").get(sid);
+  assert.strictEqual(used.n, 2);
+  assert.ok(Math.abs(used.c - 0.084) < 1e-9);
+  // Platform-wide monthly cap.
+  setSetting('ai_per_store_month', '100');
+  setSetting('ai_cap_usd_month', '0.05');
+  require('../src/limiter').clear();
+  r = await m('POST', `/dashboard/stores/${sid}/products/${lamp}/ad`, { _csrf: c });
+  assert.match(r.text, /حدّها الشهري/);
+  // The landing page was refreshed in place, not duplicated.
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM pages WHERE store_id = ? AND slug LIKE ?').get(sid, 'offer-%').n, 1);
+});

@@ -7,7 +7,7 @@
 <p><a href="/dashboard/stores/<%= store.id %>/products">← المنتجات</a></p>
 <div class="row between">
   <h1><%= values.id ? 'تعديل المنتج' : 'منتج جديد' %></h1>
-  <% if (values.id) { %><a href="/s/<%= store.slug %>/p/<%= values.id %>" target="_blank" class="btn ghost">عرض في المتجر ↗</a><% } %>
+  <% if (values.id) { %><div class="row"><a href="/s/<%= store.slug %>/p/<%= values.id %>" target="_blank" class="btn ghost">عرض في المتجر ↗</a><%- include('../partials/ai-launch', { p: values }) %></div><% } %>
 </div>
 <% if (typeof saved !== 'undefined' && saved) { %><div class="alert ok">✓ تم حفظ المنتج. يمكنك إضافة منتج آخر.</div><% } %>
 <%- include('../partials/errors') %>
@@ -176,4 +176,5 @@
   render();
 })();
 </script>
+<%- include('../partials/ai-overlay') %>
 <%- include('../partials/footer') %>

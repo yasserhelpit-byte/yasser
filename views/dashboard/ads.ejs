@@ -1,0 +1,40 @@
+<%- include('../partials/header', { title: 'الإعلانات' }) %>
+<div class="page-head-row">
+  <div><h1>📣 الإعلانات</h1><p class="muted">اختر منتجاً، وClaude يكتب الإعلان ويختار الجمهور ويبني صفحة الهبوط.</p></div>
+  <% if (!quota.demo) { %><span class="pill">متبقٍّ هذا الشهر: <%= quota.left %> / <%= quota.perStore %></span><% } %>
+</div>
+<% if (quota.blocked) { %><div class="alert"><%= quota.blocked %></div><% } %>
+
+<section class="card">
+  <h3>🚀 أطلق إعلاناً جديداً</h3>
+  <% if (!products.length) { %>
+    <p class="muted">أضف منتجاً متوفراً أولاً. <a href="/dashboard/stores/<%= store.id %>/products/new">+ منتج جديد</a></p>
+  <% } else { %>
+  <div class="ad-picks">
+    <% products.forEach(p => { p.active = 1; %>
+      <div class="ad-pick">
+        <span class="thumb big"><% if (p.image_url) { %><img src="<%= p.image_url %>" alt=""><% } else { %><%= p.name.trim().charAt(0) %><% } %></span>
+        <span class="grow"><strong><%= p.name %></strong><small class="muted"><%= money(p.price, store.currency) %></small></span>
+        <%- include('../partials/ai-launch', { p, compact: true }) %>
+      </div>
+    <% }) %>
+  </div>
+  <% } %>
+</section>
+
+<h2>إعلاناتك</h2>
+<% if (!ads.length) { %>
+  <div class="card center empty"><div class="big-icon">📣</div><p class="muted">لم تُنشئ أي إعلان بعد.</p></div>
+<% } else { %>
+<div class="list card">
+  <% ads.forEach(a => { const d = JSON.parse(a.data); %>
+    <a class="list-row" href="/dashboard/stores/<%= store.id %>/ads/<%= a.id %>">
+      <span class="thumb"><% if (a.image_url) { %><img src="<%= a.image_url %>" alt=""><% } else { %>📣<% } %></span>
+      <span class="list-main"><strong><%= a.product_name %></strong><small><%= d.headline %> · <%= a.created_at.slice(0, 16) %></small></span>
+      <% if (a.demo) { %><span class="badge">تجريبي</span><% } else { %><span class="badge s-delivered">جاهز</span><% } %>
+    </a>
+  <% }) %>
+</div>
+<% } %>
+<%- include('../partials/ai-overlay') %>
+<%- include('../partials/footer') %>

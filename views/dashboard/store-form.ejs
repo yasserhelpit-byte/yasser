@@ -58,6 +58,20 @@
   </section>
 
   <section class="card form">
+    <h3>📣 الإعلانات</h3>
+    <p class="muted small">يستعملها Claude عند الضغط على «🚀 أطلق إعلاناً».</p>
+    <label>لغة الإعلانات
+      <select name="ad_language">
+        <% [['darija', 'الدارجة المغربية (موصى بها)'], ['fusha', 'العربية الفصحى'], ['fr', 'Français']].forEach(([k, l]) => { %><option value="<%= k %>" <%= (v.ad_language || 'darija') === k ? 'selected' : '' %>><%= l %></option><% }) %>
+      </select>
+    </label>
+    <div class="row">
+      <label>الميزانية اليومية (<%= v.currency || 'MAD' %>)<input name="ad_daily_budget" type="number" min="10" step="5" value="<%= v.ad_daily_budget || 50 %>"></label>
+      <label>عدد الأيام<input name="ad_days" type="number" min="1" max="60" value="<%= v.ad_days || 5 %>"></label>
+    </div>
+  </section>
+
+  <section class="card form">
     <h3>📞 التواصل</h3>
     <label>رقم واتساب (مع رمز الدولة)<input name="whatsapp" dir="ltr" placeholder="212600000000" value="<%= v.whatsapp || '' %>"></label>
     <p class="muted small">يظهر زر واتساب عائم في متجرك، وزر «اطلب عبر واتساب» في صفحة كل منتج.</p>
