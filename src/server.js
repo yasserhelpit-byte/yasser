@@ -29,7 +29,7 @@ const cspWith = (extra = {}) => [
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' https: data: blob:",
   "media-src 'self' https:",
-  "frame-src https://www.youtube-nocookie.com",
+  "frame-src https://www.youtube-nocookie.com https://maps.google.com https://www.google.com",
   `connect-src 'self'${extra.connect || ''}`,
   "object-src 'none'",
   "base-uri 'self'",
@@ -1367,6 +1367,8 @@ shop.use((req, res, next) => {
   Object.assign(res.locals, storefrontLocals(store, !!req.customDomain));
   req.base = res.locals.base;
   res.locals.orderError = str(req.query.order_error, 300);
+  res.locals.contactSent = req.query.contact === 'sent';
+  res.locals.contactError = str(req.query.contact_error, 200);
   res.locals.pagePath = `${req.base}${req.path === '/' ? '' : req.path}`;
   // Ad pixels: not for the owner browsing their own store (keeps ad data clean).
   res.locals.pixels = !res.locals.isOwner && (store.fb_pixel_id || store.tiktok_pixel_id)
@@ -1812,6 +1814,30 @@ shop.post('/chat', (req, res) => {
     .run(body.slice(0, 140), conv.id);
   notifyChat(req, conv, body, isNew);
   res.json({ message: db.prepare(`SELECT ${msgFields} FROM messages WHERE id = ?`).get(mid) });
+});
+
+// "Contact form" section: the message lands in the merchant's inbox like a chat.
+shop.post('/contact', (req, res) => {
+  const back = str(req.body.back, 300).startsWith(req.base || '/') ? str(req.body.back, 300) : req.base || '/';
+  const go = (q) => res.redirect(`${back}${back.includes('?') ? '&' : '?'}${q}#contact-form`);
+  const startedAt = Number(req.body._t) || 0;
+  if (req.body.website || (startedAt && Date.now() - startedAt < 2000)) return go('contact=sent'); // bots: pretend it worked
+  const name = str(req.body.name, 80);
+  const phone = cleanPhone(req.body.phone);
+  const message = str(req.body.message, 1500);
+  if (name.length < 2) return go(`contact_error=${encodeURIComponent('الرجاء كتابة اسمك.')}`);
+  if (!validPhone(phone)) return go(`contact_error=${encodeURIComponent('رقم الهاتف غير صحيح. مثال: 0612345678')}`);
+  if (message.length < 5) return go(`contact_error=${encodeURIComponent('اكتب رسالتك.')}`);
+  if (!limiter.hit(`contact:${req.ip}`, 5, 60 * MIN)) return go(`contact_error=${encodeURIComponent('رسائل كثيرة. حاول لاحقاً.')}`);
+  const { lastInsertRowid } = db.prepare('INSERT INTO conversations (store_id, visitor_key, name, phone) VALUES (?, ?, ?, ?)')
+    .run(req.store.id, visitorKey(req), name, phone);
+  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(lastInsertRowid);
+  const body = `✉️ رسالة من نموذج التواصل\n${message}`;
+  db.prepare("INSERT INTO messages (conversation_id, sender, body) VALUES (?, 'visitor', ?)").run(conv.id, body);
+  db.prepare("UPDATE conversations SET status = 'open', unread_merchant = 1, last_message = ?, last_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
+    .run(body.slice(0, 140), conv.id);
+  notifyChat(req, conv, message, true);
+  go('contact=sent');
 });
 
 function notifyChat(req, conv, body, isNew) {

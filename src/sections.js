@@ -46,7 +46,8 @@ const SCHEMA = {
     fields: [f('title', 'text', 'العنوان', { max: 80, ph: 'وصل حديثاً' }), f('subtitle', 'text', 'النص', { max: 200 }),
       f('source', 'select', 'أي منتجات؟', { options: { newest: 'الأحدث', sale: 'العروض والتخفيضات', best: 'الأكثر مبيعاً', category: 'تصنيف معيّن' } }),
       f('category', 'text', 'التصنيف (إذا اخترت تصنيفاً معيّناً)', { max: 60 }),
-      f('limit', 'select', 'العدد', { options: { 4: '4', 8: '8', 12: '12' } })],
+      f('limit', 'select', 'العدد', { options: { 4: '4', 8: '8', 12: '12' } }),
+      f('layout', 'select', 'طريقة العرض', { options: { grid: 'شبكة', carousel: 'شريط يمرَّر أفقياً' } })],
   },
   categories: {
     label: 'التصنيفات بالصور', icon: '🗂️', desc: 'بطاقات تصنيفات بصور، تنقل إلى منتجات كل تصنيف',
@@ -123,9 +124,74 @@ const SCHEMA = {
       f('mode', 'select', 'عند الضغط', { options: { whatsapp: 'فتح واتساب المتجر', phone: 'اتصال بهاتف المتجر', link: 'فتح رابط' } }),
       f('message', 'text', 'الرسالة الجاهزة في واتساب', { max: 200, ph: 'مرحباً، أريد حجز موعد.' }), f('link', 'link', 'الرابط (إذا اخترت «فتح رابط»)')],
   },
+  marquee: {
+    label: 'شريط نصوص متحرك', icon: '📢', desc: 'جمل قصيرة تتحرك باستمرار: عروض، توصيل مجاني، ضمان...',
+    fields: [f('speed', 'select', 'السرعة', { options: { normal: 'عادية', slow: 'بطيئة', fast: 'سريعة' } }),
+      f('style', 'select', 'اللون', { options: { brand: 'لون المتجر', dark: 'داكن', light: 'فاتح' } })],
+    items: { label: 'جملة', max: 8, fields: [f('text', 'text', 'النص', { max: 80, ph: '🚚 توصيل مجاني فوق 300 درهم' })] },
+  },
+  promo_grid: {
+    label: 'بطاقات عروض', icon: '🧩', desc: '2 أو 3 بطاقات بصور كبيرة، لكل واحدة عنوان وزر (تشكيلات، عروض...)',
+    fields: [f('title', 'text', 'العنوان (اختياري)', { max: 80 }), f('columns', 'select', 'عدد البطاقات في الصف', { options: { 2: '2', 3: '3' } })],
+    items: { label: 'بطاقة', max: 6, fields: [f('image', 'image', 'الصورة'), f('eyebrow', 'text', 'شارة صغيرة', { max: 30, ph: 'جديد' }), f('title', 'text', 'العنوان', { max: 60 }),
+      f('subtitle', 'text', 'النص', { max: 120 }), ...BTN] },
+  },
+  steps: {
+    label: 'خطوات (كيف نعمل)', icon: '🪜', desc: 'خطوات مرقّمة تشرح طريقة الطلب أو العمل',
+    fields: [f('title', 'text', 'العنوان', { max: 80, ph: 'كيف تطلب؟' }), f('subtitle', 'text', 'النص', { max: 200 })],
+    items: { label: 'خطوة', max: 6, fields: [f('icon', 'text', 'أيقونة (اختياري)', { max: 4, ph: '🛒' }), f('title', 'text', 'العنوان', { max: 60 }), f('text', 'text', 'النص', { max: 160 })] },
+  },
+  pricing: {
+    label: 'الباقات والأسعار', icon: '💎', desc: 'جدول باقات بأسعار ومميزات، مع إبراز الباقة المقترحة',
+    fields: [f('title', 'text', 'العنوان', { max: 80, ph: 'اختر باقتك' }), f('subtitle', 'text', 'النص', { max: 200 })],
+    items: { label: 'باقة', max: 4, fields: [f('name', 'text', 'اسم الباقة', { max: 40 }), f('price', 'text', 'السعر', { max: 20, ph: '299' }), f('period', 'text', 'المدة (اختياري)', { max: 20, ph: '/ شهر' }),
+      f('features', 'textarea', 'المميزات (كل ميزة في سطر)', { max: 800 }), f('featured', 'select', 'إبراز هذه الباقة؟', { options: { no: 'لا', yes: 'نعم: «الأكثر طلباً»' } }),
+      f('button', 'text', 'نص الزر', { max: 30, ph: 'اختر الباقة' }), f('link', 'link', 'رابط الزر (فارغ = واتساب المتجر)')] },
+  },
+  before_after: {
+    label: 'قبل / بعد', icon: '↔️', desc: 'صورتان يقارن بينهما الزائر بسحب الخط (تجميل، تنظيف، ترميم...)',
+    fields: [f('title', 'text', 'العنوان', { max: 80, ph: 'شاهد الفرق' }), f('subtitle', 'text', 'النص', { max: 200 }),
+      f('before', 'image', 'صورة «قبل»'), f('after', 'image', 'صورة «بعد»'),
+      f('before_label', 'text', 'تسمية «قبل»', { max: 20, ph: 'قبل' }), f('after_label', 'text', 'تسمية «بعد»', { max: 20, ph: 'بعد' })],
+  },
+  logos: {
+    label: 'شعارات (علامات وشركاء)', icon: '🏷️', desc: 'شعارات العلامات التي تبيعها أو الشركاء والعملاء',
+    fields: [f('title', 'text', 'العنوان (اختياري)', { max: 80, ph: 'علامات نثق بها' })],
+    items: { label: 'شعار', max: 12, fields: [f('image', 'image', 'الشعار'), f('name', 'text', 'الاسم', { max: 40 }), f('link', 'link', 'رابط (اختياري)')] },
+  },
+  contact_form: {
+    label: 'نموذج تواصل', icon: '✉️', desc: 'يرسل الزائر اسمه وهاتفه ورسالته، وتصلك في «الرسائل» مع إشعار',
+    fields: [f('title', 'text', 'العنوان', { max: 80, ph: 'راسلنا' }), f('subtitle', 'text', 'النص', { max: 200, ph: 'نرد عليك في أقرب وقت.' }),
+      f('button', 'text', 'نص الزر', { max: 30, ph: 'إرسال' })],
+  },
+  map: {
+    label: 'خريطة', icon: '🗺️', desc: 'خريطة Google لموقع متجرك أو محلك',
+    fields: [f('title', 'text', 'العنوان (اختياري)', { max: 80, ph: 'موقعنا' }), f('address', 'text', 'العنوان كما تبحث عنه في خرائط Google', { max: 200, ph: 'Café X, Boulevard Zerktouni, Casablanca' }),
+      f('height', 'select', 'الارتفاع', { options: { m: 'متوسط', s: 'صغير', l: 'كبير' } })],
+  },
+  social: {
+    label: 'تابعنا', icon: '📱', desc: 'أزرار حسابات المتجر (إنستغرام، فيسبوك، تيك توك، واتساب) من الإعدادات',
+    fields: [f('title', 'text', 'العنوان', { max: 80, ph: 'تابعنا على مواقع التواصل' }), f('subtitle', 'text', 'النص', { max: 200 })],
+  },
+  divider: {
+    label: 'فاصل / مسافة', icon: '➖', desc: 'مسافة أو خط بين الأقسام',
+    fields: [f('size', 'select', 'المسافة', { options: { m: 'متوسطة', s: 'صغيرة', l: 'كبيرة' } }),
+      f('line', 'select', 'الشكل', { options: { none: 'مسافة فقط', line: 'خط', dots: 'نقاط', wave: 'موجة' } })],
+  },
 };
 
-const MAX_SECTIONS = 20;
+// Options every section gets: background band and entrance animation.
+const STYLE_FIELDS = [
+  f('bg', 'select', '🎨 خلفية القسم', { options: { none: 'بدون', soft: 'فاتحة', brand: 'لون المتجر', dark: 'داكنة' } }),
+  f('anim', 'select', '✨ حركة عند الظهور', { options: { up: 'ظهور تدريجي', zoom: 'تكبير خفيف', none: 'بدون' } }),
+];
+const NO_STYLE = new Set(['marquee', 'divider', 'slider', 'banner', 'hero', 'contact_cta']);
+for (const [type, def] of Object.entries(SCHEMA)) {
+  if (type === 'marquee' || type === 'divider') continue;
+  def.fields.push(...STYLE_FIELDS.filter((x) => !(NO_STYLE.has(type) && x.k === 'bg')));
+}
+
+const MAX_SECTIONS = 30;
 
 function cleanLink(v) {
   const s = String(v ?? '').trim().slice(0, 500);

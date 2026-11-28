@@ -3,6 +3,8 @@
   const bg = (img) => img ? `background-image:url('${img.replace(/'/g, '%27')}')` : '';
   const head = (b) => (b.title || b.subtitle) ? `<div class="sec-head">${b.title ? `<h2>${escapeFn(b.title)}</h2>` : ''}${b.subtitle ? `<p>${escapeFn(b.subtitle)}</p>` : ''}</div>` : '';
   function escapeFn(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+  // Shared style options: background band + entrance animation.
+  const sx = (b) => `${b.bg && b.bg !== 'none' ? ' bg-' + b.bg : ''}${b.anim && b.anim !== 'none' ? ' rv rv-' + b.anim : ''}`;
   const wa = (text) => `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(text)}`;
   const btn = (b, cls = 'btn') => b.button ? `<a class="${cls}" href="${escapeFn(href(b.link || '/products'))}">${escapeFn(b.button)}</a>` : '';
 %>
@@ -10,7 +12,7 @@
 <% blocks.forEach((b, bi) => { %>
 
 <% if (b.type === 'product_hero') { %>
-<section data-idx="<%= b.idx %>" class="sec sec-ph" id="order">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-ph" id="order">
   <% if (!b.product) { %>
     <div class="empty-sec"><% if (isOwner || (typeof preview !== 'undefined' && preview)) { %>أضف منتجاً إلى متجرك ثم اختره في هذا القسم.<% } else { %>المنتج غير متوفر حالياً.<% } %></div>
   <% } else { const P = b.product; const imgs = json(P.images).length ? json(P.images) : (P.image_url ? [P.image_url] : []); %>
@@ -37,7 +39,7 @@
 <% } %>
 
 <% if (b.type === 'order_form') { %>
-<section data-idx="<%= b.idx %>" class="sec sec-of" <% if (!stickyDone) { %>id="order"<% } %>>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-of" <% if (!stickyDone) { %>id="order"<% } %>>
   <div class="of-card">
     <div class="sec-head"><h2><%= b.title || 'اطلب الآن والدفع عند الاستلام' %></h2><% if (b.subtitle) { %><p><%= b.subtitle %></p><% } %></div>
     <% if (!b.product) { %>
@@ -54,7 +56,7 @@
 <% } %>
 
 <% if (b.type === 'countdown' && b.endsAt) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-cd">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-cd">
   <div class="cd-box" data-end="<%= b.endsAt %>">
     <strong><%= b.title || 'العرض ينتهي خلال' %></strong>
     <div class="cd-units"><% [['d', 'يوم'], ['h', 'ساعة'], ['m', 'دقيقة'], ['s', 'ثانية']].forEach(([k, l]) => { %><span><b data-u="<%= k %>">00</b><small><%= l %></small></span><% }) %></div>
@@ -63,7 +65,7 @@
 <% } %>
 
 <% if (b.type === 'hero') { const img = b.image || store.banner_url; %>
-<section data-idx="<%= b.idx %>" class="sec sec-hero full <%= img ? 'has-img' : '' %>" style="<%= bg(img) %>">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-hero full <%= img ? 'has-img' : '' %>" style="<%= bg(img) %>">
   <div class="wrap hero-inner">
     <% if (store.logo_url) { %><img class="hero-logo" src="<%= store.logo_url %>" alt="<%= store.name %>"><% } %>
     <h1><%= b.title || store.tagline || store.name %></h1>
@@ -74,7 +76,7 @@
 <% } %>
 
 <% if (b.type === 'slider' && b.items.length) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-slider full h-<%= b.height %>" data-slider>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-slider full h-<%= b.height %>" data-slider>
   <div class="slides">
     <% b.items.forEach((it, i) => { %>
       <div class="slide <%= i === 0 ? 'on' : '' %> <%= it.image ? 'has-img' : '' %>" style="<%= bg(it.image) %>">
@@ -95,7 +97,7 @@
 <% } %>
 
 <% if (b.type === 'banner') { %>
-<section data-idx="<%= b.idx %>" class="sec sec-banner full h-<%= b.height %> al-<%= b.align %> <%= b.image ? 'has-img' : '' %>" style="<%= bg(b.image) %>">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-banner full h-<%= b.height %> al-<%= b.align %> <%= b.image ? 'has-img' : '' %>" style="<%= bg(b.image) %>">
   <div class="wrap banner-inner">
     <% if (b.title) { %><h2><%= b.title %></h2><% } %>
     <% if (b.subtitle) { %><p><%= b.subtitle %></p><% } %>
@@ -105,7 +107,7 @@
 <% } %>
 
 <% if (b.type === 'image_text') { %>
-<section data-idx="<%= b.idx %>" class="sec sec-it side-<%= b.side %>">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-it side-<%= b.side %>">
   <div class="it-img <%= b.image ? '' : 'ph-bg' %>"><% if (b.image) { %><img src="<%= b.image %>" alt="" loading="lazy"><% } %></div>
   <div class="it-text">
     <% if (b.eyebrow) { %><span class="eyebrow"><%= b.eyebrow %></span><% } %>
@@ -117,7 +119,7 @@
 <% } %>
 
 <% if (b.type === 'products') { %>
-<section data-idx="<%= b.idx %>" class="sec sec-products" id="<%= bi === 0 ? 'products' : '' %>">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-products" id="<%= bi === 0 ? 'products' : '' %>">
   <%- head(b) %>
   <% if (!b.products.length) { %>
     <div class="empty-sec">
@@ -125,14 +127,14 @@
       <% } else { %>منتجات جديدة قريباً ✨<% } %>
     </div>
   <% } else { %>
-    <div class="pgrid"><% b.products.forEach(p => { %><%- include('product-card', { p }) %><% }) %></div>
+    <div class="pgrid<%= b.layout === 'carousel' ? ' pcarousel' : '' %>"><% b.products.forEach(p => { %><%- include('product-card', { p }) %><% }) %></div>
     <div class="sec-more"><a href="<%= href(b.moreLink) %>" class="btn ghost">عرض الكل ←</a></div>
   <% } %>
 </section>
 <% } %>
 
 <% if (b.type === 'categories' && (b.cards.length || isOwner)) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-cats">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-cats">
   <%- head(b) %>
   <% if (!b.cards.length) { %><div class="empty-sec">أضف تصنيفات لمنتجاتك لتظهر هنا تلقائياً. <small>(تظهر لك فقط)</small></div><% } %>
   <div class="cat-grid n-<%= Math.min(b.cards.length, 4) %>">
@@ -146,7 +148,7 @@
 <% } %>
 
 <% if (b.type === 'gallery' && (b.items.length || isOwner)) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-gallery">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-gallery">
   <%- head(b) %>
   <% if (!b.items.length) { %><div class="empty-sec">أضف صوراً لهذا المعرض من «تصميم المتجر». <small>(تظهر لك فقط)</small></div><% } %>
   <div class="gal-grid cols-<%= b.columns %>">
@@ -161,7 +163,7 @@
 <% } %>
 
 <% if (b.type === 'features' && b.items.length) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-features">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-features">
   <%- head(b) %>
   <div class="feat-grid">
     <% b.items.forEach(it => { %>
@@ -172,7 +174,7 @@
 <% } %>
 
 <% if (b.type === 'testimonials' && b.items.length) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-testi">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-testi">
   <%- head(b) %>
   <div class="testi-grid">
     <% b.items.forEach(it => { %>
@@ -190,21 +192,21 @@
 <% } %>
 
 <% if (b.type === 'text' && (b.title || b.text)) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-text al-<%= b.align %>">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-text al-<%= b.align %>">
   <% if (b.title) { %><h2><%= b.title %></h2><% } %>
   <% if (b.text) { %><div class="pre prose"><%= b.text %></div><% } %>
 </section>
 <% } %>
 
 <% if (b.type === 'video' && b.videoId) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-video">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-video">
   <% if (b.title) { %><div class="sec-head"><h2><%= b.title %></h2></div><% } %>
   <div class="video-box"><iframe src="https://www.youtube-nocookie.com/embed/<%= b.videoId %>" title="<%= b.title || 'video' %>" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
 </section>
 <% } %>
 
 <% if (b.type === 'faq' && b.items.length) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-faq">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-faq">
   <%- head(b) %>
   <div class="faq">
     <% b.items.filter(it => it.q).forEach(it => { %><details><summary><%= it.q %></summary><p class="pre"><%= it.a %></p></details><% }) %>
@@ -212,8 +214,139 @@
 </section>
 <% } %>
 
+<% if (b.type === 'marquee' && b.items.some(it => it.text)) { const words = b.items.filter(it => it.text); %>
+<section data-idx="<%= b.idx %>" class="mq mq-<%= b.style %> mq-<%= b.speed %>" aria-label="<%= words.map(w => w.text).join(' · ') %>">
+  <div class="mq-track" aria-hidden="true">
+    <% for (let r = 0; r < 2; r++) { %><div class="mq-run"><% for (let k = 0; k < 3; k++) { words.forEach(w => { %><span><%= w.text %></span><i>✦</i><% }) } %></div><% } %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'promo_grid' && b.items.length) { %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-promo">
+  <%- head(b) %>
+  <div class="promo-grid cols-<%= b.columns %>">
+    <% b.items.forEach(it => { const go = it.link ? href(it.link) : ''; %>
+      <<%= go ? 'a' : 'div' %> class="promo-card <%= it.image ? '' : 'no-img' %>" <% if (go) { %>href="<%= go %>"<% } %> style="<%= bg(it.image) %>">
+        <span class="promo-body">
+          <% if (it.eyebrow) { %><em><%= it.eyebrow %></em><% } %>
+          <% if (it.title) { %><strong><%= it.title %></strong><% } %>
+          <% if (it.subtitle) { %><small><%= it.subtitle %></small><% } %>
+          <% if (it.button) { %><span class="promo-btn"><%= it.button %> ←</span><% } %>
+        </span>
+      </<%= go ? 'a' : 'div' %>>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'steps' && b.items.length) { %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-steps">
+  <%- head(b) %>
+  <ol class="steps-row">
+    <% b.items.filter(it => it.title).forEach((it, k) => { %>
+      <li><span class="st-num"><%= it.icon || k + 1 %></span><strong><%= it.title %></strong><% if (it.text) { %><small><%= it.text %></small><% } %></li>
+    <% }) %>
+  </ol>
+</section>
+<% } %>
+
+<% if (b.type === 'pricing' && b.items.length) { const cur = store.currency === 'MAD' ? 'درهم' : store.currency; %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-pricing">
+  <%- head(b) %>
+  <div class="price-grid">
+    <% b.items.filter(it => it.name).forEach(it => { const go = it.link ? href(it.link) : (store.whatsapp ? wa(`مرحباً، أريد الاشتراك في باقة: ${it.name}`) : ''); %>
+      <article class="plan <%= it.featured === 'yes' ? 'featured' : '' %>">
+        <% if (it.featured === 'yes') { %><span class="plan-flag">⭐ الأكثر طلباً</span><% } %>
+        <h3><%= it.name %></h3>
+        <div class="plan-price"><strong><%= it.price %></strong><% if (/^\d+([.,]\d+)?$/.test(it.price)) { %> <span><%= cur %></span><% } %><% if (it.period) { %> <small><%= it.period %></small><% } %></div>
+        <ul><% it.features.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => { %><li><%= l %></li><% }) %></ul>
+        <% if (go) { %><a class="btn <%= it.featured === 'yes' ? '' : 'ghost' %> full" href="<%= go %>" <%= go.startsWith('https://wa.me') ? 'target=_blank rel=noopener' : '' %>><%= it.button || 'اختر الباقة' %></a><% } %>
+      </article>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'before_after') { %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-ba">
+  <%- head(b) %>
+  <% if (b.before && b.after) { %>
+  <div class="ba" style="--pos:50%">
+    <img src="<%= b.after %>" alt="<%= b.after_label || 'بعد' %>" loading="lazy">
+    <div class="ba-before"><img src="<%= b.before %>" alt="<%= b.before_label || 'قبل' %>" loading="lazy"></div>
+    <span class="ba-tag ba-l"><%= b.before_label || 'قبل' %></span><span class="ba-tag ba-r"><%= b.after_label || 'بعد' %></span>
+    <span class="ba-handle" aria-hidden="true"></span>
+    <input type="range" min="0" max="100" value="50" aria-label="قارن بين الصورتين" dir="ltr">
+  </div>
+  <% } else if (isOwner || (typeof preview !== 'undefined' && preview)) { %><div class="empty-sec">ارفع صورة «قبل» وصورة «بعد» ليظهر هذا القسم.</div><% } %>
+</section>
+<% } %>
+
+<% if (b.type === 'logos' && b.items.some(it => it.image || it.name)) { %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-logos">
+  <%- head(b) %>
+  <div class="logo-row">
+    <% b.items.filter(it => it.image || it.name).forEach(it => { const tag = it.link ? 'a' : 'span'; %>
+      <<%= tag %> class="logo-it" <% if (it.link) { %>href="<%= href(it.link) %>" target="_blank" rel="noopener"<% } %> title="<%= it.name %>"><% if (it.image) { %><img src="<%= it.image %>" alt="<%= it.name %>" loading="lazy"><% } else { %><b><%= it.name %></b><% } %></<%= tag %>>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'contact_form') { const sent = typeof contactSent !== 'undefined' && contactSent; %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-cf" id="contact-form">
+  <%- head(b) %>
+  <% if (sent) { %>
+    <div class="cf-done">✅ وصلت رسالتك، شكراً! سنرد عليك قريباً.</div>
+  <% } else { %>
+  <form class="cf" method="post" action="<%= base %>/contact">
+    <%- include('csrf') %>
+    <input type="hidden" name="back" value="<%= typeof pagePath !== 'undefined' ? pagePath : base %>">
+    <input type="hidden" name="_t" value="<%= Date.now() %>">
+    <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+    <% if (typeof contactError !== 'undefined' && contactError) { %><div class="alert"><%= contactError %></div><% } %>
+    <div class="cf-row">
+      <input name="name" required minlength="2" maxlength="80" placeholder="الاسم" autocomplete="name">
+      <input name="phone" type="tel" required dir="ltr" inputmode="tel" placeholder="📞 رقم الهاتف" autocomplete="tel">
+    </div>
+    <textarea name="message" required minlength="5" maxlength="1500" rows="4" placeholder="رسالتك…"></textarea>
+    <button class="btn big"><%= b.button || 'إرسال' %></button>
+  </form>
+  <% } %>
+</section>
+<% } %>
+
+<% if (b.type === 'map' && b.address) { %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-map">
+  <%- head(b) %>
+  <div class="map-box map-<%= b.height %>">
+    <iframe src="https://maps.google.com/maps?q=<%= encodeURIComponent(b.address) %>&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="<%= b.title || 'الخريطة' %>"></iframe>
+  </div>
+  <p class="map-open"><a href="https://www.google.com/maps/search/?api=1&query=<%= encodeURIComponent(b.address) %>" target="_blank" rel="noopener">🗺️ افتح في خرائط Google</a></p>
+</section>
+<% } %>
+
+<% if (b.type === 'social') { const nets = [['instagram', 'Instagram', '📸'], ['facebook', 'Facebook', '👍'], ['tiktok', 'TikTok', '🎵']].filter(n => store[n[0]]); %>
+<% if (nets.length || store.whatsapp) { %>
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-social">
+  <%- head(b) %>
+  <div class="social-row">
+    <% nets.forEach(([k, label, ic]) => { %><a class="soc soc-<%= k %>" href="<%= store[k] %>" target="_blank" rel="noopener"><span><%= ic %></span><%= label %></a><% }) %>
+    <% if (store.whatsapp) { %><a class="soc soc-wa" href="https://wa.me/<%= store.whatsapp %>" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a><% } %>
+  </div>
+</section>
+<% } else if (isOwner || (typeof preview !== 'undefined' && preview)) { %>
+<section data-idx="<%= b.idx %>" class="sec sec-social"><div class="empty-sec">أضف روابط إنستغرام وفيسبوك وتيك توك وواتساب في إعدادات المتجر لتظهر هنا.</div></section>
+<% } %>
+<% } %>
+
+<% if (b.type === 'divider') { %>
+<div data-idx="<%= b.idx %>" class="divider dv-<%= b.size %> dv-<%= b.line %>" aria-hidden="true"><% if (b.line === 'wave') { %><svg viewBox="0 0 1200 24" preserveAspectRatio="none"><path d="M0 12 Q 50 0 100 12 T 200 12 T 300 12 T 400 12 T 500 12 T 600 12 T 700 12 T 800 12 T 900 12 T 1000 12 T 1100 12 T 1200 12" fill="none" stroke="currentColor" stroke-width="2"/></svg><% } %></div>
+<% } %>
+
 <% if (b.type === 'services' && b.items.length) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-services">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-services">
   <%- head(b) %>
   <div class="svc-grid">
     <% b.items.filter(it => it.title).forEach(it => { const go = it.link ? href(it.link) : (store.whatsapp ? wa(`مرحباً، أريد الاستفسار عن: ${it.title}`) : ''); %>
@@ -237,7 +370,7 @@
   const cur = store.currency === 'MAD' ? 'درهم' : store.currency;
   const price = (p) => /^\d+([.,]\d+)?$/.test(p) ? `${p} ${cur}` : p;
 %>
-<section data-idx="<%= b.idx %>" class="sec sec-menu" id="menu">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-menu" id="menu">
   <%- head(b) %>
   <% if (cats.length > 1) { %><nav class="menu-tabs"><% cats.forEach((c, ci) => { %><a href="#menu-<%= bi %>-<%= ci %>"><%= c.name %></a><% }) %></nav><% } %>
   <% cats.forEach((c, ci) => { %>
@@ -262,7 +395,7 @@
 <% } %>
 
 <% if (b.type === 'team' && b.items.length) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-team">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-team">
   <%- head(b) %>
   <div class="team-grid">
     <% b.items.filter(it => it.name).forEach(it => { %>
@@ -278,7 +411,7 @@
 <% } %>
 
 <% if (b.type === 'stats' && b.items.length) { %>
-<section data-idx="<%= b.idx %>" class="sec sec-stats">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-stats">
   <%- head(b) %>
   <div class="stats-row">
     <% b.items.filter(it => it.value).forEach(it => { %><div><strong dir="ltr"><%= it.value %></strong><span><%= it.label %></span></div><% }) %>
@@ -287,7 +420,7 @@
 <% } %>
 
 <% if (b.type === 'hours') { const tel = b.phone || store.phone; %>
-<section data-idx="<%= b.idx %>" class="sec sec-hours" id="hours">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-hours" id="hours">
   <%- head(b) %>
   <div class="hours-grid">
     <% if (b.items.length) { %>
@@ -312,7 +445,7 @@
 <% if (b.type === 'contact_cta') {
   const go = b.mode === 'phone' ? (store.phone ? 'tel:' + store.phone.replace(/[^+\d]/g, '') : '') : b.mode === 'link' ? href(b.link) : (store.whatsapp ? wa(b.message || 'مرحباً') : '');
 %>
-<section data-idx="<%= b.idx %>" class="sec sec-cta" id="contact">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-cta" id="contact">
   <div class="cta-band">
     <div>
       <% if (b.title) { %><h2><%= b.title %></h2><% } %>
@@ -396,6 +529,21 @@ document.querySelectorAll('.cd-box').forEach((box) => {
   document.querySelectorAll('.lo-form').forEach((f) => io.observe(f));
 })();
 
+// Before / after comparison.
+document.querySelectorAll('.ba').forEach((box) => {
+  const r = box.querySelector('input');
+  const set = () => box.style.setProperty('--pos', r.value + '%');
+  r.addEventListener('input', set); set();
+});
+// Reveal sections as they scroll into view.
+(() => {
+  const els = document.querySelectorAll('.rv');
+  if (!els.length) return;
+  if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.documentElement.classList.add('rv-on');
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+  els.forEach((el) => io.observe(el));
+})();
 // Auto-advancing slider with arrows, dots and swipe.
 document.querySelectorAll('[data-slider]').forEach((el) => {
   const slides = el.querySelectorAll('.slide'), dots = el.querySelectorAll('.dots button');

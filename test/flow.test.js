@@ -990,3 +990,64 @@ test('templates: services, clinic and restaurant sections render; no cart withou
   assert.doesNotMatch(html, /كل المنتجات/);
   assert.match(html, /aria-label="واتساب"/);
 });
+
+test('advanced sections: render, styles, contact form reaches the inbox', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const sections = require('../src/sections');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Adv', email: 'adv@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const r = await m('POST', '/dashboard/stores', { _csrf: c, name: 'Adv Shop', slug: 'adv-shop', currency: 'MAD', color: '#7c3aed' });
+  const sid = Number(r.location.split('/').pop());
+  db.prepare("UPDATE stores SET whatsapp = '212611111111', instagram = 'https://instagram.com/adv' WHERE id = ?").run(sid);
+  const list = sections.sanitize([
+    { type: 'marquee', items: [{ text: 'توصيل مجاني' }], style: 'dark' },
+    { type: 'pricing', bg: 'brand', anim: 'zoom', items: [{ name: 'Pro', price: '299', period: '/ شهر', features: 'ميزة 1\nميزة 2', featured: 'yes' }] },
+    { type: 'steps', items: [{ title: 'اختر' }, { title: 'اطلب' }] },
+    { type: 'promo_grid', items: [{ title: 'رجال', link: '/products' }] },
+    { type: 'before_after', before: 'https://example.com/a.jpg', after: 'https://example.com/b.jpg' },
+    { type: 'logos', items: [{ name: 'BrandX' }] },
+    { type: 'map', address: 'Casablanca' },
+    { type: 'social' },
+    { type: 'divider', line: 'wave' },
+    { type: 'contact_form', title: 'راسلنا', bg: 'evil"><script>' },
+  ]);
+  assert.strictEqual(list[9].bg, 'none'); // style options are validated like any other field
+  assert.strictEqual(list[1].anim, 'zoom');
+  const html = (await m('POST', `/dashboard/stores/${sid}/design/preview`, { _csrf: c, sections: JSON.stringify(list) })).text;
+  assert.match(html, /class="mq mq-dark/);
+  assert.match(html, /class="sec bg-brand rv rv-zoom sec-pricing"/);
+  assert.match(html, /الأكثر طلباً/);
+  assert.match(html, /wa\.me\/212611111111\?text=/);
+  assert.match(html, /class="steps-row"/);
+  assert.match(html, /class="ba"/);
+  assert.match(html, /BrandX/);
+  assert.match(html, /maps\.google\.com\/maps\?q=Casablanca&output=embed/);
+  assert.match(html, /soc-instagram/);
+  assert.match(html, /dv-wave/);
+
+  // Contact form: lands in the inbox and notifies the merchant.
+  db.prepare('UPDATE stores SET home_sections = ? WHERE id = ?').run(JSON.stringify(list), sid);
+  const v = client(base);
+  const page = (await v('GET', '/s/adv-shop')).text;
+  assert.match(fetchCsp = (await fetch(`${base}/s/adv-shop`)).headers.get('content-security-policy'), /frame-src[^;]*maps\.google\.com/);
+  const vc = csrfOf(page);
+  let res = await v('POST', '/s/adv-shop/contact', { _csrf: vc, back: '/s/adv-shop', name: 'Omar', phone: '12', message: 'Bonjour' });
+  assert.match(decodeURIComponent(res.location), /رقم الهاتف غير صحيح/);
+  res = await v('POST', '/s/adv-shop/contact', { _csrf: vc, back: '/s/adv-shop', name: 'Omar', phone: '0677777777', message: 'هل عندكم مقاس كبير؟' });
+  assert.strictEqual(res.location, '/s/adv-shop?contact=sent#contact-form');
+  assert.match((await v('GET', '/s/adv-shop?contact=sent')).text, /وصلت رسالتك/);
+  const conv = db.prepare('SELECT * FROM conversations WHERE store_id = ? ORDER BY id DESC').get(sid);
+  assert.strictEqual(conv.phone, '0677777777');
+  assert.strictEqual(conv.unread_merchant, 1);
+  assert.match(db.prepare('SELECT body FROM messages WHERE conversation_id = ?').get(conv.id).body, /مقاس كبير/);
+  // Off-site "back" values are ignored.
+  res = await v('POST', '/s/adv-shop/contact', { _csrf: vc, back: 'https://evil.example', name: 'Omar', phone: '0677777777', message: 'test message' });
+  assert.match(res.location, /^\/s\/adv-shop\?/);
+});
+var fetchCsp;
