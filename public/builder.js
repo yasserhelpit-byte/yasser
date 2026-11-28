@@ -183,7 +183,33 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus 
     });
   }
   input.form.addEventListener('submit', () => { input.value = JSON.stringify(sections); dirty = false; });
+  // Closing the tab or reloading: only the browser's own warning is possible there.
   window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  // Leaving through a link inside YASSER: our own dialog, with "save and continue".
+  document.addEventListener('click', async (e) => {
+    const a = e.target.closest('a[href]');
+    if (!dirty || !a || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (a.target === '_blank' || a.hasAttribute('download') || a.getAttribute('href').startsWith('#')) return;
+    const url = new URL(a.href, location.href);
+    if (url.origin !== location.origin) return;
+    e.preventDefault();
+    if (!window.yChoice) { if (confirm('لديك تغييرات غير محفوظة. الخروج بدونها؟')) { dirty = false; location.href = url.href; } return; }
+    const choice = await yChoice('لديك تغييرات لم تُحفظ بعد في هذه الصفحة. ماذا تريد أن تفعل؟', {
+      title: 'تغييرات غير محفوظة', icon: '💾',
+      buttons: [{ value: 'save', label: '💾 حفظ والمتابعة' }, { value: 'leave', label: 'خروج بدون حفظ', kind: 'danger' }, { value: 'stay', label: 'البقاء في الصفحة', kind: 'ghost' }],
+    });
+    if (choice === 'leave') { dirty = false; location.href = url.href; return; }
+    if (choice !== 'save') return;
+    input.value = JSON.stringify(sections);
+    try {
+      const r = await fetch(input.form.getAttribute('action') || location.href, { method: 'POST', body: new URLSearchParams(new FormData(input.form)) });
+      if (!r.ok) throw new Error(r.status);
+      dirty = false;
+      location.href = url.href;
+    } catch (err) {
+      yAlert('تعذّر الحفظ. تحقق من الاتصال ثم اضغط «حفظ».', { title: 'لم يتم الحفظ', icon: '⚠️' });
+    }
+  }, true);
   input.value = JSON.stringify(sections);
   render();
   return { isDirty: () => dirty, markDirty: () => { dirty = true; }, value: () => JSON.stringify(sections) };

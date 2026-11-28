@@ -1637,3 +1637,8 @@ a.promo-card:hover { transform: translateY(-3px); }
 @keyframes ydlg-out { to { opacity: 0; transform: scale(.97); } }
 @keyframes ydlg-fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ydlg-card, .ydlg::backdrop { animation: none !important; } }
+
+.ydlg-actions.stack { flex-direction: column; }
+.ydlg-actions.stack .btn { flex: none; width: 100%; }
+.ydlg-danger { background: #fff; color: #dc2626; border: 1.5px solid #fecaca; }
+.ydlg-danger:hover { background: #fef2f2; }

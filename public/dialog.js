@@ -1,11 +1,12 @@
 // YASSER dialogs: replace the browser's confirm()/alert() with styled, RTL, keyboard-friendly ones.
 //   await yConfirm('message', { title, ok, cancel, danger, icon })  -> true / false
 //   await yAlert('message', { title, icon })
+//   await yChoice('message', { title, buttons: [{ value, label, kind: 'primary'|'ghost'|'danger' }] }) -> value or ''
 // Forms: <form data-confirm="message" data-confirm-title="…" data-confirm-ok="…" data-danger> ask before submitting.
 (function () {
   let open = null;
 
-  function yDialog({ title = '', message = '', ok = 'تأكيد', cancel = 'إلغاء', danger = false, icon = '', alertOnly = false }) {
+  function yDialog({ title = '', message = '', ok = 'تأكيد', cancel = 'إلغاء', danger = false, icon = '', alertOnly = false, buttons = null }) {
     if (open) open.close('cancel');
     return new Promise((resolve) => {
       const d = document.createElement('dialog');
@@ -24,24 +25,38 @@
       const c = d.querySelector('.ydlg-cancel');
       c.textContent = cancel;
       c.hidden = alertOnly;
+      if (buttons) { // free set of buttons; the dialog resolves with the chosen value
+        const box = d.querySelector('.ydlg-actions');
+        box.innerHTML = '';
+        box.classList.add('stack');
+        for (const bt of buttons) {
+          const el = document.createElement('button');
+          el.value = bt.value;
+          el.className = 'btn' + (bt.kind === 'ghost' ? ' ghost' : bt.kind === 'danger' ? ' ydlg-danger' : '');
+          el.textContent = bt.label;
+          box.appendChild(el);
+        }
+      }
       // A click on the dimmed backdrop cancels.
       d.addEventListener('click', (e) => { if (e.target === d) d.close('cancel'); });
       d.addEventListener('close', () => {
         open = null;
         d.classList.add('out');
         setTimeout(() => d.remove(), 160);
-        resolve(d.returnValue === 'ok');
+        resolve(buttons ? (d.returnValue === 'cancel' ? '' : d.returnValue) : d.returnValue === 'ok');
       });
       document.body.appendChild(d);
       open = d;
       d.showModal();
-      (alertOnly || !danger ? d.querySelector('.ydlg-ok') : c).focus(); // destructive actions start on "cancel"
+      if (buttons) d.querySelector('.ydlg-actions button')?.focus();
+      else (alertOnly || !danger ? d.querySelector('.ydlg-ok') : c).focus(); // destructive actions start on "cancel"
     });
   }
 
   window.yDialog = yDialog;
   window.yConfirm = (message, opts = {}) => yDialog({ ...opts, message });
   window.yAlert = (message, opts = {}) => yDialog({ ...opts, message, alertOnly: true });
+  window.yChoice = (message, opts = {}) => yDialog({ ...opts, message });
 
   // Forms that need a confirmation.
   document.addEventListener('submit', async (e) => {
