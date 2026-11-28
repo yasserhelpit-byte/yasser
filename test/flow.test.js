@@ -950,3 +950,43 @@ test('payments: PayPal converts the amount and only trusts a completed capture',
   captureStatus = 'PENDING';
   assert.strictEqual((await payments.PROVIDERS.paypal.verify({ store, order: saved, query: { token: 'PP1' } })).paid, false);
 });
+
+test('templates: services, clinic and restaurant sections render; no cart without products', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const { PRESETS } = require('../src/sections');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Chef', email: 'chef@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const r = await m('POST', '/dashboard/stores', { _csrf: c, name: 'Dar Tajine', slug: 'dar-tajine', currency: 'MAD', color: '#9a3412' });
+  const sid = Number(r.location.split('/').pop());
+  db.prepare("UPDATE stores SET whatsapp = '212600000000', phone = '0522000000' WHERE id = ?").run(sid);
+  const preview = (k) => m('POST', `/dashboard/stores/${sid}/design/preview`, { _csrf: c, sections: JSON.stringify(PRESETS[k].sections) });
+
+  let html = (await preview('restaurant')).text;
+  assert.match(html, /طاجين دجاج بالزيتون/);
+  assert.match(html, /70 درهم/);
+  assert.match(html, /class="menu-tabs"/);
+  assert.match(html, /wa\.me\/212600000000\?text=[^"]*%D8%B7%D8%A7%D8%AC%D9%8A%D9%86/); // order a dish on WhatsApp
+  assert.match(html, /12:00 – 23:00/);
+  html = (await preview('clinic')).text;
+  assert.match(html, /الطاقم الطبي/);
+  assert.match(html, /class="team-card"/);
+  assert.match(html, /tel:0522000000/);
+  assert.doesNotMatch(html, /sec-testi/); // no patient testimonials in the clinic template
+  html = (await preview('about')).text;
+  assert.match(html, /class="stats-row"/);
+  assert.match(html, /ابتداءً من 300 درهم/);
+  assert.match(html, /id="contact"/);
+
+  // A store with nothing for sale shows no cart or "all products" link.
+  db.prepare('UPDATE stores SET home_sections = ? WHERE id = ?').run(JSON.stringify(PRESETS.restaurant.sections), sid);
+  html = await (await fetch(`${base}/s/dar-tajine`)).text();
+  assert.doesNotMatch(html, /aria-label="السلة"/);
+  assert.doesNotMatch(html, /كل المنتجات/);
+  assert.match(html, /aria-label="واتساب"/);
+});

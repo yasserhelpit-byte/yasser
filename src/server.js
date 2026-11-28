@@ -1338,6 +1338,8 @@ function storefrontLocals(store, customDomain = false) {
   return {
     base,
     menuPages: db.prepare('SELECT title, slug, in_menu, in_footer FROM pages WHERE store_id = ? ORDER BY position, id').all(store.id),
+    // Service businesses (clinics, restaurants…) may sell nothing online: then no cart or product links.
+    hasProducts: !!db.prepare('SELECT 1 FROM products WHERE store_id = ? AND active = 1 LIMIT 1').get(store.id),
     font: FONTS[store.font] || FONTS.tajawal,
     radius: (RADII[store.radius] || RADII.soft).v,
     // Store-relative links: "/products" -> "/s/<slug>/products".

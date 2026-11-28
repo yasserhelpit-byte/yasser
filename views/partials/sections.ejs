@@ -3,6 +3,7 @@
   const bg = (img) => img ? `background-image:url('${img.replace(/'/g, '%27')}')` : '';
   const head = (b) => (b.title || b.subtitle) ? `<div class="sec-head">${b.title ? `<h2>${escapeFn(b.title)}</h2>` : ''}${b.subtitle ? `<p>${escapeFn(b.subtitle)}</p>` : ''}</div>` : '';
   function escapeFn(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+  const wa = (text) => `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(text)}`;
   const btn = (b, cls = 'btn') => b.button ? `<a class="${cls}" href="${escapeFn(href(b.link || '/products'))}">${escapeFn(b.button)}</a>` : '';
 %>
 <% let stickyDone = false; %>
@@ -207,6 +208,118 @@
   <%- head(b) %>
   <div class="faq">
     <% b.items.filter(it => it.q).forEach(it => { %><details><summary><%= it.q %></summary><p class="pre"><%= it.a %></p></details><% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'services' && b.items.length) { %>
+<section data-idx="<%= b.idx %>" class="sec sec-services">
+  <%- head(b) %>
+  <div class="svc-grid">
+    <% b.items.filter(it => it.title).forEach(it => { const go = it.link ? href(it.link) : (store.whatsapp ? wa(`مرحباً، أريد الاستفسار عن: ${it.title}`) : ''); %>
+      <article class="svc-card">
+        <% if (it.image) { %><img class="svc-img" src="<%= it.image %>" alt="" loading="lazy"><% } else { %><span class="svc-icon"><%= it.icon || '⭐' %></span><% } %>
+        <h3><%= it.title %></h3>
+        <% if (it.text) { %><p class="pre"><%= it.text %></p><% } %>
+        <% if (it.price || (it.button && go)) { %><div class="svc-foot">
+          <% if (it.price) { %><span class="svc-price"><%= it.price %></span><% } %>
+          <% if (it.button && go) { %><a class="btn small" href="<%= go %>" <%= go.startsWith('https://wa.me') ? 'target=_blank rel=noopener' : '' %>><%= it.button %></a><% } %>
+        </div><% } %>
+      </article>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'menu' && b.items.length) {
+  const cats = [];
+  b.items.filter(it => it.name).forEach(it => { const c = it.category || 'القائمة'; let g = cats.find(x => x.name === c); if (!g) cats.push(g = { name: c, items: [] }); g.items.push(it); });
+  const cur = store.currency === 'MAD' ? 'درهم' : store.currency;
+  const price = (p) => /^\d+([.,]\d+)?$/.test(p) ? `${p} ${cur}` : p;
+%>
+<section data-idx="<%= b.idx %>" class="sec sec-menu" id="menu">
+  <%- head(b) %>
+  <% if (cats.length > 1) { %><nav class="menu-tabs"><% cats.forEach((c, ci) => { %><a href="#menu-<%= bi %>-<%= ci %>"><%= c.name %></a><% }) %></nav><% } %>
+  <% cats.forEach((c, ci) => { %>
+    <div class="menu-cat" id="menu-<%= bi %>-<%= ci %>">
+      <h3><%= c.name %></h3>
+      <div class="menu-list">
+        <% c.items.forEach(it => { %>
+          <div class="menu-item">
+            <% if (it.image) { %><img src="<%= it.image %>" alt="" loading="lazy"><% } %>
+            <div class="mi-body">
+              <div class="mi-top"><strong><%= it.name %></strong><% if (it.tag) { %><em class="mi-tag"><%= it.tag %></em><% } %><span class="mi-dots"></span><% if (it.price) { %><b class="mi-price"><%= price(it.price) %></b><% } %></div>
+              <% if (it.desc) { %><small><%= it.desc %></small><% } %>
+            </div>
+            <% if (b.order === 'whatsapp' && store.whatsapp) { %><a class="mi-add" href="<%= wa(`مرحباً، أريد طلب: ${it.name}${it.price ? ' (' + price(it.price) + ')' : ''}`) %>" target="_blank" rel="noopener" aria-label="اطلب <%= it.name %> عبر واتساب">+</a><% } %>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  <% }) %>
+  <% if (b.note) { %><p class="menu-note"><%= b.note %></p><% } %>
+</section>
+<% } %>
+
+<% if (b.type === 'team' && b.items.length) { %>
+<section data-idx="<%= b.idx %>" class="sec sec-team">
+  <%- head(b) %>
+  <div class="team-grid">
+    <% b.items.filter(it => it.name).forEach(it => { %>
+      <article class="team-card">
+        <% if (it.image) { %><img src="<%= it.image %>" alt="<%= it.name %>" loading="lazy"><% } else { %><span class="team-ph"><%= it.name.replace(/^د\.\s*/, '').trim().charAt(0) %></span><% } %>
+        <h3><%= it.name %></h3>
+        <% if (it.role) { %><span class="team-role"><%= it.role %></span><% } %>
+        <% if (it.text) { %><p class="pre"><%= it.text %></p><% } %>
+      </article>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'stats' && b.items.length) { %>
+<section data-idx="<%= b.idx %>" class="sec sec-stats">
+  <%- head(b) %>
+  <div class="stats-row">
+    <% b.items.filter(it => it.value).forEach(it => { %><div><strong dir="ltr"><%= it.value %></strong><span><%= it.label %></span></div><% }) %>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'hours') { const tel = b.phone || store.phone; %>
+<section data-idx="<%= b.idx %>" class="sec sec-hours" id="hours">
+  <%- head(b) %>
+  <div class="hours-grid">
+    <% if (b.items.length) { %>
+    <div class="hours-card">
+      <h3>🕘 أوقات العمل</h3>
+      <table><% b.items.filter(it => it.day).forEach(it => { %><tr class="<%= /مغلق|closed|fermé/i.test(it.time) ? 'closed' : '' %>"><td><%= it.day %></td><td dir="auto"><%= it.time %></td></tr><% }) %></table>
+    </div>
+    <% } %>
+    <div class="hours-card">
+      <h3>📍 العنوان والتواصل</h3>
+      <p class="pre"><%= b.address || store.city || '' %></p>
+      <div class="hours-actions">
+        <% if (b.map) { %><a class="btn small" href="<%= b.map %>" target="_blank" rel="noopener">🗺️ الاتجاهات</a><% } %>
+        <% if (tel) { %><a class="btn small ghost" href="tel:<%= tel.replace(/[^+\d]/g, '') %>">📞 <span dir="ltr"><%= tel %></span></a><% } %>
+        <% if (store.whatsapp) { %><a class="btn small wa" href="https://wa.me/<%= store.whatsapp %>" target="_blank" rel="noopener">💬 واتساب</a><% } %>
+      </div>
+    </div>
+  </div>
+</section>
+<% } %>
+
+<% if (b.type === 'contact_cta') {
+  const go = b.mode === 'phone' ? (store.phone ? 'tel:' + store.phone.replace(/[^+\d]/g, '') : '') : b.mode === 'link' ? href(b.link) : (store.whatsapp ? wa(b.message || 'مرحباً') : '');
+%>
+<section data-idx="<%= b.idx %>" class="sec sec-cta" id="contact">
+  <div class="cta-band">
+    <div>
+      <% if (b.title) { %><h2><%= b.title %></h2><% } %>
+      <% if (b.text) { %><p><%= b.text %></p><% } %>
+    </div>
+    <% if (go) { %><a class="btn big light" href="<%= go %>" <%= /^https?:/.test(go) ? 'target=_blank rel=noopener' : '' %>><%= b.button || (b.mode === 'phone' ? '📞 اتصل بنا' : '💬 تواصل معنا') %></a>
+    <% } else if (isOwner || (typeof preview !== 'undefined' && preview)) { %><small class="cta-warn">⚠️ أضف رقم <%= b.mode === 'phone' ? 'الهاتف' : 'واتساب' %> في إعدادات المتجر ليظهر الزر.</small><% } %>
   </div>
 </section>
 <% } %>

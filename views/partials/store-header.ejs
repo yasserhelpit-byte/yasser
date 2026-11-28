@@ -19,7 +19,7 @@
       <summary aria-label="القائمة"><span></span><span></span><span></span></summary>
       <nav>
         <a href="<%= base || '/' %>">الرئيسية</a>
-        <a href="<%= base %>/products">كل المنتجات</a>
+        <% if (hasProducts) { %><a href="<%= base %>/products">كل المنتجات</a><% } %>
         <% menuPages.filter(p => p.in_menu).forEach(p => { %><a href="<%= base %>/page/<%= p.slug %>"><%= p.title %></a><% }) %>
       </nav>
     </details>
@@ -29,10 +29,11 @@
     </a>
     <nav class="snav">
       <a href="<%= base || '/' %>">الرئيسية</a>
-      <a href="<%= base %>/products">كل المنتجات</a>
+      <% if (hasProducts) { %><a href="<%= base %>/products">كل المنتجات</a><% } %>
       <% menuPages.filter(p => p.in_menu).forEach(p => { %><a href="<%= base %>/page/<%= p.slug %>"><%= p.title %></a><% }) %>
     </nav>
     <div class="head-actions">
+      <% if (hasProducts || cartCount) { %>
       <a href="<%= base %>/products" class="icon-btn" aria-label="بحث">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       </a>
@@ -40,6 +41,9 @@
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="cart-ic"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2.2l2.4 11.2a1.8 1.8 0 0 0 1.8 1.4h8.7a1.8 1.8 0 0 0 1.7-1.3L21.5 7H6"/></svg>
         <% if (cartCount) { %><b class="count"><%= cartCount %></b><% } %>
       </a>
+      <% } else if (store.whatsapp) { %>
+      <a href="https://wa.me/<%= store.whatsapp %>" class="icon-btn" target="_blank" rel="noopener" aria-label="واتساب"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20.5 5 16a8.5 8.5 0 1 1 3.2 3.1Z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.4-2-1-1 .8a4 4 0 0 1-2.1-2.1l.8-1-1-2Z"/></svg></a>
+      <% } %>
     </div>
   </div>
 </header>

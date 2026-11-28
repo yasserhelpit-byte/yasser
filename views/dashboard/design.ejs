@@ -71,7 +71,7 @@
       <div class="ed-pane" data-pane="templates" hidden>
         <p class="muted small ed-hint">ابدأ من قالب جاهز، ثم عدّل نصوصه وصوره. سيستبدل القالب الأقسام الحالية (يمكنك عدم الحفظ للتراجع).</p>
         <div class="tpl-list">
-          <% const tplIcons = { classic: '🏠', fashion: '👗', boutique: '💎', landing: '🎯' }; %>
+          <% const tplIcons = { classic: '🏠', fashion: '👗', boutique: '💎', landing: '🎯', about: '🧰', clinic: '🩺', restaurant: '🍽️' }; %>
           <% Object.entries(presets).forEach(([k, p]) => { %>
             <button type="button" class="tpl-card" data-preset="<%= k %>">
               <span class="tpl-ic"><%= tplIcons[k] || '✨' %></span>
