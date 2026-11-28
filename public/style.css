@@ -1608,3 +1608,10 @@ a.promo-card:hover { transform: translateY(-3px); }
 .kit:hover { border-color: var(--brand); }
 .seg.wrap { flex-wrap: wrap; }
 .mode-picks label span { min-width: 0; }
+
+/* Template picker groups */
+.tpl-group { font-weight: 800; font-size: .9rem; color: var(--muted); margin: 18px 2px 8px; }
+.tpl-group:first-of-type { margin-top: 6px; }
+.tpl-card .tpl-txt { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.tpl-pro { font-style: normal; font-size: .68rem; font-weight: 800; padding: 1px 8px; border-radius: 999px; background: linear-gradient(135deg, #f59e0b, #ec4899); color: #fff; vertical-align: 2px; }
+.tpl-swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--line); }

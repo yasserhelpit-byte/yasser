@@ -252,7 +252,7 @@
 <% } %>
 
 <% if (b.type === 'pricing' && b.items.length) { const cur = store.currency === 'MAD' ? 'درهم' : store.currency; %>
-<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-pricing">
+<section data-idx="<%= b.idx %>" class="sec<%= sx(b) %> sec-pricing" id="pricing">
   <%- head(b) %>
   <div class="price-grid">
     <% b.items.filter(it => it.name).forEach(it => { const go = it.link ? href(it.link) : (store.whatsapp ? wa(`مرحباً، أريد الاشتراك في باقة: ${it.name}`) : ''); %>

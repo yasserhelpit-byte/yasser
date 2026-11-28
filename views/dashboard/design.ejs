@@ -87,15 +87,18 @@
 
       <div class="ed-pane" data-pane="templates" hidden>
         <p class="muted small ed-hint">ابدأ من قالب جاهز، ثم عدّل نصوصه وصوره. سيستبدل القالب الأقسام الحالية (يمكنك عدم الحفظ للتراجع).</p>
+        <% Object.entries(groups).forEach(([g, gLabel]) => { %>
+        <div class="tpl-group"><%= gLabel %></div>
         <div class="tpl-list">
-          <% const tplIcons = { classic: '🏠', fashion: '👗', boutique: '💎', landing: '🎯', about: '🧰', clinic: '🩺', restaurant: '🍽️' }; %>
-          <% Object.entries(presets).forEach(([k, p]) => { %>
+          <% Object.entries(presets).filter(([, p]) => p.group === g).sort((x, y) => !!y[1].style - !!x[1].style).forEach(([k, p]) => { %>
             <button type="button" class="tpl-card" data-preset="<%= k %>">
-              <span class="tpl-ic"><%= tplIcons[k] || '✨' %></span>
-              <span><strong><%= p.label %></strong><small><%= p.sections.map(s => SCHEMA[s.type].label).join(' · ') %></small></span>
+              <span class="tpl-ic" <% if (p.style) { %>style="background: <%= p.style.color %>1a"<% } %>><%= p.icon || '✨' %></span>
+              <span class="tpl-txt"><strong><%= p.label %><% if (p.style) { %> <em class="tpl-pro">احترافي</em><% } %></strong><small><%= p.desc || '' %> · <%= p.sections.length %> أقسام</small></span>
+              <% if (p.style) { %><span class="tpl-swatch" style="background: <%= p.style.color %>" title="مع أسلوب جاهز"></span><% } %>
             </button>
           <% }) %>
         </div>
+        <% }) %>
       </div>
     </aside>
 
@@ -177,7 +180,13 @@
   // Templates: rebuild the builder with the preset's sections.
   document.querySelectorAll('.tpl-card').forEach((b) => b.addEventListener('click', () => {
     const p = presets[b.dataset.preset];
-    if (!confirm(`استبدال الأقسام الحالية بقالب «${p.label}»؟`)) return;
+    if (!confirm(`استبدال الأقسام الحالية بقالب «${p.label}»؟${p.style ? '\nسيُطبَّق أيضاً أسلوبه (الألوان والخطوط)، ويمكنك تغييره من «الأسلوب».' : ''}`)) return;
+    if (p.style) {
+      Object.entries(p.style.theme || {}).forEach(([k, v]) => pick('t_' + k, v));
+      if (p.style.font) pick('font', p.style.font);
+      if (p.style.radius) pick('radius', p.style.radius);
+      if (p.style.color) { colorInput.value = p.style.color; document.querySelectorAll('.swatch').forEach((s) => s.classList.toggle('on', s.dataset.color === p.style.color)); }
+    }
     document.getElementById('builder').replaceWith(Object.assign(document.createElement('div'), { id: 'builder', className: 'builder' }));
     Object.assign(builder, initBuilder({
       root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: p.sections,

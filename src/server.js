@@ -777,7 +777,7 @@ const storeHome = (store) => {
   return store.home_sections ? list : sections.DEFAULT_HOME;
 };
 dash.get('/stores/:storeId/design', ownStore, (req, res) => {
-  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id), theme: themeLib.sanitize(req.store.theme) });
+  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id), theme: themeLib.sanitize(req.store.theme), groups: sections.GROUPS });
 });
 // Live preview for the design editor: renders the storefront home with unsaved changes.
 dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {

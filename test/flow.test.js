@@ -1090,3 +1090,33 @@ test('style options: saved, validated, applied on every storefront page', async 
   // The dashboard keeps the fixed YASSER look.
   assert.doesNotMatch((await m('GET', '/dashboard')).text, /t-mode-cream|--bg:#f8f3ea/);
 });
+
+test('templates: every template renders, and template styles use valid values', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { PRESETS, GROUPS } = require('../src/sections');
+  const themeLib = require('../src/theme');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Tpl', email: 'tpl@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const r = await m('POST', '/dashboard/stores', { _csrf: c, name: 'Tpl Shop', slug: 'tpl-shop', currency: 'MAD', color: '#123456' });
+  const sid = Number(r.location.split('/').pop());
+  const page = (await m('GET', `/dashboard/stores/${sid}/design`)).text;
+  for (const g of Object.values(GROUPS)) assert.ok(page.includes(g), g);
+  for (const [k, p] of Object.entries(PRESETS)) {
+    assert.ok(GROUPS[p.group], `${k} has a group`);
+    assert.ok(page.includes(`data-preset="${k}"`), k);
+    if (p.style) {
+      assert.deepStrictEqual(themeLib.sanitize(p.style.theme), p.style.theme, `${k} theme values are valid`);
+      assert.match(p.style.color, /^#[0-9a-f]{6}$/);
+    }
+    const form = { _csrf: c, sections: JSON.stringify(p.sections), ...(p.style ? { color: p.style.color, font: p.style.font, radius: p.style.radius } : {}) };
+    for (const [kk, v] of Object.entries(p.style?.theme || {})) form['t_' + kk] = v;
+    const res = await m('POST', `/dashboard/stores/${sid}/design/preview`, form);
+    assert.strictEqual(res.status, 200, k);
+    assert.match(res.text, /class="storefront /, k);
+  }
+});

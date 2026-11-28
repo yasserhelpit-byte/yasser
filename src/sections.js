@@ -244,7 +244,7 @@ function sanitize(input) {
 const item = (o) => o;
 const PRESETS = {
   classic: {
-    label: 'كلاسيكي',
+    label: 'كلاسيكي', icon: '🏠', group: 'store', desc: 'بداية بسيطة لأي متجر',
     sections: [
       { type: 'hero' },
       { type: 'features', items: [item({ icon: '💵', title: 'الدفع عند الاستلام', text: 'ادفع عندما يصلك طلبك' }), item({ icon: '🚚', title: 'توصيل سريع', text: 'إلى باب منزلك' }), item({ icon: '📞', title: 'خدمة العملاء', text: 'نجيب على أسئلتك' })] },
@@ -252,7 +252,7 @@ const PRESETS = {
     ],
   },
   fashion: {
-    label: 'أزياء وموضة',
+    label: 'أزياء وموضة', icon: '👗', group: 'store', desc: 'ملابس وأحذية وإكسسوارات',
     sections: [
       { type: 'slider', height: 'l', items: [item({ title: 'تشكيلة الموسم الجديد', subtitle: 'اكتشف أحدث الصيحات', button: 'تسوّق الآن', link: '/products' }), item({ title: 'تخفيضات حتى 50%', subtitle: 'لفترة محدودة', button: 'اكتشف العروض', link: '/products?sale=1' })] },
       { type: 'categories', title: 'تسوّق حسب التصنيف', items: [] },
@@ -264,7 +264,7 @@ const PRESETS = {
     ],
   },
   boutique: {
-    label: 'بوتيك أنيق',
+    label: 'بوتيك أنيق', icon: '💎', group: 'store', desc: 'متجر صغير بقصة وهوية',
     sections: [
       { type: 'banner', title: '', subtitle: '', height: 'l', align: 'center', button: 'اكتشف المجموعة', link: '/products' },
       { type: 'image_text', eyebrow: 'قصتنا', title: 'صُنع بحب وعناية', text: 'نختار كل قطعة بعناية لنقدّم لك منتجات تجمع بين الجودة والأناقة.', button: 'تعرّف علينا', link: '', side: 'start' },
@@ -274,7 +274,7 @@ const PRESETS = {
     ],
   },
   landing: {
-    label: 'صفحة هبوط (منتج واحد)',
+    label: 'صفحة هبوط (منتج واحد)', icon: '🎯', group: 'landing', desc: 'لإعلانات فيسبوك وتيك توك',
     sections: [
       { type: 'product_hero', eyebrow: '🔥 الأكثر طلباً', subtitle: 'اكتب هنا جملتين تشرحان لماذا يحتاج العميل هذا المنتج وما الذي سيتغيّر في حياته.', button: 'اطلب الآن · الدفع عند الاستلام' },
       { type: 'countdown', title: 'العرض ينتهي خلال' },
@@ -292,7 +292,7 @@ const day = (d, t) => item({ day: d, time: t });
 const dish = (category, name, desc, price, tag = '') => item({ category, name, desc, price, tag });
 Object.assign(PRESETS, {
   about: {
-    label: 'تعريف وخدمات',
+    label: 'تعريف وخدمات', icon: '🧰', group: 'service', desc: 'شركة أو حرفي أو مستقل',
     sections: [
       { type: 'hero', subtitle: 'نقدّم لك خدمات احترافية بجودة عالية وأسعار مناسبة.', button: 'تواصل معنا', link: '#contact' },
       { type: 'image_text', eyebrow: 'من نحن', title: 'خبرة وثقة في خدمتك', text: 'عرّف بنفسك هنا: من أنت، منذ متى تعمل، وما الذي يميّزك. اكتب بصدق وبلغة بسيطة يفهمها عملاؤك.', side: 'start' },
@@ -308,7 +308,7 @@ Object.assign(PRESETS, {
     ],
   },
   clinic: {
-    label: 'عيادة / طبيب',
+    label: 'عيادة / طبيب', icon: '🩺', group: 'service', desc: 'خدمات وطاقم وأوقات وحجز',
     sections: [
       { type: 'hero', title: 'عيادة الدكتور …', subtitle: 'طب عام · استشارات · متابعة\nنستقبلكم بالموعد في أجواء مريحة.', button: 'احجز موعدك', link: '#contact' },
       { type: 'services', title: 'خدماتنا', subtitle: 'الفحوصات والخدمات المتوفرة في العيادة', items: [
@@ -323,7 +323,7 @@ Object.assign(PRESETS, {
     ],
   },
   restaurant: {
-    label: 'مطعم (منيو)',
+    label: 'مطعم (منيو)', icon: '🍽️', group: 'service', desc: 'منيو وطلب عبر واتساب',
     sections: [
       { type: 'hero', subtitle: 'أطباق طازجة كل يوم · أكل في المطعم · طلب وتوصيل', button: 'شاهد المنيو', link: '#menu' },
       { type: 'menu', title: 'قائمة الطعام', order: 'whatsapp', note: 'الأسعار بالدرهم.', items: [
@@ -342,6 +342,139 @@ Object.assign(PRESETS, {
     ],
   },
 });
+
+// ---- Professional templates: sections + a matching style (applied with the template). ----
+const plan = (name, price, period, features, extra = {}) => item({ name, price, period, features, button: extra.button || 'اختر الباقة', featured: extra.featured || 'no' });
+const step = (icon, title, text) => item({ icon, title, text });
+const say = (name, city, text) => item({ name, city, text, rating: '5' });
+const q = (qq, a) => item({ q: qq, a });
+Object.assign(PRESETS, {
+  electronics: {
+    label: 'إلكترونيات وتقنية', icon: '📱', group: 'store', desc: 'هواتف، إكسسوارات، أجهزة ذكية',
+    style: { color: '#1e3a8a', font: 'cairo', radius: 'soft', theme: { mode: 'light', hfont: 'same', size: 'm', btn: 'gradient', card: 'shadow', ratio: 'square', density: 'm', head: 'sticky' } },
+    sections: [
+      { type: 'marquee', style: 'dark', items: [item({ text: '⚡ شحن سريع لكل المدن' }), item({ text: '🛡️ ضمان 12 شهراً' }), item({ text: '💵 الدفع عند الاستلام' }), item({ text: '🔄 استبدال خلال 7 أيام' })] },
+      { type: 'slider', height: 'l', items: [item({ title: 'أحدث الهواتف والإكسسوارات', subtitle: 'أصلية ومضمونة، بأفضل الأسعار', button: 'تسوّق الآن', link: '/products' }), item({ title: 'عروض الأسبوع', subtitle: 'تخفيضات حتى 30% على السماعات والساعات الذكية', button: 'شاهد العروض', link: '/products?sale=1' })] },
+      { type: 'promo_grid', columns: '3', items: [
+        item({ eyebrow: 'جديد', title: 'الهواتف الذكية', subtitle: 'آخر الإصدارات', button: 'اكتشف', link: '/products' }),
+        item({ eyebrow: 'الأكثر مبيعاً', title: 'السماعات', subtitle: 'صوت نقي بدون أسلاك', button: 'اكتشف', link: '/products' }),
+        item({ eyebrow: '-20%', title: 'الساعات الذكية', subtitle: 'صحتك على معصمك', button: 'اكتشف', link: '/products?sale=1' })] },
+      { type: 'products', title: 'الأكثر مبيعاً', source: 'best', limit: '8', layout: 'carousel' },
+      { type: 'features', bg: 'soft', items: [item({ icon: '🛡️', title: 'منتجات أصلية', text: 'مع ضمان حقيقي' }), item({ icon: '🚚', title: 'توصيل 24–72 ساعة', text: 'لكل المدن المغربية' }), item({ icon: '💵', title: 'الدفع عند الاستلام', text: 'افحص ثم ادفع' }), item({ icon: '🎧', title: 'دعم فني', text: 'نساعدك في الإعداد' })] },
+      { type: 'products', title: 'وصل حديثاً', source: 'newest', limit: '8' },
+      { type: 'logos', title: 'علامات نتعامل معها', items: [item({ name: 'BRAND 1' }), item({ name: 'BRAND 2' }), item({ name: 'BRAND 3' }), item({ name: 'BRAND 4' }), item({ name: 'BRAND 5' })] },
+      { type: 'testimonials', title: 'آراء عملائنا', items: [say('أمين', 'طنجة', 'وصلني الهاتف في يومين، أصلي ومغلف. شكراً!'), say('هند', 'أكادير', 'سماعات ممتازة والسعر أحسن من المحلات.'), say('كريم', 'فاس', 'خدمة ما بعد البيع رائعة، ساعدوني في الإعداد.')] },
+      { type: 'faq', title: 'أسئلة متكررة', items: [q('هل المنتجات أصلية؟', 'نعم، وكل منتج مع ضمان. اكتب هنا مدة الضمان وشروطه.'), q('كم يستغرق التوصيل؟', 'من 24 إلى 72 ساعة حسب مدينتك.'), q('هل يمكنني فحص المنتج قبل الدفع؟', 'نعم، تفحص الطلب أمام عامل التوصيل ثم تدفع.')] },
+    ],
+  },
+  beauty: {
+    label: 'تجميل وعناية', icon: '💄', group: 'store', desc: 'مستحضرات، عناية بالبشرة والشعر',
+    style: { color: '#be185d', font: 'almarai', radius: 'round', theme: { mode: 'light', hfont: 'same', size: 'm', btn: 'solid', card: 'minimal', ratio: 'portrait', density: 'm', head: 'sticky' } },
+    sections: [
+      { type: 'marquee', style: 'light', items: [item({ text: '🌸 مكونات طبيعية' }), item({ text: '🚚 توصيل مجاني فوق 300 درهم' }), item({ text: '💵 الدفع عند الاستلام' })] },
+      { type: 'hero', subtitle: 'عناية طبيعية تليق بجمالك. منتجات مختارة بعناية لبشرتك وشعرك.', button: 'اكتشفي المنتجات', link: '/products' },
+      { type: 'categories', title: 'تسوّقي حسب احتياجك', items: [] },
+      { type: 'products', title: 'المفضّلة لدى عميلاتنا', source: 'best', limit: '8' },
+      { type: 'before_after', title: 'النتيجة تتكلم', subtitle: 'ارفعي صورتين حقيقيتين (بإذن صاحبتها) قبل وبعد الاستعمال.', before_label: 'قبل', after_label: 'بعد 4 أسابيع' },
+      { type: 'image_text', eyebrow: 'لماذا نحن؟', title: 'مكونات تعرفينها', text: 'اكتبي هنا ما يميز منتجاتك: المكونات، بلد الصنع، طريقة الاستعمال، والنتائج التي يمكن أن تنتظرها العميلة.', side: 'start', bg: 'soft' },
+      { type: 'testimonials', title: 'تجارب عميلاتنا', items: [say('سلمى', 'الرباط', 'بشرتي صارت أنعم من أول أسبوع.'), say('نادية', 'مراكش', 'التغليف راقٍ والتوصيل سريع.'), say('خديجة', 'وجدة', 'أفضل زيت أركان جربته.')] },
+      { type: 'features', items: [item({ icon: '🌿', title: 'طبيعي 100%', text: 'بدون مواد ضارة' }), item({ icon: '🐰', title: 'لم يُجرَّب على الحيوانات', text: '' }), item({ icon: '💵', title: 'الدفع عند الاستلام', text: '' })] },
+      { type: 'social', title: 'تابعينا لنصائح العناية اليومية' },
+    ],
+  },
+  perfume: {
+    label: 'عطور وفخامة', icon: '🕯️', group: 'store', desc: 'عطور، ساعات، مجوهرات',
+    style: { color: '#a16207', font: 'plex', radius: 'sharp', theme: { mode: 'dark', hfont: 'amiri', size: 'm', btn: 'outline', card: 'minimal', ratio: 'portrait', density: 'l', head: 'sticky' } },
+    sections: [
+      { type: 'banner', title: 'عبق لا يُنسى', subtitle: 'عطور مختارة لمن يعرف قيمة التفاصيل', button: 'اكتشف المجموعة', link: '/products', height: 'l', align: 'center' },
+      { type: 'image_text', eyebrow: 'قصتنا', title: 'فن صناعة العطر', text: 'احكِ هنا قصة علامتك: من أين تأتي مكوناتك، وكيف تختار عطورك، ولماذا يثق بك عملاؤك.', side: 'end' },
+      { type: 'products', title: 'المجموعة المميزة', source: 'newest', limit: '4' },
+      { type: 'promo_grid', columns: '2', items: [item({ eyebrow: 'للرجال', title: 'عطور رجالية', subtitle: 'خشبية، جلدية، شرقية', button: 'تسوّق', link: '/products' }), item({ eyebrow: 'للنساء', title: 'عطور نسائية', subtitle: 'زهرية، مسكية، فاكهية', button: 'تسوّق', link: '/products' })] },
+      { type: 'features', items: [item({ icon: '✨', title: 'أصلي ومضمون', text: '' }), item({ icon: '🎁', title: 'تغليف فاخر للهدايا', text: '' }), item({ icon: '🚚', title: 'توصيل لكل المدن', text: '' })] },
+      { type: 'testimonials', title: 'قالوا عنا', items: [say('ياسين', 'الدار البيضاء', 'العطر يدوم طول اليوم. تغليف رائع.'), say('ليلى', 'الرباط', 'هدية مثالية، أعجبت زوجي كثيراً.')] },
+      { type: 'contact_form', title: 'تحتاج نصيحة لاختيار عطرك؟', subtitle: 'اكتب لنا ذوقك وسنقترح عليك الأنسب.', button: 'أرسل' },
+    ],
+  },
+  natural: {
+    label: 'منتجات طبيعية وبلدية', icon: '🍯', group: 'store', desc: 'عسل، أركان، أعشاب، منتجات تعاونيات',
+    style: { color: '#a16207', font: 'almarai', radius: 'round', theme: { mode: 'cream', hfont: 'kufi', size: 'm', btn: 'solid', card: 'boxed', ratio: 'square', density: 'm', head: 'sticky' } },
+    sections: [
+      { type: 'hero', subtitle: 'من التعاونيات المغربية إلى بابك: عسل حر، زيت أركان، وأعشاب طبيعية.', button: 'تسوّق الآن', link: '/products' },
+      { type: 'features', items: [item({ icon: '🐝', title: 'حر 100%', text: 'بدون إضافات' }), item({ icon: '🏔️', title: 'من الجبال المغربية', text: 'مباشرة من المنتج' }), item({ icon: '🧪', title: 'مُختبر', text: 'شهادات الجودة' })] },
+      { type: 'products', title: 'منتجاتنا', source: 'newest', limit: '8' },
+      { type: 'image_text', eyebrow: 'من أين يأتي؟', title: 'نعمل مع التعاونيات مباشرة', text: 'اكتب هنا عن المنتجين الذين تعمل معهم، والمنطقة، وطريقة الجني والتعبئة.', side: 'start', bg: 'soft' },
+      { type: 'steps', title: 'كيف تطلب؟', items: [step('🛒', 'اختر منتجك', 'والكمية التي تريد'), step('📞', 'نتصل بك', 'لتأكيد الطلب'), step('🚚', 'يصلك الطلب', 'وتدفع عند الاستلام')] },
+      { type: 'testimonials', title: 'آراء عملائنا', items: [say('الحاج محمد', 'سلا', 'عسل حقيقي كما كنا نعرفه في البادية.'), say('فاطمة', 'تطوان', 'زيت الأركان ممتاز للشعر.')] },
+      { type: 'faq', title: 'أسئلة متكررة', items: [q('كيف أعرف أن العسل حر؟', 'اكتب هنا علامات الجودة والتحاليل التي تتوفر عليها.'), q('هل ترسلون خارج المغرب؟', 'اكتب هنا سياستك.')] },
+    ],
+  },
+  salon: {
+    label: 'صالون تجميل وسبا', icon: '💅', group: 'service', desc: 'خدمات، باقات، قبل/بعد، حجز',
+    style: { color: '#9d174d', font: 'almarai', radius: 'round', theme: { mode: 'cream', hfont: 'amiri', size: 'm', btn: 'solid', card: 'boxed', ratio: 'portrait', density: 'm', head: 'sticky' } },
+    sections: [
+      { type: 'hero', subtitle: 'مساحتك للجمال والراحة. احجزي موعدك في دقيقة عبر واتساب.', button: 'احجزي موعدك', link: '#contact' },
+      { type: 'services', title: 'خدماتنا', items: [
+        item({ icon: '💇‍♀️', title: 'تصفيف وقص الشعر', text: 'قص، سشوار، تسريحات المناسبات', price: 'ابتداءً من 80 درهم', button: 'احجزي' }),
+        item({ icon: '💆‍♀️', title: 'العناية بالبشرة', text: 'تنظيف عميق، ماسكات، تقشير', price: 'ابتداءً من 150 درهم', button: 'احجزي' }),
+        item({ icon: '💅', title: 'مانيكير وباديكير', text: 'عادي، جل، بناء أظافر', price: 'ابتداءً من 70 درهم', button: 'احجزي' }),
+        item({ icon: '🧖‍♀️', title: 'حمام مغربي', text: 'حمام تقليدي مع الصابون البلدي والغاسول', price: '200 درهم', button: 'احجزي' })] },
+      { type: 'pricing', title: 'باقات العروس', bg: 'soft', items: [plan('الأساسية', '1500', '', 'تسريحة يوم العرس\nمكياج\nمانيكير'), plan('الذهبية', '3000', '', 'كل ما في الأساسية\nحمام مغربي\nعناية بالبشرة قبل العرس\nتسريحتان', { featured: 'yes' }), plan('الملكية', '5000', '', 'كل ما في الذهبية\nثلاث مناسبات\nخدمة في المنزل')] },
+      { type: 'before_after', title: 'من أعمالنا', before_label: 'قبل', after_label: 'بعد' },
+      { type: 'gallery', title: 'أجواء الصالون', columns: '3', items: [] },
+      { type: 'hours', title: 'أوقات العمل والعنوان', items: [day('الثلاثاء – الأحد', '10:00 – 20:00'), day('الإثنين', 'مغلق')] },
+      { type: 'contact_cta', title: 'احجزي موعدك الآن', text: 'اكتبي لنا الخدمة واليوم المناسب لك.', button: 'احجزي عبر واتساب', mode: 'whatsapp', message: 'مرحباً، أريد حجز موعد. الخدمة: … اليوم: …' },
+    ],
+  },
+  agency: {
+    label: 'وكالة / خدمات احترافية', icon: '🚀', group: 'service', desc: 'تسويق، تصميم، برمجة، استشارات',
+    style: { color: '#6d28d9', font: 'plex', radius: 'soft', theme: { mode: 'light', hfont: 'cairo', size: 'm', btn: 'gradient', card: 'shadow', ratio: 'landscape', density: 'm', head: 'sticky' } },
+    sections: [
+      { type: 'hero', subtitle: 'نساعد الشركات المغربية على النمو عبر الإنترنت: مواقع، إعلانات، ومحتوى يبيع.', button: 'احصل على استشارة مجانية', link: '#contact-form' },
+      { type: 'logos', title: 'وثق بنا', items: [item({ name: 'CLIENT A' }), item({ name: 'CLIENT B' }), item({ name: 'CLIENT C' }), item({ name: 'CLIENT D' }), item({ name: 'CLIENT E' })] },
+      { type: 'services', title: 'ماذا نقدّم', items: [
+        item({ icon: '🎨', title: 'الهوية البصرية', text: 'شعار، ألوان، ودليل استعمال' }),
+        item({ icon: '💻', title: 'المواقع والمتاجر', text: 'سريعة، جميلة، وتظهر في Google' }),
+        item({ icon: '📣', title: 'إعلانات فيسبوك وتيك توك', text: 'حملات تُقاس بالمبيعات' }),
+        item({ icon: '🎬', title: 'المحتوى والفيديو', text: 'تصوير ومونتاج للشبكات الاجتماعية' })] },
+      { type: 'stats', bg: 'dark', items: [item({ value: '+120', label: 'مشروع منجز' }), item({ value: '+60', label: 'عميل راضٍ' }), item({ value: '8', label: 'سنوات من الخبرة' }), item({ value: '24h', label: 'وقت الرد' })] },
+      { type: 'steps', title: 'كيف نعمل', items: [step('☕', 'نتعرف عليك', 'جلسة مجانية لفهم هدفك'), step('🧭', 'نقترح خطة', 'بأهداف وميزانية واضحة'), step('⚙️', 'ننفذ', 'مع تقارير أسبوعية'), step('📈', 'نقيس ونحسّن', 'حتى تصل للنتيجة')] },
+      { type: 'pricing', title: 'باقاتنا', items: [plan('انطلاقة', '2900', '/ شهر', 'إدارة صفحتين\n12 منشوراً\nتقرير شهري'), plan('نمو', '5900', '/ شهر', 'كل ما في الانطلاقة\nإعلانات ممولة\n4 فيديوهات قصيرة\nمكالمة أسبوعية', { featured: 'yes' }), plan('شركات', 'حسب الطلب', '', 'فريق مخصص\nاستراتيجية كاملة', { button: 'تواصل معنا' })] },
+      { type: 'testimonials', title: 'ماذا يقول عملاؤنا', items: [say('مدير شركة X', 'الدار البيضاء', 'تضاعفت طلباتنا في ثلاثة أشهر.'), say('صاحبة متجر Y', 'الرباط', 'فريق محترف ويحترم المواعيد.')] },
+      { type: 'faq', title: 'أسئلة متكررة', items: [q('هل الاستشارة الأولى مجانية؟', 'نعم، 30 دقيقة لفهم مشروعك.'), q('هل هناك عقد؟', 'اكتب هنا مدة الالتزام وشروطه.')] },
+      { type: 'contact_form', title: 'لنتحدث عن مشروعك', subtitle: 'اترك رقمك وسنتصل بك خلال 24 ساعة.', button: 'أرسل طلبي', bg: 'soft' },
+    ],
+  },
+  coach: {
+    label: 'دورات وتدريب', icon: '🎓', group: 'service', desc: 'مدرب، أستاذ، دورات أونلاين أو حضورية',
+    style: { color: '#0e7490', font: 'tajawal', radius: 'soft', theme: { mode: 'light', hfont: 'kufi', size: 'm', btn: 'solid', card: 'boxed', ratio: 'landscape', density: 'm', head: 'sticky' } },
+    sections: [
+      { type: 'hero', subtitle: 'تعلّم المهارة التي تغيّر مسارك، خطوة بخطوة ومع متابعة شخصية.', button: 'سجّل الآن', link: '#pricing' },
+      { type: 'stats', items: [item({ value: '+800', label: 'متدرب' }), item({ value: '4.9★', label: 'تقييم المتدربين' }), item({ value: '30', label: 'درساً عملياً' })] },
+      { type: 'image_text', eyebrow: 'عن المدرب', title: 'من أنا؟', text: 'عرّف بنفسك وبخبرتك وبالنتائج التي حققها متدربوك.', side: 'start' },
+      { type: 'steps', title: 'ماذا ستتعلم؟', items: [step('1', 'الأساسيات', 'ابدأ من الصفر'), step('2', 'التطبيق', 'مشاريع حقيقية'), step('3', 'الاحتراف', 'أسرار المهنة'), step('🏆', 'الشهادة', 'بعد إتمام الدورة')] },
+      { type: 'pricing', title: 'اختر طريقتك', bg: 'soft', items: [plan('أونلاين', '490', '', 'كل الدروس المسجلة\nمجموعة دعم\nشهادة'), plan('مع المتابعة', '990', '', 'كل ما في أونلاين\n4 جلسات مباشرة\nتصحيح المشاريع', { featured: 'yes' }), plan('حضوري', '1900', '', 'تكوين في القاعة\nمجموعات صغيرة\nشهادة')] },
+      { type: 'testimonials', title: 'قصص نجاح', items: [say('يونس', 'مكناس', 'بعد الدورة حصلت على أول عميل لي.'), say('سارة', 'القنيطرة', 'شرح واضح ومتابعة رائعة.')] },
+      { type: 'faq', title: 'أسئلة متكررة', items: [q('هل أحتاج خبرة سابقة؟', 'لا، الدورة تبدأ من الصفر.'), q('كيف أدفع؟', 'تحويل بنكي أو وكالة أو بطاقة، حسب ما فعّلته في «الدفع».')] },
+      { type: 'contact_cta', title: 'عندك سؤال قبل التسجيل؟', text: 'راسلنا ونجيبك في نفس اليوم.', button: 'اسألنا عبر واتساب', mode: 'whatsapp', message: 'مرحباً، عندي سؤال عن الدورة.' },
+    ],
+  },
+  landing_pro: {
+    label: 'صفحة هبوط احترافية', icon: '🔥', group: 'landing', desc: 'منتج واحد بأقوى عناصر الإقناع',
+    style: { color: '#b91c1c', font: 'cairo', radius: 'round', theme: { mode: 'light', hfont: 'same', size: 'l', btn: 'gradient', card: 'shadow', ratio: 'square', density: 's', head: 'static' } },
+    sections: [
+      { type: 'marquee', style: 'brand', speed: 'fast', items: [item({ text: '🔥 عرض محدود' }), item({ text: '💵 الدفع عند الاستلام' }), item({ text: '🚚 توصيل لكل المدن' })] },
+      { type: 'product_hero', eyebrow: '⭐ أكثر من 1000 عميل راضٍ', subtitle: 'جملتان قويتان: ما المشكلة التي يحلها المنتج، وما النتيجة التي سيحصل عليها العميل.', button: 'اطلب الآن · الدفع عند الاستلام' },
+      { type: 'countdown', title: '⏳ ينتهي العرض خلال' },
+      { type: 'before_after', title: 'شاهد الفرق بنفسك', before_label: 'قبل', after_label: 'بعد' },
+      { type: 'features', title: 'لماذا يختاره الجميع؟', bg: 'soft', items: [item({ icon: '✅', title: 'الفائدة الأولى', text: 'اشرحها في جملة' }), item({ icon: '⚡', title: 'الفائدة الثانية', text: 'اشرحها في جملة' }), item({ icon: '💎', title: 'الفائدة الثالثة', text: 'اشرحها في جملة' })] },
+      { type: 'steps', title: 'طريقة الاستعمال', items: [step('1', 'الخطوة الأولى', ''), step('2', 'الخطوة الثانية', ''), step('3', 'النتيجة', '')] },
+      { type: 'testimonials', title: 'آراء عملائنا', items: [say('اسم العميل', 'المدينة', 'ضع هنا رأياً حقيقياً (احذف القسم إن لم تكن لديك آراء بعد).')] },
+      { type: 'faq', title: 'أسئلة متكررة', items: [q('متى أدفع؟', 'عند استلام الطلب.'), q('كم يستغرق التوصيل؟', 'من 24 إلى 72 ساعة.'), q('هل يمكنني الإرجاع؟', 'اكتب سياستك هنا.')] },
+      { type: 'order_form', title: 'اطلب الآن قبل نفاد الكمية', subtitle: 'املأ معلوماتك وسنتصل بك للتأكيد.', button: 'تأكيد الطلب', bg: 'soft' },
+    ],
+  },
+});
+const GROUPS = { store: '🛍️ متاجر', service: '🧰 خدمات وأنشطة', landing: '🎯 صفحات هبوط' };
 for (const p of Object.values(PRESETS)) p.sections = sanitize(p.sections);
 
 const DEFAULT_HOME = PRESETS.classic.sections;
@@ -352,4 +485,4 @@ function youtubeId(url) {
   return m ? m[1] : '';
 }
 
-module.exports = { SCHEMA, PRESETS, DEFAULT_HOME, sanitize, cleanLink, youtubeId };
+module.exports = { SCHEMA, PRESETS, GROUPS, DEFAULT_HOME, sanitize, cleanLink, youtubeId };
