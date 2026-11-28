@@ -1,4 +1,70 @@
 <%- include('../partials/header', { title: 'الطلبات' }) %>
-<h1>الطلبات</h1>
-<%- include('orders-table', { orders }) %>
+<%
+  const base = `/dashboard/stores/${store.id}/orders`;
+  const qs = (o) => { const p = new URLSearchParams(); const v = { status, q, ...o }; for (const k of ['status', 'q', 'page']) if (v[k]) p.set(k, v[k]); const s = p.toString(); return s ? '?' + s : ''; };
+  const tabs = [['', 'الكل', counts.all || 0], ...Object.entries(STATUSES).map(([k, l]) => [k, l, counts[k] || 0])];
+%>
+<div class="page-head-row">
+  <div><h1>🧾 الطلبات</h1><p class="muted"><%= total %> <%= total === 1 ? 'طلب' : 'طلبات' %><%= status ? ' · ' + STATUSES[status] : '' %><%= q ? ` · بحث: «${q}»` : '' %></p></div>
+  <div class="row">
+    <a class="btn ghost" href="<%= base %>.csv<%= qs({ page: '' }) %>">⬇️ تصدير Excel</a>
+  </div>
+</div>
+
+<nav class="ord-tabs" aria-label="حالة الطلب">
+  <% tabs.forEach(([k, l, n]) => { %><a href="<%= base %><%= qs({ status: k, page: '' }) %>" class="<%= status === k ? 'on' : '' %> <%= k ? 's-' + k : '' %>"><%= l %> <b><%= n %></b></a><% }) %>
+</nav>
+
+<form class="ord-search" method="get" action="<%= base %>">
+  <% if (status) { %><input type="hidden" name="status" value="<%= status %>"><% } %>
+  <input type="search" name="q" value="<%= q %>" placeholder="🔍 ابحث بالاسم أو الهاتف أو رقم الطلب">
+  <button class="btn">بحث</button>
+  <% if (q) { %><a class="btn ghost" href="<%= base %><%= qs({ q: '', page: '' }) %>">مسح</a><% } %>
+</form>
+
+<% if (!orders.length) { %>
+  <section class="card center empty"><div class="big-icon">📭</div><p class="muted"><%= q || status ? 'لا توجد طلبات مطابقة.' : 'لا توجد طلبات بعد. شارك رابط متجرك مع عملائك.' %></p></section>
+<% } else { %>
+<form id="bulk" method="get" action="<%= base %>/print" target="_blank" class="ord-bulk">
+  <input type="hidden" name="ids" id="bulk-ids">
+  <span class="muted small" id="bulk-count">حدّد طلبات لطباعة وصولات التوصيل</span>
+  <button class="btn small" id="bulk-print" disabled>🖨️ طباعة وصولات المحدّدة</button>
+</form>
+<div class="table-wrap"><table class="ord-table">
+  <tr><th><input type="checkbox" id="check-all" aria-label="تحديد الكل"></th><th>#</th><th>العميل</th><th>الهاتف</th><th>المجموع</th><th>الحالة</th><th>التاريخ</th><th></th></tr>
+  <% orders.forEach(o => { %>
+  <tr>
+    <td><input type="checkbox" class="ord-check" value="<%= o.id %>" aria-label="تحديد الطلب <%= o.id %>"></td>
+    <td><a href="<%= base %>/<%= o.id %>">#<%= o.id %></a></td>
+    <td><a href="<%= base %>/<%= o.id %>"><%= o.customer_name %></a></td>
+    <td dir="ltr"><%= o.customer_phone %></td>
+    <td><%= money(o.total, store.currency) %></td>
+    <td><span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span><% if (o.payment_method && o.payment_method !== 'cod') { %> <span class="badge p-<%= o.payment_status %>" title="<%= (PAY_METHODS[o.payment_method] || {}).label %>"><%= (PAY_METHODS[o.payment_method] || {}).icon %> <%= PAY_STATUS[o.payment_status] %></span><% } %></td>
+    <td class="muted"><%= o.created_at.slice(0, 16) %></td>
+    <td><a class="ord-print" href="<%= base %>/print?ids=<%= o.id %>" target="_blank" title="طباعة وصل التوصيل">🖨️</a></td>
+  </tr>
+  <% }) %>
+</table></div>
+<% if (pages > 1) { %>
+<nav class="pager">
+  <% if (page > 1) { %><a class="btn small ghost" href="<%= base %><%= qs({ page: page - 1 }) %>">→ السابق</a><% } %>
+  <span class="muted">صفحة <%= page %> من <%= pages %></span>
+  <% if (page < pages) { %><a class="btn small ghost" href="<%= base %><%= qs({ page: page + 1 }) %>">التالي ←</a><% } %>
+</nav>
+<% } %>
+<script>
+(function () {
+  const boxes = [...document.querySelectorAll('.ord-check')], all = document.getElementById('check-all');
+  const btn = document.getElementById('bulk-print'), ids = document.getElementById('bulk-ids'), count = document.getElementById('bulk-count');
+  const sync = () => {
+    const sel = boxes.filter((b) => b.checked).map((b) => b.value);
+    ids.value = sel.join(','); btn.disabled = !sel.length;
+    count.textContent = sel.length ? `${sel.length} محدّد` : 'حدّد طلبات لطباعة وصولات التوصيل';
+    all.checked = sel.length === boxes.length;
+  };
+  boxes.forEach((b) => b.addEventListener('change', sync));
+  all.addEventListener('change', () => { boxes.forEach((b) => (b.checked = all.checked)); sync(); });
+})();
+</script>
+<% } %>
 <%- include('../partials/footer') %>

@@ -203,6 +203,21 @@ app.get('/manifest.webmanifest', (req, res) => {
 });
 
 // ---------- Legal pages ----------
+// ----- Search engines -----
+const xmlEsc = (s) => String(s).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[c]);
+const sitemapXml = (urls) => '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+  + urls.map((u) => `  <url><loc>${xmlEsc(u.loc)}</loc>${u.lastmod ? `<lastmod>${u.lastmod.slice(0, 10)}</lastmod>` : ''}</url>`).join('\n') + '\n</urlset>\n';
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(['User-agent: *', 'Disallow: /dashboard', 'Disallow: /admin', 'Disallow: /reset', 'Disallow: /s/*/cart', 'Disallow: /s/*/checkout',
+    'Disallow: /s/*/pay/', 'Disallow: /s/*/thanks/', 'Allow: /', '', `Sitemap: ${baseUrl(req)}/sitemap.xml`, ''].join('\n'));
+});
+app.get('/sitemap.xml', (req, res) => {
+  const b = baseUrl(req);
+  // Stores on their own domain are listed in that domain's sitemap instead.
+  const stores = db.prepare("SELECT slug FROM stores WHERE suspended = 0 AND NOT (domain_verified = 1 AND custom_domain != '') ORDER BY id").all();
+  res.type('application/xml').send(sitemapXml([{ loc: `${b}/` }, { loc: `${b}/terms` }, { loc: `${b}/privacy` }, ...stores.map((s) => ({ loc: `${b}/s/${s.slug}` }))]));
+});
+
 app.get(['/terms', '/privacy'], (req, res) => {
   const st = res.locals.platform;
   res.render(`legal/${req.path.slice(1)}`, {
@@ -424,6 +439,62 @@ dash.post('/settings/notifications', (req, res) => {
 });
 
 // Polled by the dashboard every 30s to alert the merchant about new orders.
+// ----- My account -----
+const accountView = (req, extra = {}) => ({
+  me: db.prepare('SELECT id, name, email, created_at FROM users WHERE id = ?').get(req.user.id),
+  sessions: db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND (last_seen IS NULL OR last_seen >= datetime('now', '-30 days'))").get(req.user.id).n,
+  storeCount: db.prepare('SELECT COUNT(*) AS n FROM stores WHERE owner_id = ?').get(req.user.id).n,
+  notice: null, error: null, ...extra,
+});
+dash.get('/account', (req, res) => res.render('dashboard/account', accountView(req, { notice: { saved: 'تم حفظ التغييرات.', password: 'تم تغيير كلمة المرور، وخرجت من كل الأجهزة الأخرى.', devices: 'خرجت من كل الأجهزة الأخرى.' }[req.query.ok] || null })));
+dash.post('/account/profile', (req, res) => {
+  const name = str(req.body.name, 80);
+  if (name.length < 2) return res.status(400).render('dashboard/account', accountView(req, { error: 'الاسم قصير جداً.' }));
+  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, req.user.id);
+  res.redirect('/dashboard/account?ok=saved');
+});
+const checkPassword = (req, pw) => {
+  const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  return !!row && auth.verifyPassword(String(pw || ''), row.password_hash);
+};
+dash.post('/account/password', (req, res) => {
+  const fail = (error) => res.status(400).render('dashboard/account', accountView(req, { error }));
+  if (!limiter.hit(`pw-change:${req.user.id}`, 5, 15 * MIN)) return fail('محاولات كثيرة. حاول بعد قليل.');
+  if (!checkPassword(req, req.body.current)) return fail('كلمة المرور الحالية غير صحيحة.');
+  const pw = String(req.body.password || '');
+  if (pw.length < 8) return fail('كلمة المرور الجديدة يجب أن تتكون من 8 أحرف على الأقل.');
+  if (pw !== req.body.password2) return fail('كلمتا المرور غير متطابقتين.');
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(auth.hashPassword(pw), req.user.id);
+  auth.logoutEverywhere(req.user.id);
+  auth.login(req, res, req.user.id); // this device stays signed in
+  res.redirect('/dashboard/account?ok=password');
+});
+dash.post('/account/logout-others', (req, res) => {
+  auth.logoutEverywhere(req.user.id);
+  auth.login(req, res, req.user.id);
+  res.redirect('/dashboard/account?ok=devices');
+});
+// Delete the account and everything in it (stores, products, orders, pages, chats…). Needs the password.
+dash.post('/account/delete', (req, res) => {
+  const fail = (error) => res.status(400).render('dashboard/account', accountView(req, { error }));
+  if (req.user.isAdmin) return fail('لا يمكن حذف حساب مسؤول من هنا. أزل صلاحية المسؤول أولاً.');
+  if (!limiter.hit(`acct-del:${req.user.id}`, 5, 15 * MIN)) return fail('محاولات كثيرة. حاول بعد قليل.');
+  if (!checkPassword(req, req.body.password)) return fail('كلمة المرور غير صحيحة.');
+  if (str(req.body.confirm, 20) !== 'حذف') return fail('اكتب كلمة «حذف» للتأكيد.');
+  const uid = req.user.id;
+  const email = req.user.email;
+  transaction(() => {
+    for (const s of db.prepare('SELECT id FROM stores WHERE owner_id = ?').all(uid)) db.prepare('DELETE FROM stores WHERE id = ?').run(s.id);
+    for (const t of ['push_subscriptions', 'notifications', 'sessions']) db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(uid);
+    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM users WHERE id = ?').run(uid);
+  });
+  notifier.notifyAdmins({ title: '🗑️ حساب حُذف', body: `${email} حذف حسابه وبياناته.`, link: '/admin/merchants' });
+  res.clearCookie('yasser_sid');
+  Object.assign(res.locals, { user: null, shell: false });
+  res.render('message', { title: 'تم حذف حسابك', message: 'حُذف حسابك ومتاجرك وكل بياناتها نهائياً. شكراً لاستعمالك YASSER.' });
+});
+
 dash.get('/notifications', (req, res) => {
   const latest = db
     .prepare(
@@ -728,9 +799,60 @@ dash.post('/stores/:storeId/products/:productId/delete', ownStore, ownProduct, (
   res.redirect(`/dashboard/stores/${req.store.id}/products`);
 });
 
+// Orders: filter by status, search by name / phone / number, 50 per page, export to Excel (CSV).
+function orderQuery(req) {
+  const status = STATUSES[req.query.status] ? req.query.status : '';
+  const q = str(req.query.q, 80);
+  const where = ['store_id = ?'];
+  const args = [req.store.id];
+  if (status) { where.push('status = ?'); args.push(status); }
+  if (q) {
+    const id = parseInt(q.replace(/^#/, ''), 10);
+    where.push(`(customer_name LIKE ? ESCAPE '\\' OR customer_phone LIKE ? ESCAPE '\\'${String(id) === q.replace(/^#/, '') ? ' OR id = ?' : ''})`);
+    args.push(likeOf(q), likeOf(cleanPhone(q) || q));
+    if (String(id) === q.replace(/^#/, '')) args.push(id);
+  }
+  return { status, q, sql: where.join(' AND '), args };
+}
 dash.get('/stores/:storeId/orders', ownStore, (req, res) => {
-  const orders = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC').all(req.store.id);
-  res.render('dashboard/orders', { orders });
+  const f = orderQuery(req);
+  const per = 50;
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM orders WHERE ${f.sql}`).get(...f.args).n;
+  const pages = Math.max(1, Math.ceil(total / per));
+  const page = Math.min(pages, Math.max(1, parseInt(req.query.page, 10) || 1));
+  const orders = db.prepare(`SELECT * FROM orders WHERE ${f.sql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...f.args, per, (page - 1) * per);
+  const counts = Object.fromEntries(db.prepare('SELECT status, COUNT(*) AS n FROM orders WHERE store_id = ? GROUP BY status').all(req.store.id).map((r) => [r.status, r.n]));
+  counts.all = Object.values(counts).reduce((a, b) => a + b, 0);
+  res.render('dashboard/orders', { orders, counts, status: f.status, q: f.q, page, pages, total });
+});
+dash.get('/stores/:storeId/orders.csv', ownStore, (req, res) => {
+  const f = orderQuery(req);
+  const rows = db.prepare(`SELECT * FROM orders WHERE ${f.sql} ORDER BY id DESC LIMIT 20000`).all(...f.args);
+  const items = db.prepare('SELECT name, quantity FROM order_items WHERE order_id = ?');
+  // Excel: UTF-8 with a BOM so Arabic shows correctly; a leading = + - @ is neutralised (formula injection).
+  const cell = (v) => {
+    let s = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = ['رقم الطلب', 'التاريخ', 'الحالة', 'العميل', 'الهاتف', 'العنوان', 'المنتجات', 'المجموع', 'التوصيل', 'الإجمالي', 'العملة', 'طريقة الدفع', 'حالة الدفع', 'ملاحظة'];
+  const lines = rows.map((o) => [
+    o.id, o.created_at, STATUSES[o.status] || o.status, o.customer_name, o.customer_phone, o.customer_address,
+    items.all(o.id).map((i) => `${i.name} × ${i.quantity}`).join(' | '),
+    (o.total - (o.shipping || 0)).toFixed(2), Number(o.shipping || 0).toFixed(2), Number(o.total).toFixed(2), req.store.currency,
+    (payments.METHODS[o.payment_method] || {}).label || o.payment_method, payments.PAY_STATUS[o.payment_status] || o.payment_status, o.note,
+  ].map(cell).join(','));
+  const name = `orders-${req.store.slug}-${new Date().toISOString().slice(0, 10)}${f.status ? '-' + f.status : ''}.csv`;
+  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}"` });
+  res.send('\ufeff' + [head.map(cell).join(','), ...lines].join('\r\n'));
+});
+// Printable delivery slip (one order, or several: ?ids=1,2,3).
+dash.get('/stores/:storeId/orders/print', ownStore, (req, res) => {
+  const ids = String(req.query.ids || '').split(',').map((x) => parseInt(x, 10)).filter(Boolean).slice(0, 100);
+  const orders = ids.length ? db.prepare(`SELECT * FROM orders WHERE store_id = ? AND id IN (${ids.map(() => '?').join(',')}) ORDER BY id`).all(req.store.id, ...ids) : [];
+  if (!orders.length) return res.status(404).render('message', { title: 'غير موجود', message: 'لا توجد طلبات للطباعة.' });
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
+  res.render('dashboard/print', { orders: orders.map((o) => ({ ...o, items: items.all(o.id) })), layout: false });
 });
 dash.get('/stores/:storeId/orders/:orderId', ownStore, (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
@@ -1590,6 +1712,23 @@ function resolveSections(store, list) {
   });
 }
 
+// On a store's own domain these answer /robots.txt and /sitemap.xml (the domain rewrites to /s/<slug>/…).
+shop.get('/robots.txt', (req, res) => {
+  const origin = req.customDomain ? `https://${req.customDomain}` : `${baseUrl(req)}${req.base}`;
+  res.type('text/plain').send(['User-agent: *', `Disallow: ${req.base}/cart`, `Disallow: ${req.base}/checkout`, `Disallow: ${req.base}/pay/`, `Disallow: ${req.base}/thanks/`,
+    'Allow: /', '', `Sitemap: ${origin}/sitemap.xml`, ''].join('\n'));
+});
+shop.get('/sitemap.xml', (req, res) => {
+  const origin = req.customDomain ? `https://${req.customDomain}` : `${baseUrl(req)}${req.base}`;
+  const products = db.prepare('SELECT id FROM products WHERE store_id = ? AND active = 1 ORDER BY id DESC LIMIT 5000').all(req.store.id);
+  const pages = db.prepare('SELECT slug FROM pages WHERE store_id = ? ORDER BY position, id').all(req.store.id);
+  res.type('application/xml').send(sitemapXml([
+    { loc: `${origin}/` }, { loc: `${origin}/products` },
+    ...products.map((p) => ({ loc: `${origin}/p/${p.id}` })),
+    ...pages.map((p) => ({ loc: `${origin}/page/${encodeURIComponent(p.slug)}` })),
+  ]));
+});
+
 shop.get('/', (req, res) => {
   const list = req.store.home_sections ? sections.sanitize(req.store.home_sections) : sections.DEFAULT_HOME;
   res.render('store/home', { blocks: resolveSections(req.store, list), pageTitle: null });
@@ -1755,7 +1894,7 @@ shop.post('/checkout', (req, res) => {
 // Landing pages: order one product directly (no cart). Answers JSON to fetch(), redirects otherwise.
 shop.post('/quick-order', (req, res) => {
   const wantsJson = (req.get('accept') || '').includes('application/json');
-  const back = str(req.body.back, 300).startsWith(req.base || '/') ? str(req.body.back, 300) : req.base || '/';
+  const back = safeBack(req);
   const reply = (r) => {
     if (wantsJson) return res.status(r.error ? r.status : 200).json(r.error ? { error: r.error } : { redirect: r.next });
     if (r.error) return res.redirect(`${back}${back.includes('?') ? '&' : '?'}order_error=${encodeURIComponent(r.error)}#order`);
@@ -1788,6 +1927,14 @@ shop.get('/thanks/:orderId', (req, res) => {
   const items = db.prepare('SELECT product_id, quantity, price FROM order_items WHERE order_id = ?').all(order.id);
   res.render('store/thanks', { order, items });
 });
+
+// A "back" path from a storefront form: only a page of this store (never "//other.site" or "/\\other").
+function safeBack(req) {
+  const b = str(req.body.back, 300);
+  const base = req.base || '';
+  const inStore = !base || b === base || b.startsWith(base + '/') || b.startsWith(base + '?');
+  return /^\/(?![\/\\])/.test(b) && !/[\\\s]/.test(b) && inStore ? b : base || '/';
+}
 
 // ----- Payments -----
 // Where to send the customer right after the order is created.
@@ -1961,7 +2108,7 @@ shop.post('/chat', (req, res) => {
 
 // "Contact form" section: the message lands in the merchant's inbox like a chat.
 shop.post('/contact', (req, res) => {
-  const back = str(req.body.back, 300).startsWith(req.base || '/') ? str(req.body.back, 300) : req.base || '/';
+  const back = safeBack(req);
   const go = (q) => res.redirect(`${back}${back.includes('?') ? '&' : '?'}${q}#contact-form`);
   const startedAt = Number(req.body._t) || 0;
   if (req.body.website || (startedAt && Date.now() - startedAt < 2000)) return go('contact=sent'); // bots: pretend it worked

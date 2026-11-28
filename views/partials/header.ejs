@@ -48,6 +48,7 @@
       <a href="/dashboard" class="<%= on('/dashboard', true) %>"><span>🏪</span>متاجري
         <% if (typeof pendingOrders !== 'undefined' && pendingOrders) { %><b class="pending" id="pending-badge" title="طلبات جديدة"><%= pendingOrders %></b><% } %></a>
       <a href="/dashboard/settings/notifications" class="<%= on('/dashboard/settings/notifications') %>"><span>🔔</span>الإشعارات</a>
+      <a href="/dashboard/account" class="<%= on('/dashboard/account') %>"><span>👤</span>حسابي</a>
       <% if (!cur) { %><a href="/dashboard/stores/new" class="<%= on('/dashboard/stores/new', true) %>"><span>➕</span>متجر جديد</a><% } %>
       <% if (user.isAdmin) { %>
         <div class="side-label">الإدارة</div>
@@ -65,7 +66,7 @@
     <% } %>
     <div class="side-user">
       <span class="u-avatar"><%= user.name.trim().charAt(0).toUpperCase() %></span>
-      <span class="u-info"><strong><%= user.name %></strong><small dir="ltr"><%= user.email %></small></span>
+      <a class="u-info" href="/dashboard/account" title="حسابي"><strong><%= user.name %></strong><small dir="ltr"><%= user.email %></small></a>
       <form method="post" action="/logout" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="u-out" title="خروج" aria-label="خروج"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button></form>
     </div>
   </aside>

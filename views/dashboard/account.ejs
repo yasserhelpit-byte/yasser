@@ -1,0 +1,49 @@
+<%- include('../partials/header', { title: 'حسابي' }) %>
+<div class="page-head-row"><div>
+  <h1>👤 حسابي</h1>
+  <p class="muted">معلوماتك وكلمة المرور والأجهزة المتصلة.</p>
+</div></div>
+<% if (notice) { %><div class="alert ok">✓ <%= notice %></div><% } %>
+<% if (error) { %><div class="alert">⚠️ <%= error %></div><% } %>
+
+<section class="acct-grid">
+  <form method="post" action="/dashboard/account/profile" class="card form">
+    <%- include('../partials/csrf') %>
+    <h3>المعلومات الشخصية</h3>
+    <label>الاسم<input name="name" required minlength="2" maxlength="80" value="<%= me.name %>" autocomplete="name"></label>
+    <label>البريد الإلكتروني<input value="<%= me.email %>" dir="ltr" disabled></label>
+    <p class="muted small">عضو منذ <%= me.created_at.slice(0, 10) %> · <%= storeCount %> <%= storeCount === 1 ? 'متجر' : 'متاجر' %>. لتغيير البريد تواصل مع فريق YASSER.</p>
+    <button class="btn">💾 حفظ</button>
+  </form>
+
+  <form method="post" action="/dashboard/account/password" class="card form">
+    <%- include('../partials/csrf') %>
+    <h3>كلمة المرور</h3>
+    <label>كلمة المرور الحالية<input name="current" type="password" required autocomplete="current-password"></label>
+    <label>كلمة المرور الجديدة<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+    <label>أعد كتابة كلمة المرور الجديدة<input name="password2" type="password" required minlength="8" autocomplete="new-password"></label>
+    <p class="muted small">بعد التغيير تخرج من كل الأجهزة الأخرى، ويبقى هذا الجهاز متصلاً.</p>
+    <button class="btn">🔒 تغيير كلمة المرور</button>
+  </form>
+
+  <section class="card">
+    <h3>الأجهزة المتصلة</h3>
+    <p>حسابك مفتوح حالياً على <strong><%= sessions %></strong> <%= sessions === 1 ? 'جهاز' : 'أجهزة' %>.</p>
+    <p class="muted small">إذا نسيت الخروج من جهاز آخر، أو شككت أن أحداً يستعمل حسابك.</p>
+    <form method="post" action="/dashboard/account/logout-others" data-confirm="ستخرج من كل الأجهزة والمتصفحات الأخرى، ويبقى هذا الجهاز متصلاً." data-confirm-title="الخروج من الأجهزة الأخرى؟" data-confirm-ok="نعم، أخرجني منها" data-confirm-icon="📱">
+      <%- include('../partials/csrf') %><button class="btn ghost">📱 الخروج من كل الأجهزة الأخرى</button>
+    </form>
+  </section>
+
+  <% if (!user.isAdmin) { %>
+  <form method="post" action="/dashboard/account/delete" class="card form danger-zone" data-confirm="سيُحذف حسابك وكل متاجرك ومنتجاتك وطلباتك ورسائلك نهائياً. لا يمكن التراجع." data-confirm-title="حذف الحساب نهائياً؟" data-confirm-ok="نعم، احذف كل شيء" data-danger>
+    <%- include('../partials/csrf') %>
+    <h3>🗑️ حذف الحساب</h3>
+    <p class="muted small">يحذف حسابك و<strong>كل متاجرك</strong> مع منتجاتها وطلباتها وصفحاتها ورسائلها. لا يمكن التراجع. إذا كان عندك اشتراك مدفوع فلا يُسترجع المبلغ.</p>
+    <label>كلمة المرور<input name="password" type="password" required autocomplete="current-password"></label>
+    <label>اكتب كلمة <strong>حذف</strong> للتأكيد<input name="confirm" required autocomplete="off" placeholder="حذف"></label>
+    <button class="btn danger-solid">حذف حسابي نهائياً</button>
+  </form>
+  <% } %>
+</section>
+<%- include('../partials/footer') %>

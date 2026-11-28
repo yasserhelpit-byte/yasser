@@ -1310,3 +1310,100 @@ test('security: email links never come from client headers or store domains', as
   assert.doesNotMatch(text, /evil\.example/);
   assert.match(text, /\/reset\/[a-f0-9]{64}/);
 });
+
+test('security: storefront forms never redirect to another site', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const v = client(base);
+  const vc = csrfOf((await v('GET', '/s/adv-shop')).text);
+  for (const back of ['//evil.example/x', '/\\evil.example', 'https://evil.example', '/s/adv-shopX']) {
+    const r = await v('POST', '/s/adv-shop/contact', { _csrf: vc, back, name: 'Omar', phone: '12', message: 'Bonjour' });
+    assert.match(r.location, /^\/s\/adv-shop\?contact_error=/, back);
+  }
+});
+
+test('account page, orders filter/search/export/print, robots and sitemap', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Acc', email: 'acc@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = Number((await m('POST', '/dashboard/stores', { _csrf: c, name: 'Acc Shop', slug: 'acc-shop', currency: 'MAD' })).location.split('/').pop());
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Mug', price: '50', stock: '100', active: '1' });
+  const pid = db.prepare('SELECT id FROM products WHERE store_id = ?').get(sid).id;
+
+  // Orders: several customers, one with a formula-looking name (CSV injection).
+  const shopper = client(base);
+  const sc = csrfOf((await shopper('GET', `/s/acc-shop/p/${pid}`)).text);
+  const names = ['=HYPERLINK("http://x")', 'Amina', 'Bilal'];
+  for (let i = 0; i < names.length; i++) {
+    require('../src/limiter').clear();
+    await shopper('POST', '/s/acc-shop/quick-order', { _csrf: sc, product_id: pid, quantity: '1', customer_name: names[i], customer_phone: `06100000${i}0`, customer_address: 'Casablanca, Maarif 12' });
+  }
+  const ids = db.prepare('SELECT id FROM orders WHERE store_id = ? ORDER BY id').all(sid).map((r) => r.id);
+  assert.strictEqual(ids.length, 3);
+  await m('POST', `/dashboard/stores/${sid}/orders/${ids[1]}/status`, { _csrf: c, status: 'confirmed' });
+  let page = (await m('GET', `/dashboard/stores/${sid}/orders?status=new`)).text;
+  assert.match(page, /Bilal/);
+  assert.doesNotMatch(page, />Amina</); // confirmed, not "new"
+  assert.match(page, /جديد <b>2<\/b>/);
+  page = (await m('GET', `/dashboard/stores/${sid}/orders?q=Amina`)).text;
+  assert.match(page, /Amina/);
+  assert.doesNotMatch(page, /Bilal/);
+  assert.match((await m('GET', `/dashboard/stores/${sid}/orders?q=%23${ids[2]}`)).text, /Bilal/);
+  // Excel export: BOM, Arabic header, neutralised formula.
+  const csv = await m('GET', `/dashboard/stores/${sid}/orders.csv`);
+  const raw = Buffer.from(await (await fetch(`${base}/dashboard/stores/${sid}/orders.csv`, { headers: { cookie: m.cookie() } })).arrayBuffer());
+  assert.deepStrictEqual([...raw.subarray(0, 3)], [0xef, 0xbb, 0xbf]); // UTF-8 BOM so Excel reads Arabic
+  assert.match(csv.text, /رقم الطلب,التاريخ/);
+  assert.match(csv.text, /"'=HYPERLINK\(""http:\/\/x""\)"/);
+  // Print slips: only this store's orders.
+  page = (await m('GET', `/dashboard/stores/${sid}/orders/print?ids=${ids.join(',')}`)).text;
+  assert.strictEqual((page.match(/class="slip/g) || []).length, 3);
+  assert.match(page, /المبلغ الواجب تحصيله/);
+  const other = db.prepare('SELECT id FROM orders WHERE store_id != ? LIMIT 1').get(sid);
+  if (other) assert.strictEqual((await m('GET', `/dashboard/stores/${sid}/orders/print?ids=${other.id}`)).status, 404);
+
+  // robots.txt and sitemaps.
+  let r = await fetch(base + '/robots.txt');
+  let txt = await r.text();
+  assert.match(txt, /Disallow: \/dashboard/);
+  assert.match(txt, /Sitemap: .*\/sitemap\.xml/);
+  txt = await (await fetch(base + '/sitemap.xml')).text();
+  assert.match(txt, /<loc>[^<]*\/s\/acc-shop<\/loc>/);
+  txt = await (await fetch(base + '/s/acc-shop/sitemap.xml')).text();
+  assert.match(txt, new RegExp(`/s/acc-shop/p/${pid}</loc>`));
+
+  // Account: rename, wrong current password, change password (other devices signed out).
+  page = (await m('GET', '/dashboard/account')).text;
+  assert.match(page, /acc@example\.com/);
+  await m('POST', '/dashboard/account/profile', { _csrf: c, name: 'Acc Renamed' });
+  assert.strictEqual(db.prepare("SELECT name FROM users WHERE email = 'acc@example.com'").get().name, 'Acc Renamed');
+  const other2 = client(base);
+  const oc = csrfOf((await other2('GET', '/login')).text);
+  await other2('POST', '/login', { _csrf: oc, email: 'acc@example.com', password: 'password123' });
+  assert.strictEqual((await other2('GET', '/dashboard')).status, 200);
+  r = await m('POST', '/dashboard/account/password', { _csrf: c, current: 'nope', password: 'newpassword1', password2: 'newpassword1' });
+  assert.match(r.text, /الحالية غير صحيحة/);
+  r = await m('POST', '/dashboard/account/password', { _csrf: c, current: 'password123', password: 'newpassword1', password2: 'newpassword1' });
+  assert.strictEqual(r.location, '/dashboard/account?ok=password');
+  assert.strictEqual((await m('GET', '/dashboard')).status, 200); // this device stays in
+  assert.strictEqual((await other2('GET', '/dashboard')).status, 302); // the other one is out
+  c = csrfOf((await m('GET', '/dashboard/account')).text);
+
+  // Delete the account: needs the password and the word, then removes stores and orders.
+  r = await m('POST', '/dashboard/account/delete', { _csrf: c, password: 'newpassword1', confirm: 'no' });
+  assert.match(r.text, /اكتب كلمة/);
+  r = await m('POST', '/dashboard/account/delete', { _csrf: c, password: 'newpassword1', confirm: 'حذف' });
+  assert.match(r.text, /تم حذف حسابك/);
+  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = 'acc@example.com'").get().n, 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM stores WHERE id = ?').get(sid).n, 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders WHERE store_id = ?').get(sid).n, 0);
+  assert.strictEqual((await fetch(base + '/s/acc-shop')).status, 404);
+});

@@ -13,7 +13,7 @@
 <p><a href="/dashboard/stores/<%= store.id %>/orders">← الطلبات</a></p>
 <div class="row between">
   <h1>طلب #<%= order.id %> <span class="badge s-<%= order.status %>"><%= STATUSES[order.status] %></span></h1>
-  <span class="muted"><%= order.created_at %></span>
+  <span class="row"><span class="muted"><%= order.created_at %></span><a class="btn small ghost" href="/dashboard/stores/<%= store.id %>/orders/print?ids=<%= order.id %>" target="_blank">🖨️ وصل التوصيل</a></span>
 </div>
 
 <section class="card pay-card pay-<%= order.payment_status %>">

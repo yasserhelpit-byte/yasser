@@ -1837,3 +1837,24 @@ a.kpi:hover { text-decoration: none; transform: translateY(-2px); box-shadow: 0 
 .b-pick.is-pro { border-color: #fbcfe8; }
 .b-pick.is-pro:hover { border-color: #ec4899; background: #fdf2f8; }
 .b-group, .st-group { scroll-margin-top: 64px; }
+
+/* My account */
+.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.acct-grid > .card { margin: 0; }
+a.u-info { color: inherit; text-decoration: none; }
+a.u-info:hover strong { text-decoration: underline; }
+
+/* Orders list */
+.ord-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: 4px 0 12px; scrollbar-width: thin; }
+.ord-tabs a { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-weight: 600; font-size: .9rem; }
+.ord-tabs a b { font-size: .75rem; background: var(--bg); padding: 1px 8px; border-radius: 999px; color: var(--muted); }
+.ord-tabs a:hover { text-decoration: none; border-color: var(--brand); }
+.ord-tabs a.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.ord-tabs a.on b { background: rgba(255,255,255,.22); color: #fff; }
+.ord-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.ord-search input { flex: 1; }
+.ord-bulk { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ord-table td:first-child, .ord-table th:first-child { width: 36px; }
+.ord-table input[type=checkbox] { width: 18px; height: 18px; }
+.ord-print { font-size: 1.1rem; text-decoration: none; }
+.pager { display: flex; justify-content: center; align-items: center; gap: 14px; margin: 16px 0; }

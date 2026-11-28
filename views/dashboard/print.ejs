@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>وصولات التوصيل · <%= store.name %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Tajawal', system-ui, sans-serif; color: #111; background: #eef0f3; }
+    .bar { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 20px; background: #0f1d1b; color: #fff; }
+    .bar button { font: inherit; font-weight: 700; padding: 8px 18px; border: 0; border-radius: 8px; background: #14b8a6; color: #fff; cursor: pointer; }
+    .slip { width: 190mm; min-height: 128mm; margin: 16px auto; background: #fff; padding: 12mm; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.08); page-break-after: always; break-after: page; display: flex; flex-direction: column; gap: 10px; }
+    .slip:last-child { page-break-after: auto; break-after: auto; }
+    .top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 8px; }
+    .top h1 { margin: 0; font-size: 20px; }
+    .top .no { font-size: 26px; font-weight: 800; }
+    .muted { color: #555; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; }
+    .box { border: 1.5px solid #111; border-radius: 6px; padding: 8px 10px; }
+    .box h3 { margin: 0 0 4px; font-size: 12px; color: #555; font-weight: 700; }
+    .big { font-size: 17px; font-weight: 800; }
+    .phone { font-size: 20px; font-weight: 800; letter-spacing: .04em; direction: ltr; text-align: right; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #ccc; padding: 5px 4px; text-align: right; }
+    th { font-size: 11px; color: #555; }
+    .cod { display: flex; justify-content: space-between; align-items: center; border: 3px solid #111; border-radius: 8px; padding: 8px 12px; margin-top: auto; }
+    .cod b { font-size: 24px; }
+    .paid { border-style: dashed; }
+    .note { font-size: 12px; border-inline-start: 3px solid #111; padding-inline-start: 8px; }
+    @media print {
+      body { background: #fff; }
+      .bar { display: none; }
+      .slip { margin: 0 auto; box-shadow: none; border-radius: 0; width: auto; min-height: 0; padding: 8mm 10mm; }
+      @page { size: A5 landscape; margin: 6mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bar"><span><%= orders.length %> <%= orders.length === 1 ? 'وصل' : 'وصولات' %> · <%= store.name %></span><button onclick="print()">🖨️ طباعة</button></div>
+  <% orders.forEach(o => { const paid = o.payment_status === 'paid'; const sub = o.total - (o.shipping || 0); %>
+  <section class="slip">
+    <div class="top">
+      <div>
+        <h1><%= store.name %></h1>
+        <div class="muted"><%= [store.phone, store.city].filter(Boolean).join(' · ') %></div>
+      </div>
+      <div style="text-align:left">
+        <div class="no">#<%= o.id %></div>
+        <div class="muted"><%= o.created_at.slice(0, 16) %></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="box">
+        <h3>المستلم</h3>
+        <div class="big"><%= o.customer_name %></div>
+        <div class="phone"><%= o.customer_phone %></div>
+        <div><%= o.customer_address %></div>
+      </div>
+      <div class="box">
+        <h3>المحتوى</h3>
+        <table>
+          <tr><th>المنتج</th><th>الكمية</th></tr>
+          <% o.items.forEach(i => { %><tr><td><%= i.name %></td><td><%= i.quantity %></td></tr><% }) %>
+        </table>
+      </div>
+    </div>
+    <% if (o.note) { %><div class="note">📝 <%= o.note %></div><% } %>
+    <div class="cod <%= paid ? 'paid' : '' %>">
+      <span><%= paid ? '✅ مدفوع مسبقاً · لا تحصّل أي مبلغ' : '💵 المبلغ الواجب تحصيله عند التسليم' %></span>
+      <b><%= paid ? '0' : money(o.total, store.currency) %></b>
+    </div>
+    <div class="muted">المنتجات <%= money(sub, store.currency) %><%= o.shipping ? ' · التوصيل ' + money(o.shipping, store.currency) : '' %> · الإجمالي <%= money(o.total, store.currency) %></div>
+  </section>
+  <% }) %>
+</body>
+</html>

@@ -43,7 +43,8 @@
   <p>لك الحق في الاطلاع على بياناتك وتصحيحها والاعتراض على معالجتها وطلب حذفها. وللمزيد يمكنك التوجه إلى اللجنة الوطنية لمراقبة حماية المعطيات ذات الطابع الشخصي (CNDP).</p>
 
   <h2 id="data-deletion">8. طلب حذف البيانات</h2>
-  <p>لحذف حسابك وبياناتك، أو بياناتك كعميل في أحد المتاجر، أرسل طلباً إلى:
+  <p><strong>للتجار:</strong> يمكنك حذف حسابك وكل متاجرك وبياناتها بنفسك في أي وقت من <strong>لوحة التحكم ← حسابي ← حذف الحساب</strong>. يتم الحذف فوراً ونهائياً.</p>
+  <p>لطلب حذف بياناتك كعميل في أحد المتاجر، أو لأي سؤال، أرسل طلباً إلى:
     <% if (platform.support_email) { %><a href="mailto:<%= platform.support_email %>?subject=<%= encodeURIComponent('طلب حذف البيانات') %>" dir="ltr"><%= platform.support_email %></a><% } %>
     <% if (platform.support_whatsapp) { %><% if (platform.support_email) { %> أو <% } %><a href="https://wa.me/<%= platform.support_whatsapp %>" target="_blank" rel="noopener">واتساب</a><% } %>
     <% if (!platform.support_email && !platform.support_whatsapp) { %>عنوان التواصل المذكور أسفله<% } %>،
