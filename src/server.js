@@ -475,7 +475,18 @@ dash.get('/', (req, res) => {
     { done: stores.some((s) => s.description), label: 'أضف وصفاً لمتجرك', href: first ? `/dashboard/stores/${first.id}/settings` : '/dashboard/stores/new' },
     { done: totals.orders > 0, label: 'شارك رابط متجرك واستقبل أول طلب', href: first ? `/s/${first.slug}` : '/dashboard/stores/new' },
   ];
-  res.render('dashboard/index', { stores, totals, recentOrders, lowStock, currency, steps });
+  const uid = Number(req.user.id);
+  const ownSql = `SELECT o.* FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ${uid} AND o.status != 'cancelled'`;
+  const sales = series(`SELECT date(created_at) AS day, SUM(total) AS v FROM (${ownSql}) WHERE created_at >= date('now', '-29 days') GROUP BY day`, lastDays(30));
+  const period = db.prepare(`SELECT
+      COALESCE(SUM(CASE WHEN created_at >= date('now', '-29 days') THEN total END), 0) AS cur,
+      COALESCE(SUM(CASE WHEN created_at < date('now', '-29 days') AND created_at >= date('now', '-59 days') THEN total END), 0) AS prev,
+      COALESCE(SUM(created_at >= date('now')), 0) AS today
+    FROM (${ownSql})`).get();
+  const trend = period.prev > 0 ? Math.round(((period.cur - period.prev) / period.prev) * 100) : null;
+  const storeNew = Object.fromEntries(db.prepare(`SELECT o.store_id, COUNT(*) AS n FROM orders o JOIN stores s ON s.id = o.store_id
+    WHERE s.owner_id = ? AND o.status = 'new' AND o.payment_status NOT IN ('pending', 'failed', 'expired') GROUP BY o.store_id`).all(uid).map((r) => [r.store_id, r.n]));
+  res.render('dashboard/index', { stores, totals, recentOrders, lowStock, currency, steps, sales, period, trend, storeNew });
 });
 
 dash.get('/stores/new', (req, res) => res.render('dashboard/store-form', { error: null, values: {}, action: '/dashboard/stores' }));

@@ -3,42 +3,112 @@
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'صباح الخير' : 'مساء الخير';
   const doneCount = steps.filter(s => s.done).length;
+  const first = stores[0];
+  const today = new Intl.DateTimeFormat('ar-MA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+  const ic = {
+    money: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    orders: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    ext: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/>',
+    brush: '<path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/>',
+    card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+    gem: '<path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6M2 9h20"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+  };
+  const svg = (k, sz = 20) => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic[k]}</svg>`;
+  const shopUrl = (s) => s.domain_verified && s.custom_domain ? `https://${s.custom_domain}` : `/s/${s.slug}`;
 %>
-<div class="row between page-head">
-  <div>
-    <h1><%= greet %>، <%= user.name %> 👋</h1>
-    <p class="muted">هذه نظرة عامة على متاجرك وطلباتك.</p>
-  </div>
-  <a href="/dashboard/stores/new" class="btn">+ متجر جديد</a>
-</div>
 
-<%- include('../partials/push-banner') %>
-<section class="grid four stats">
-  <div class="card stat"><span class="icon">💰</span><span class="muted">إجمالي المبيعات</span><strong><%= money(totals.revenue, currency) %></strong></div>
-  <div class="card stat"><span class="icon">🧾</span><span class="muted">الطلبات</span><strong><%= totals.orders %></strong></div>
-  <div class="card stat"><span class="icon">⏳</span><span class="muted">بانتظار المعالجة</span><strong><%= totals.pending %></strong></div>
-  <div class="card stat"><span class="icon">👥</span><span class="muted">العملاء</span><strong><%= totals.customers %></strong></div>
+<section class="dh-hero">
+  <div>
+    <p class="dh-date"><%= today %></p>
+    <h1><%= greet %>، <%= user.name %> 👋</h1>
+    <p class="muted"><%= stores.length ? (totals.pending ? `لديك ${totals.pending} ${totals.pending === 1 ? 'طلب جديد' : 'طلبات جديدة'} بانتظار التأكيد.` : 'كل الطلبات معالَجة. يوم موفق!') : 'لنطلق متجرك الأول في دقائق.' %></p>
+  </div>
+  <div class="dh-actions">
+    <% if (first) { %>
+      <a href="/dashboard/stores/<%= first.id %>/products/new" class="btn"><%- svg('plus', 18) %> منتج جديد</a>
+      <a href="<%= shopUrl(first) %>" target="_blank" class="btn ghost"><%- svg('ext', 18) %> عرض المتجر</a>
+    <% } else { %>
+      <a href="/dashboard/stores/new" class="btn big"><%- svg('plus', 18) %> أنشئ متجرك</a>
+    <% } %>
+  </div>
 </section>
 
-<% if (doneCount < steps.length) { %>
-<section class="card onboarding">
-  <div class="row between">
-    <h3>🚀 ابدأ البيع</h3>
-    <span class="muted"><%= doneCount %> / <%= steps.length %></span>
+<%- include('../partials/push-banner') %>
+
+<section class="dh-kpis">
+  <div class="kpi">
+    <span class="kpi-ic c-green"><%- svg('money') %></span>
+    <span class="kpi-label">المبيعات · 30 يوماً</span>
+    <strong class="kpi-val"><%= money(period.cur, currency) %></strong>
+    <span class="kpi-sub"><% if (trend !== null) { %><b class="<%= trend >= 0 ? 'up' : 'down' %>"><%= trend >= 0 ? '▲' : '▼' %> <%= Math.abs(trend) %>%</b> مقارنة بالشهر السابق<% } else { %>الإجمالي منذ البداية: <%= money(totals.revenue, currency) %><% } %></span>
   </div>
-  <div class="progress"><span style="width: <%= Math.round(doneCount / steps.length * 100) %>%"></span></div>
-  <ul class="steps">
-    <% steps.forEach(s => { %>
-      <li class="<%= s.done ? 'done' : '' %>">
-        <span class="tick"><%= s.done ? '✓' : '' %></span>
-        <% if (s.done) { %><span><%= s.label %></span><% } else { %><a href="<%= s.href %>"><%= s.label %> ←</a><% } %>
-      </li>
-    <% }) %>
-  </ul>
+  <div class="kpi">
+    <span class="kpi-ic c-blue"><%- svg('orders') %></span>
+    <span class="kpi-label">الطلبات</span>
+    <strong class="kpi-val"><%= totals.orders %></strong>
+    <span class="kpi-sub"><b><%= period.today %></b> اليوم</span>
+  </div>
+  <a class="kpi <%= totals.pending ? 'kpi-alert' : '' %>" href="<%= first ? '/dashboard/stores/' + first.id + '/orders?status=new' : '#' %>">
+    <span class="kpi-ic c-amber"><%- svg('clock') %></span>
+    <span class="kpi-label">بانتظار التأكيد</span>
+    <strong class="kpi-val"><%= totals.pending %></strong>
+    <span class="kpi-sub"><%= totals.pending ? 'أكّدها الآن ←' : 'لا شيء ينتظرك' %></span>
+  </a>
+  <div class="kpi">
+    <span class="kpi-ic c-violet"><%- svg('users') %></span>
+    <span class="kpi-label">العملاء</span>
+    <strong class="kpi-val"><%= totals.customers %></strong>
+    <span class="kpi-sub">رقم هاتف مختلف</span>
+  </div>
+</section>
+
+<% if (stores.length) { %>
+<section class="dh-grid">
+  <div class="card dh-chart">
+    <div class="dh-card-head">
+      <div><h3>المبيعات</h3><span class="muted small">آخر 30 يوماً</span></div>
+      <strong><%= money(period.cur, currency) %></strong>
+    </div>
+    <%- include('../partials/linechart', { data: sales, fmt: (v) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 0 }), color: (first && first.color) || '#0f766e', label: 'المبيعات' }) %>
+  </div>
+
+  <% if (doneCount < steps.length) { %>
+  <div class="card dh-start">
+    <div class="dh-card-head">
+      <div><h3>🚀 ابدأ البيع</h3><span class="muted small"><%= doneCount %> من <%= steps.length %> خطوات</span></div>
+      <span class="ring" style="--p: <%= Math.round(doneCount / steps.length * 100) %>"><b><%= Math.round(doneCount / steps.length * 100) %>%</b></span>
+    </div>
+    <ol class="dh-steps">
+      <% steps.forEach((s, i) => { %>
+        <li class="<%= s.done ? 'done' : '' %>">
+          <span class="st-dot"><%- s.done ? svg('check', 14) : i + 1 %></span>
+          <% if (s.done) { %><span><%= s.label %></span><% } else { %><a href="<%= s.href %>"><%= s.label %></a><% } %>
+        </li>
+      <% }) %>
+    </ol>
+  </div>
+  <% } else { %>
+  <div class="card dh-quick">
+    <div class="dh-card-head"><h3>اختصارات</h3></div>
+    <a href="/dashboard/stores/<%= first.id %>/products/new"><span class="q-ic c-green"><%- svg('box', 18) %></span>إضافة منتج</a>
+    <a href="/dashboard/stores/<%= first.id %>/design"><span class="q-ic c-violet"><%- svg('brush', 18) %></span>تصميم المتجر</a>
+    <a href="/dashboard/stores/<%= first.id %>/payments"><span class="q-ic c-blue"><%- svg('card', 18) %></span>طرق الدفع</a>
+    <a href="/dashboard/stores/<%= first.id %>/billing"><span class="q-ic c-amber"><%- svg('gem', 18) %></span>الاشتراك</a>
+  </div>
+  <% } %>
 </section>
 <% } %>
 
-<h2>متاجري</h2>
+<div class="dh-section-head">
+  <h2>متاجري</h2>
+  <a href="/dashboard/stores/new" class="btn small ghost"><%- svg('plus', 16) %> متجر جديد</a>
+</div>
 <% if (!stores.length) { %>
   <section class="card center empty">
     <div class="big-icon">🏪</div>
@@ -47,63 +117,66 @@
     <a href="/dashboard/stores/new" class="btn">أنشئ متجراً</a>
   </section>
 <% } %>
-<section class="grid three">
-  <% stores.forEach(s => { %>
-    <div class="card store-tile">
-      <div class="store-banner" style="background: <%= s.color %>">
-        <span class="avatar"><%= s.name.trim().charAt(0).toUpperCase() %></span>
-      </div>
-      <div class="store-body">
-        <h3><a href="/dashboard/stores/<%= s.id %>"><%= s.name %></a></h3>
-        <a class="muted small" dir="ltr" href="/s/<%= s.slug %>" target="_blank">/s/<%= s.slug %> ↗</a>
-        <div class="mini-stats">
-          <div><strong><%= s.product_count %></strong><span>منتج</span></div>
-          <div><strong><%= s.order_count %></strong><span>طلب</span></div>
-          <div><strong><%= Number(s.revenue).toFixed(0) %></strong><span><%= s.currency %></span></div>
+<section class="dh-stores">
+  <% stores.forEach(s => { const bs = billingOf(s); const fresh = storeNew[s.id] || 0; %>
+    <article class="card dh-store" style="--sc: <%= s.color %>">
+      <div class="dh-store-top">
+        <span class="dh-store-av"><% if (s.logo_url) { %><img src="<%= s.logo_url %>" alt=""><% } else { %><%= s.name.trim().charAt(0).toUpperCase() %><% } %></span>
+        <div class="dh-store-id">
+          <h3><a href="/dashboard/stores/<%= s.id %>"><%= s.name %></a></h3>
+          <a class="dh-store-url" href="<%= shopUrl(s) %>" target="_blank" dir="ltr"><%- svg('link', 13) %> <%= s.domain_verified && s.custom_domain ? s.custom_domain : '/s/' + s.slug %></a>
         </div>
-        <div class="row actions">
-          <a href="/dashboard/stores/<%= s.id %>" class="btn small">إدارة</a>
-          <a href="/dashboard/stores/<%= s.id %>/products/new" class="btn small ghost">+ منتج</a>
-          <a href="/dashboard/stores/<%= s.id %>/orders" class="btn small ghost">الطلبات</a>
-        </div>
+        <span class="dh-plan p-<%= bs.state %>"><%= bs.state === 'trial' ? 'تجربة · ' + bs.daysLeft + ' يوم' : bs.label %></span>
       </div>
-    </div>
+      <% if (s.suspended) { %><div class="dh-store-warn">⛔ موقوف من الإدارة</div><% } else if (fresh) { %><a class="dh-store-new" href="/dashboard/stores/<%= s.id %>/orders?status=new">🔔 <%= fresh %> <%= fresh === 1 ? 'طلب جديد' : 'طلبات جديدة' %> بانتظارك ←</a><% } %>
+      <div class="dh-store-stats">
+        <div><strong><%= s.product_count %></strong><span>منتج</span></div>
+        <div><strong><%= s.order_count %></strong><span>طلب</span></div>
+        <div><strong><%= money(s.revenue, s.currency).replace(/\.00\b/, '') %></strong><span>مبيعات</span></div>
+      </div>
+      <div class="dh-store-actions">
+        <a href="/dashboard/stores/<%= s.id %>" class="btn small">إدارة المتجر</a>
+        <a href="/dashboard/stores/<%= s.id %>/orders" class="btn small ghost">الطلبات</a>
+        <a href="/dashboard/stores/<%= s.id %>/design" class="btn small ghost">التصميم</a>
+      </div>
+    </article>
   <% }) %>
 </section>
 
 <% if (stores.length) { %>
-<section class="grid side">
-  <div>
-    <h2>آخر الطلبات</h2>
+<section class="dh-grid">
+  <div class="card">
+    <div class="dh-card-head"><h3>آخر الطلبات</h3><% if (first) { %><a class="small" href="/dashboard/stores/<%= first.id %>/orders">عرض الكل ←</a><% } %></div>
     <% if (!recentOrders.length) { %>
-      <div class="card center empty"><div class="big-icon">📭</div><p class="muted">لم تصلك طلبات بعد. شارك رابط متجرك مع عملائك.</p></div>
+      <div class="dh-empty"><span>📭</span><p class="muted">لم تصلك طلبات بعد. شارك رابط متجرك مع عملائك على واتساب وإنستغرام.</p></div>
     <% } else { %>
-    <div class="table-wrap"><table>
-      <tr><th>#</th><th>المتجر</th><th>العميل</th><th>المجموع</th><th>الحالة</th></tr>
-      <% recentOrders.forEach(o => { %>
-      <tr>
-        <td><a href="/dashboard/stores/<%= o.store_id %>/orders/<%= o.id %>">#<%= o.id %></a></td>
-        <td><span class="dot" style="background: <%= o.color %>"></span><%= o.store_name %></td>
-        <td><%= o.customer_name %></td>
-        <td><%= money(o.total, o.currency) %></td>
-        <td><span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span></td>
-      </tr>
-      <% }) %>
-    </table></div>
+      <div class="dh-list">
+        <% recentOrders.forEach(o => { %>
+        <a class="dh-row" href="/dashboard/stores/<%= o.store_id %>/orders/<%= o.id %>">
+          <span class="dh-row-av" style="background: <%= o.color %>1a; color: <%= o.color %>"><%= o.customer_name.trim().charAt(0) %></span>
+          <span class="dh-row-main"><strong><%= o.customer_name %></strong><small>#<%= o.id %> · <%= o.store_name %> · <%= o.created_at.slice(5, 16).replace('-', '/') %></small></span>
+          <span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span>
+          <strong class="dh-row-amt"><%= money(o.total, o.currency) %></strong>
+        </a>
+        <% }) %>
+      </div>
     <% } %>
   </div>
-  <div>
-    <h2>تنبيهات المخزون</h2>
-    <div class="card">
-      <% if (!lowStock.length) { %>
-        <p class="muted">✅ كل المنتجات متوفرة بكمية كافية.</p>
-      <% } else { lowStock.forEach(p => { %>
-        <p class="row between">
-          <a href="/dashboard/stores/<%= p.store_id %>/products/<%= p.id %>"><%= p.name %></a>
+  <div class="card">
+    <div class="dh-card-head"><h3>تنبيهات المخزون</h3></div>
+    <% if (!lowStock.length) { %>
+      <div class="dh-empty"><span>✅</span><p class="muted">كل المنتجات متوفرة بكمية كافية.</p></div>
+    <% } else { %>
+      <div class="dh-list">
+        <% lowStock.forEach(p => { %>
+        <a class="dh-row" href="/dashboard/stores/<%= p.store_id %>/products/<%= p.id %>">
+          <span class="dh-row-av c-amber"><%- svg('box', 16) %></span>
+          <span class="dh-row-main"><strong><%= p.name %></strong><small><%= p.store_name %></small></span>
           <span class="badge <%= p.stock ? 's-confirmed' : 's-cancelled' %>"><%= p.stock ? 'متبقي ' + p.stock : 'نفد' %></span>
-        </p>
-      <% }) } %>
-    </div>
+        </a>
+        <% }) %>
+      </div>
+    <% } %>
   </div>
 </section>
 <% } %>
