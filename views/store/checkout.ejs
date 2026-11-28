@@ -11,7 +11,7 @@
       <label>رقم الهاتف<input name="customer_phone" type="tel" required dir="ltr" inputmode="tel" placeholder="06XXXXXXXX" pattern="[+0-9 .\-()]{9,20}" value="<%= values.customer_phone || '' %>"></label>
       <label>العنوان الكامل (المدينة، الحي، الشارع)<textarea name="customer_address" rows="3" required><%= values.customer_address || '' %></textarea></label>
       <label>ملاحظة (اختياري)<textarea name="note" rows="2"><%= values.note || '' %></textarea></label>
-      <div class="pay-box">💵 <div><strong>الدفع عند الاستلام</strong><small class="muted">ادفع نقداً عند وصول طلبك</small></div></div>
+      <%- include('../partials/pay-methods') %>
       <% const priv = menuPages.find(p => p.slug === 'privacy' || p.title.includes('الخصوصية')); %>
       <p class="muted small">بتأكيد الطلب، توافق على استعمال معلوماتك لتوصيل طلبك والتواصل معك بشأنه (<a href="<%= priv ? base + '/page/' + priv.slug : '/privacy' %>" target="_blank">سياسة الخصوصية</a>).</p>
       <button class="btn big">تأكيد الطلب · <%= money(total, store.currency) %></button>

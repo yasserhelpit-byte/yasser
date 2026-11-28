@@ -6,7 +6,7 @@
     <td><a href="/dashboard/stores/<%= store.id %>/orders/<%= o.id %>">#<%= o.id %></a></td>
     <td><%= o.customer_name %></td><td dir="ltr"><%= o.customer_phone %></td>
     <td><%= money(o.total, store.currency) %></td>
-    <td><span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span></td>
+    <td><span class="badge s-<%= o.status %>"><%= STATUSES[o.status] %></span><% if (o.payment_method && o.payment_method !== 'cod') { %> <span class="badge p-<%= o.payment_status %>" title="<%= (PAY_METHODS[o.payment_method] || {}).label %>"><%= (PAY_METHODS[o.payment_method] || {}).icon %> <%= PAY_STATUS[o.payment_status] %></span><% } %></td>
     <td class="muted"><%= o.created_at %></td>
   </tr>
   <% }) %>

@@ -1,8 +1,11 @@
 <%- include('../partials/header', { title: 'طلب #' + order.id }) %>
 <%
   const cur = store.currency;
+  const PM = PAY_METHODS[order.payment_method] || PAY_METHODS.cod;
+  const paid = order.payment_status === 'paid';
+  const payNote = paid ? `(مدفوع مسبقاً ✅ ${PM.label})` : order.payment_method === 'cod' ? '(الدفع عند الاستلام)' : `(${PM.label})`;
   const lines = items.map(i => `• ${i.name} × ${i.quantity}`).join('\n');
-  const confirmMsg = `مرحباً ${order.customer_name} 👋\nشكراً لطلبك من متجر ${store.name}.\n\nطلبك رقم #${order.id}:\n${lines}\n\nالإجمالي: ${money(order.total, cur)} (الدفع عند الاستلام)\nالعنوان: ${order.customer_address}\n\nهل تؤكد الطلب؟ ردّ بـ «نعم» للتأكيد ✅`;
+  const confirmMsg = `مرحباً ${order.customer_name} 👋\nشكراً لطلبك من متجر ${store.name}.\n\nطلبك رقم #${order.id}:\n${lines}\n\nالإجمالي: ${money(order.total, cur)} ${payNote}\nالعنوان: ${order.customer_address}\n\nهل تؤكد الطلب؟ ردّ بـ «نعم» للتأكيد ✅`;
   const wa = `https://wa.me/${waNumber(order.customer_phone)}?text=${encodeURIComponent(confirmMsg)}`;
   const risky = history.cancelled > 0;
   const trusted = history.delivered > 0 && !risky;
@@ -12,6 +15,32 @@
   <h1>طلب #<%= order.id %> <span class="badge s-<%= order.status %>"><%= STATUSES[order.status] %></span></h1>
   <span class="muted"><%= order.created_at %></span>
 </div>
+
+<section class="card pay-card pay-<%= order.payment_status %>">
+  <div class="pay-card-main">
+    <span class="pm-icon"><%= PM.icon %></span>
+    <div>
+      <strong><%= PM.label %></strong>
+      <span class="badge p-<%= order.payment_status %>"><%= PAY_STATUS[order.payment_status] || order.payment_status %></span>
+      <% if (paid && order.paid_at) { %><small class="muted"> · <%= order.paid_at %></small><% } %>
+      <% if (order.payment_note) { %><div class="small muted" dir="auto">المرجع: <%= order.payment_note %></div><% } %>
+    </div>
+  </div>
+  <div class="row">
+    <% if (!paid && PM.kind === 'manual') { %>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/paid" class="inline" onsubmit="return confirm('هل وصلك المبلغ فعلاً إلى حسابك؟')"><%- include('../partials/csrf') %><button class="btn">✓ وصلني المبلغ</button></form>
+    <% } %>
+    <% if (!paid && PM.kind === 'online' && order.payment_method !== 'cmi') { %>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/verify" class="inline"><%- include('../partials/csrf') %><button class="btn ghost">🔄 التحقق من الدفع</button></form>
+    <% } %>
+    <% if (paid && PM.kind === 'manual') { %>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/paid" class="inline" onsubmit="return confirm('إلغاء تأكيد الدفع؟')"><%- include('../partials/csrf') %><input type="hidden" name="undo" value="1"><button class="link danger">تراجع</button></form>
+    <% } %>
+  </div>
+  <% if (check === 'unpaid') { %><p class="small muted">لم يكتمل الدفع بعد عند <%= PM.label %>.</p><% } %>
+  <% if (check === 'error') { %><p class="small danger">تعذّر الاتصال بـ<%= PM.label %>. تحقق من المفاتيح في صفحة «الدفع».</p><% } %>
+  <% if (['pending', 'failed'].includes(order.payment_status)) { %><p class="small muted">العميل لم يُكمل الدفع بعد. إن لم يدفع خلال ساعتين يُلغى الطلب تلقائياً ويعود المخزون.</p><% } %>
+</section>
 
 <% if (order.status === 'new') { %>
 <section class="card confirm-box">
@@ -67,7 +96,7 @@
     <p class="muted small">عند الإلغاء تعود الكميات إلى المخزون تلقائياً.</p>
     <% if (order.status !== 'new') { const statusMsg = {
       confirmed: `مرحباً ${order.customer_name} 👋\nتم تأكيد طلبك رقم #${order.id} من متجر ${store.name} ✅\nسنقوم بشحنه قريباً، وسنخبرك عند خروجه.`,
-      shipped: `مرحباً ${order.customer_name} 👋\nطلبك رقم #${order.id} في الطريق إليك 🚚\nجهّز مبلغ ${money(order.total, cur)} للدفع عند الاستلام. شكراً لثقتك بـ ${store.name}!`,
+      shipped: `مرحباً ${order.customer_name} 👋\nطلبك رقم #${order.id} في الطريق إليك 🚚\n${paid ? 'طلبك مدفوع مسبقاً، لا حاجة لدفع أي مبلغ.' : `جهّز مبلغ ${money(order.total, cur)} للدفع عند الاستلام.`} شكراً لثقتك بـ ${store.name}!`,
       delivered: `مرحباً ${order.customer_name} 👋\nنتمنى أن يعجبك طلبك من ${store.name} 💚\nيسعدنا رأيك، ولا تتردد في الطلب مرة أخرى.`,
       cancelled: `مرحباً ${order.customer_name}،\nتم إلغاء طلبك رقم #${order.id} من متجر ${store.name}.\nإذا كان ذلك خطأً أو أردت الطلب من جديد، راسلنا هنا.`,
     }[order.status]; %>

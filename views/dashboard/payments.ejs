@@ -1,0 +1,47 @@
+<%- include('../partials/header', { title: 'طرق الدفع' }) %>
+<div class="page-head-row"><div>
+  <h1>💳 طرق الدفع</h1>
+  <p class="muted">اختر طرق الدفع التي يراها عملاؤك عند الطلب. المال يصل مباشرة إلى حسابك، ولا يمر عبر YASSER.</p>
+</div></div>
+<% if (saved) { %><div class="alert ok">✓ تم حفظ طرق الدفع.</div><% } %>
+<% if (errors.length) { %><div class="alert"><% errors.forEach(e => { %><div>⚠️ <%= e %></div><% }) %></div><% } %>
+
+<form method="post" class="pay-settings">
+  <%- include('../partials/csrf') %>
+  <% const groups = [['offline', 'الدفع عند الاستلام'], ['manual', 'التحويل (تؤكده أنت يدوياً)'], ['online', 'الدفع الإلكتروني (يتأكد تلقائياً)']]; %>
+  <% groups.forEach(([kind, title]) => { %>
+    <h3 class="pay-group"><%= title %></h3>
+    <% payOrder.filter(m => PAY_METHODS[m].kind === kind).forEach(m => { const M = PAY_METHODS[m]; const on = cfg.enabled.includes(m); const v = cfg.values[m] || {}; const sec = secretSet[m] || {}; %>
+    <details class="card pay-method" <%= on && M.fields.length ? 'open' : '' %>>
+      <summary>
+        <span class="pm-icon"><%= M.icon %></span>
+        <span class="pm-text"><strong><%= M.label %></strong><small class="muted"><%= M.hint %></small></span>
+        <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" name="<%= m %>_enabled" value="1" <%= on ? 'checked' : '' %>><span class="slider"></span></label>
+      </summary>
+      <p class="muted small pm-about"><%= M.about %></p>
+      <% if (M.fields.length) { %>
+      <div class="form pm-fields">
+        <% M.fields.forEach(f => { const name = m + '_' + f.k; %>
+          <% if (f.type === 'select') { %>
+            <label><%= f.label %><select name="<%= name %>"><% Object.entries(f.options).forEach(([k, l]) => { %><option value="<%= k %>" <%= v[f.k] === k ? 'selected' : '' %>><%= l %></option><% }) %></select></label>
+          <% } else if (f.type === 'textarea') { %>
+            <label><%= f.label %><textarea name="<%= name %>" rows="2" placeholder="<%= f.placeholder || '' %>"><%= v[f.k] || '' %></textarea></label>
+          <% } else if (f.secret) { %>
+            <label><%= f.label %>
+              <input name="<%= name %>" type="password" autocomplete="new-password" dir="ltr" placeholder="<%= sec[f.k] ? '•••••••• محفوظ — اتركه فارغاً للإبقاء عليه' : '' %>">
+              <% if (sec[f.k]) { %><span class="small muted pm-secret">🔒 محفوظ ومشفّر · <label class="inline-check"><input type="checkbox" name="<%= name %>_clear" value="1"> حذفه</label></span><% } %>
+            </label>
+          <% } else { %>
+            <label><%= f.label %><input name="<%= name %>" <%= f.type === 'number' ? 'type=number step=any min=0' : '' %> <%= f.ltr ? 'dir=ltr' : '' %> placeholder="<%= f.placeholder || '' %>" value="<%= v[f.k] || '' %>"></label>
+          <% } %>
+        <% }) %>
+      </div>
+      <% } %>
+      <% if (m === 'cmi') { %><p class="small muted">🔗 عنوان الإشعار (Callback) يُرسل تلقائياً مع كل عملية، لا حاجة لإعطائه للبنك. ابدأ بالبيئة التجريبية ثم انتقل إلى الحقيقية بعد موافقة CMI.</p><% } %>
+    </details>
+    <% }) %>
+  <% }) %>
+  <div class="pay-save"><button class="btn big">💾 حفظ طرق الدفع</button></div>
+</form>
+<p class="muted small">🔒 المفاتيح السرية تُحفظ مشفّرة ولا تظهر مرة أخرى بعد الحفظ. لا تشاركها مع أي أحد.</p>
+<%- include('../partials/footer') %>

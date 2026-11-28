@@ -1,0 +1,21 @@
+<%
+  // Payment method picker for the checkout and landing-page order forms.
+  const pm = typeof payMethods !== 'undefined' ? payMethods : ['cod'];
+  const picked = (typeof values !== 'undefined' && values && values.payment_method) || pm[0];
+  const hasOnline = pm.some(m => PAY_METHODS[m].kind === 'online');
+%>
+<% if (pm.length === 1) { const M = PAY_METHODS[pm[0]]; %>
+  <input type="hidden" name="payment_method" value="<%= pm[0] %>">
+  <div class="pay-box"><%= M.icon %> <div><strong><%= M.label %></strong><small class="muted"><%= M.hint %></small></div></div>
+<% } else { %>
+  <fieldset class="pay-pick">
+    <legend>طريقة الدفع</legend>
+    <% pm.forEach(m => { const M = PAY_METHODS[m]; %>
+      <label><input type="radio" name="payment_method" value="<%= m %>" required <%= m === picked ? 'checked' : '' %>>
+        <span><b class="pp-icon"><%= M.icon %></b><span><strong><%= M.label %></strong><small><%= M.hint %></small></span></span></label>
+    <% }) %>
+  </fieldset>
+<% } %>
+<% if (hasOnline) { %>
+  <input class="pay-email" name="customer_email" type="email" dir="ltr" maxlength="120" autocomplete="email" placeholder="✉️ البريد الإلكتروني (لاستلام وصل الدفع بالبطاقة)" value="<%= (typeof values !== 'undefined' && values && values.customer_email) || '' %>">
+<% } %>

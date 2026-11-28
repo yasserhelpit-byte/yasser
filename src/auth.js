@@ -25,7 +25,7 @@ function sessionMiddleware(req, res, next) {
   if (!session) {
     if (!TOKEN_RE.test(token || '')) {
       token = crypto.randomBytes(32).toString('hex');
-      setCookie(res, token);
+      if (!req.stateless) setCookie(res, token);
     }
     session = { token, user_id: null, cart: '{}', persisted: false };
   } else {

@@ -11,6 +11,7 @@ const mailer = require('./mailer');
 const sections = require('./sections');
 const aiAds = require('./ai-ads');
 const notifier = require('./notify');
+const payments = require('./payments');
 
 const dns = require('dns').promises;
 const maintenance = require('./maintenance');
@@ -32,7 +33,8 @@ const cspWith = (extra = {}) => [
   `connect-src 'self'${extra.connect || ''}`,
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  // Checkout forms may hand over to a payment page (CMI posts a form; Stripe/PayPal redirect).
+  "form-action 'self' https://payment.cmi.co.ma https://testpayment.cmi.co.ma https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com",
   "frame-ancestors 'self'",
 ].join('; ');
 const CSP = cspWith();
@@ -84,6 +86,10 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: false, limit: '1mb' })); // page designs can be large
 app.use(cookieParser());
+// CMI posts the payment result to these from its own servers / pages: they carry a signed hash instead
+// of a CSRF token, and must not get a fresh session cookie (that would replace the customer's own).
+const CMI_POST = /^\/s\/[^/]+\/pay\/\d+\/cmi\/(ok|fail|callback)$/;
+app.use((req, res, next) => { req.stateless = req.method === 'POST' && CMI_POST.test(req.path); next(); });
 app.use(auth.sessionMiddleware);
 
 // CSRF: a per-session token derived from the session token, checked on every POST.
@@ -98,7 +104,9 @@ function loadSecret() {
   return secret;
 }
 const CSRF_SECRET = loadSecret();
+payments.init(CSRF_SECRET);
 app.use((req, res, next) => {
+  if (req.method === 'POST' && CMI_POST.test(req.path)) return next();
   const csrf = crypto.createHmac('sha256', CSRF_SECRET).update(req.session.token).digest('hex');
   res.locals.csrf = csrf;
   res.locals.flash = null;
@@ -122,6 +130,9 @@ const STATUSES = {
   cancelled: 'ملغى',
 };
 app.locals.STATUSES = STATUSES;
+app.locals.PAY_METHODS = payments.METHODS;
+app.locals.PAY_STATUS = payments.PAY_STATUS;
+app.locals.payOrder = payments.ORDER;
 const FONTS = {
   tajawal: { label: 'Tajawal · عصري', css: "'Tajawal'", g: 'Tajawal:wght@400;500;700;800' },
   cairo: { label: 'Cairo · واضح', css: "'Cairo'", g: 'Cairo:wght@400;600;700;800' },
@@ -322,7 +333,7 @@ const shell = (req, res, next) => {
 };
 dash.use(shell);
 const pendingFor = (userId) =>
-  db.prepare(`SELECT COUNT(*) AS n FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ? AND o.status = 'new'`).get(userId).n;
+  db.prepare(`SELECT COUNT(*) AS n FROM orders o JOIN stores s ON s.id = o.store_id WHERE s.owner_id = ? AND o.status = 'new' AND o.payment_status NOT IN ('pending', 'failed', 'expired')`).get(userId).n;
 const unreadChatsFor = (userId) =>
   db.prepare('SELECT COALESCE(SUM(c.unread_merchant), 0) AS n FROM conversations c JOIN stores s ON s.id = c.store_id WHERE s.owner_id = ?').get(userId).n;
 dash.use((req, res, next) => {
@@ -688,7 +699,7 @@ dash.get('/stores/:storeId/orders/:orderId', ownStore, (req, res) => {
        FROM orders WHERE store_id = ? AND customer_phone = ? AND id != ?`
     )
     .get(req.store.id, order.customer_phone, order.id);
-  res.render('dashboard/order', { order, items, history });
+  res.render('dashboard/order', { order, items, history, check: str(req.query.check, 10) });
 });
 dash.post('/stores/:storeId/orders/:orderId/status', ownStore, (req, res) => {
   const status = req.body.status;
@@ -702,6 +713,49 @@ dash.post('/stores/:storeId/orders/:orderId/status', ownStore, (req, res) => {
     db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, order.id);
   });
   res.redirect(`/dashboard/stores/${req.store.id}/orders/${order.id}`);
+});
+
+// Merchant confirms a bank / agency transfer (or cash) has arrived.
+dash.post('/stores/:storeId/orders/:orderId/paid', ownStore, (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
+  if (!order) return res.status(404).render('message', { title: 'غير موجود', message: 'الطلب غير موجود.' });
+  if (req.body.undo) db.prepare("UPDATE orders SET payment_status = ?, paid_at = NULL WHERE id = ? AND payment_status = 'paid'").run(payments.isManual(order.payment_method) ? 'awaiting' : 'unpaid', order.id);
+  else markPaid(req, order, 'تأكيد يدوي من التاجر');
+  res.redirect(`/dashboard/stores/${req.store.id}/orders/${order.id}`);
+});
+// Ask Stripe / PayPal again whether an online order was paid.
+dash.post('/stores/:storeId/orders/:orderId/verify', ownStore, async (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
+  if (!order) return res.status(404).render('message', { title: 'غير موجود', message: 'الطلب غير موجود.' });
+  let msg = 'paid';
+  try {
+    const r = order.payment_status === 'paid' ? { paid: true } : await payments.PROVIDERS[order.payment_method]?.verify({ store: req.store, order });
+    if (r?.paid) markPaid(req, order, r.ref); else msg = 'unpaid';
+  } catch (err) {
+    console.error('verify payment:', err.message);
+    msg = 'error';
+  }
+  res.redirect(`/dashboard/stores/${req.store.id}/orders/${order.id}?check=${msg}`);
+});
+
+// ----- Payment methods -----
+const paymentsView = (req, extra = {}) => ({
+  cfg: payments.settingsOf(req.store),
+  secretSet: Object.fromEntries(Object.entries(payments.secretsOf(req.store)).map(([m, v]) => [m, Object.fromEntries(Object.keys(v).map((k) => [k, true]))])),
+  errors: [], saved: !!req.query.saved, ...extra,
+});
+dash.get('/stores/:storeId/payments', ownStore, (req, res) => res.render('dashboard/payments', paymentsView(req)));
+dash.post('/stores/:storeId/payments', ownStore, (req, res) => {
+  const r = payments.parseForm(req.body, req.store);
+  if (r.errors.length) {
+    // Show what was typed (secrets are never echoed back).
+    const values = {};
+    for (const m of payments.ORDER) values[m] = Object.fromEntries(payments.METHODS[m].fields.filter((f) => !f.secret).map((f) => [f.k, str(req.body[`${m}_${f.k}`], 600)]));
+    const enabled = payments.ORDER.filter((m) => req.body[`${m}_enabled`]);
+    return res.status(400).render('dashboard/payments', paymentsView(req, { errors: r.errors, cfg: { enabled, values } }));
+  }
+  db.prepare('UPDATE stores SET payment_config = ?, payment_secrets = ? WHERE id = ?').run(r.payment_config, r.payment_secrets, req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/payments?saved=1`);
 });
 
 function adjustStock(orderId, sign) {
@@ -1302,6 +1356,7 @@ shop.use((req, res, next) => {
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);
   res.locals.isOwner = !!req.user && req.user.id === store.owner_id;
+  res.locals.payMethods = payments.available(store);
   // On the merchant's own domain, only their store is reachable.
   if (req.customDomain && ![store.custom_domain, `www.${store.custom_domain}`].includes(req.customDomain)) {
     return res.status(404).render('message', { title: 'غير موجود', message: 'الصفحة غير موجودة.' });
@@ -1474,7 +1529,10 @@ const orderValues = (body) => ({
   customer_phone: cleanPhone(body.customer_phone),
   customer_address: str(body.customer_address, 500),
   note: str(body.note, 1000),
+  customer_email: str(body.customer_email, 120).toLowerCase(),
+  payment_method: str(body.payment_method, 20) || 'cod',
 });
+const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 
 // Validate and create an order from cart lines. Shared by the cart checkout and landing-page orders.
 // Returns { orderId } or { error, status }.
@@ -1487,25 +1545,37 @@ function placeOrder(req, cart, values) {
   if (values.customer_name.length < 3) return fail('الرجاء إدخال الاسم الكامل.');
   if (!validPhone(values.customer_phone)) return fail('رقم الهاتف غير صحيح. مثال: 0612345678');
   if (values.customer_address.length < 8) return fail('الرجاء إدخال العنوان الكامل (المدينة، الحي، الشارع).');
+  const methods = payments.available(req.store);
+  const method = methods.includes(values.payment_method) ? values.payment_method : methods.length === 1 ? methods[0] : null;
+  if (!method) return fail('الرجاء اختيار طريقة الدفع.');
+  if (values.customer_email && !validEmail(values.customer_email)) return fail('البريد الإلكتروني غير صحيح.');
+  if (method === 'cmi' && !values.customer_email) return fail('الرجاء إدخال بريدك الإلكتروني لاستلام وصل الدفع بالبطاقة.');
+  const online = payments.isOnline(method);
 
   // Abuse limits: per IP and per phone number.
   if (!limiter.hit(`order-ip:${req.ip}`, 5, 60 * MIN)) return fail('طلبات كثيرة من نفس الجهاز. حاول لاحقاً أو تواصل مع المتجر.', 429);
+  // An earlier attempt by the same customer that was never paid online is replaced by this one.
+  for (const o of db.prepare("SELECT id FROM orders WHERE store_id = ? AND customer_phone = ? AND status = 'new' AND payment_status IN ('pending', 'failed')").all(req.store.id, values.customer_phone)) {
+    cancelUnpaid(o.id, 'failed');
+  }
   const recent = db
     .prepare(
       `SELECT id FROM orders WHERE store_id = ? AND customer_phone = ? AND status = 'new'
-         AND created_at >= datetime('now', '-30 minutes') ORDER BY id DESC LIMIT 1`
+         AND payment_status NOT IN ('pending', 'failed', 'expired') AND created_at >= datetime('now', '-30 minutes') ORDER BY id DESC LIMIT 1`
     )
     .get(req.store.id, values.customer_phone);
   if (recent) return fail(`لديك طلب قيد المراجعة (رقم #${recent.id}). سيتصل بك المتجر قريباً لتأكيده. لتعديل طلبك تواصل مع المتجر.`, 409);
   const today = db
-    .prepare(`SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND customer_phone = ? AND created_at >= datetime('now', '-1 day')`)
+    .prepare(`SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND customer_phone = ? AND payment_status NOT IN ('pending', 'failed', 'expired') AND created_at >= datetime('now', '-1 day')`)
     .get(req.store.id, values.customer_phone).n;
   if (today >= 3) return fail('تجاوزت عدد الطلبات المسموح به اليوم لهذا الرقم. تواصل مع المتجر مباشرة.', 429);
   try {
     const orderId = transaction(() => {
       const { lastInsertRowid } = db
-        .prepare('INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, shipping, total, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.shipping, cart.total, req.ip || '');
+        .prepare(`INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, shipping, total, ip,
+                   customer_email, payment_method, payment_status, pay_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.shipping, cart.total, req.ip || '',
+          values.customer_email, method, online ? 'pending' : payments.isManual(method) ? 'awaiting' : 'unpaid', crypto.randomBytes(16).toString('hex'));
       const take = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
       const addItem = db.prepare('INSERT INTO order_items (order_id, product_id, name, price, quantity) VALUES (?, ?, ?, ?, ?)');
       for (const l of cart.lines) {
@@ -1514,8 +1584,9 @@ function placeOrder(req, cart, values) {
       }
       return Number(lastInsertRowid);
     });
-    notifyNewOrder(req, orderId); // fire and forget
-    return { orderId };
+    // Online payments: the merchant hears about the order once it is paid.
+    if (!online) notifyNewOrder(req, orderId); // fire and forget
+    return { orderId, next: nextStep(req, orderId) };
   } catch (err) {
     if (err.message !== 'OUT_OF_STOCK') throw err;
     return fail('نفدت الكمية المطلوبة من المنتج.', 409);
@@ -1530,7 +1601,7 @@ shop.post('/checkout', (req, res) => {
   if (r.error) return res.status(r.status).render('store/checkout', { ...cartLines(req), error: r.error, values });
   delete req.cart[req.store.id];
   auth.saveCart(req);
-  res.redirect(`${req.base}/thanks/${r.orderId}`);
+  res.redirect(r.next);
 });
 
 // Landing pages: order one product directly (no cart). Answers JSON to fetch(), redirects otherwise.
@@ -1538,9 +1609,9 @@ shop.post('/quick-order', (req, res) => {
   const wantsJson = (req.get('accept') || '').includes('application/json');
   const back = str(req.body.back, 300).startsWith(req.base || '/') ? str(req.body.back, 300) : req.base || '/';
   const reply = (r) => {
-    if (wantsJson) return res.status(r.error ? r.status : 200).json(r.error ? { error: r.error } : { redirect: `${req.base}/thanks/${r.orderId}` });
+    if (wantsJson) return res.status(r.error ? r.status : 200).json(r.error ? { error: r.error } : { redirect: r.next });
     if (r.error) return res.redirect(`${back}${back.includes('?') ? '&' : '?'}order_error=${encodeURIComponent(r.error)}#order`);
-    res.redirect(`${req.base}/thanks/${r.orderId}`);
+    res.redirect(r.next);
   };
   const product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.body.product_id, req.store.id);
   if (!product) return reply({ error: 'المنتج غير متوفر.', status: 404 });
@@ -1557,10 +1628,145 @@ shop.post('/quick-order', (req, res) => {
 });
 
 shop.get('/thanks/:orderId', (req, res) => {
-  const order = db.prepare('SELECT id, total FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
+  const order = db.prepare('SELECT id, total, payment_method, payment_status, pay_token FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
   if (!order) return res.redirect(req.base || '/');
+  // An online order that is not paid yet goes back to its payment step.
+  // (No payment link here: order numbers are guessable, the link is only in the customer's own redirect.)
+  if (payments.isOnline(order.payment_method) && order.payment_status !== 'paid') {
+    return res.render('message', { title: 'بانتظار الدفع', message: `الطلب #${order.id} لم يُدفع بعد. إن أغلقت صفحة الدفع، أعد الطلب من المتجر.` });
+  }
+  res.locals.payDetails = payments.isManual(order.payment_method) ? payments.publicDetails(req.store, order.payment_method) : [];
+  delete order.pay_token;
   const items = db.prepare('SELECT product_id, quantity, price FROM order_items WHERE order_id = ?').all(order.id);
   res.render('store/thanks', { order, items });
+});
+
+// ----- Payments -----
+// Where to send the customer right after the order is created.
+function nextStep(req, orderId) {
+  const o = db.prepare('SELECT payment_method, pay_token FROM orders WHERE id = ?').get(orderId);
+  return payments.isOnline(o.payment_method) ? `${req.base}/pay/${orderId}?t=${o.pay_token}` : `${req.base}/thanks/${orderId}`;
+}
+const here = (req) => `${req.protocol}://${req.get('host')}${req.base}`;
+function payUrls(req, order) {
+  const b = `${here(req)}/pay/${order.id}`;
+  const t = `t=${order.pay_token}`;
+  return {
+    return: `${b}/return?${t}`, cancel: `${b}/cancel?${t}`, shop: here(req) || '/',
+    cmiOk: `${b}/cmi/ok`, cmiFail: `${b}/cmi/fail`, cmiCallback: `${b}/cmi/callback`,
+  };
+}
+// The order a payment URL is about; the random token in the link proves it belongs to this customer.
+function payOrder(req) {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.orderId, req.store.id);
+  if (!order || !order.pay_token) return null;
+  const a = Buffer.from(String(req.query.t || req.body?.t || ''));
+  const b = Buffer.from(order.pay_token);
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? order : null;
+}
+function cancelUnpaid(orderId, payStatus) {
+  transaction(() => {
+    const changed = db.prepare("UPDATE orders SET status = 'cancelled', payment_status = ? WHERE id = ? AND status = 'new' AND payment_status IN ('pending', 'failed')").run(payStatus, orderId).changes;
+    if (changed) adjustStock(orderId, +1);
+  });
+}
+// Online orders left unpaid for 2 hours give their stock back.
+function expireUnpaid() {
+  const stale = db.prepare("SELECT id FROM orders WHERE status = 'new' AND payment_status IN ('pending', 'failed') AND created_at < datetime('now', '-2 hours')").all();
+  for (const o of stale) cancelUnpaid(o.id, 'expired');
+  return stale.length;
+}
+// Marks an order paid exactly once, then tells the merchant.
+function markPaid(req, order, ref) {
+  const changed = db.prepare("UPDATE orders SET payment_status = 'paid', payment_note = ?, paid_at = datetime('now') WHERE id = ? AND payment_status != 'paid'")
+    .run(String(ref || '').slice(0, 120), order.id).changes;
+  if (changed && payments.isOnline(order.payment_method)) notifyNewOrder(req, order.id);
+  return changed;
+}
+const payFailed = (req, res, order, reason, status = 200) =>
+  res.status(status).render('store/pay-failed', { order, reason, codOk: payments.available(req.store).includes('cod'), retry: `${req.base}/pay/${order.id}?t=${order.pay_token}` });
+
+shop.get('/pay/:orderId', async (req, res, next) => {
+  const order = payOrder(req);
+  if (!order) return res.redirect(req.base || '/');
+  if (order.payment_status === 'paid' || !payments.isOnline(order.payment_method)) return res.redirect(`${req.base}/thanks/${order.id}`);
+  if (order.status === 'cancelled') return payFailed(req, res, order, 'انتهت صلاحية هذا الطلب. أعد الطلب من المتجر.');
+  if (!payments.available(req.store).includes(order.payment_method)) return payFailed(req, res, order, 'طريقة الدفع هذه لم تعد متاحة في المتجر.');
+  try {
+    const step = await payments.PROVIDERS[order.payment_method].start({ store: req.store, order, urls: payUrls(req, order) });
+    db.prepare("UPDATE orders SET payment_ref = ?, payment_amount = ?, payment_status = 'pending' WHERE id = ?").run(step.ref, step.amount, order.id);
+    if (step.redirect) return res.redirect(303, step.redirect);
+    res.render('store/pay-redirect', { form: step.form, order });
+  } catch (err) {
+    console.error(`Payment start failed (store ${req.store.id}, order ${order.id}):`, err.message);
+    payFailed(req, res, order, 'تعذّر الاتصال ببوابة الدفع. حاول مرة أخرى بعد قليل.', 502);
+  }
+});
+shop.get('/pay/:orderId/return', async (req, res) => {
+  const order = payOrder(req);
+  if (!order) return res.redirect(req.base || '/');
+  if (order.payment_status === 'paid') return res.redirect(`${req.base}/thanks/${order.id}`);
+  try {
+    const r = await payments.PROVIDERS[order.payment_method]?.verify({ store: req.store, order, query: req.query });
+    if (r?.paid) {
+      markPaid(req, order, r.ref);
+      return res.redirect(`${req.base}/thanks/${order.id}`);
+    }
+  } catch (err) {
+    console.error(`Payment check failed (store ${req.store.id}, order ${order.id}):`, err.message);
+  }
+  db.prepare("UPDATE orders SET payment_status = 'failed' WHERE id = ? AND payment_status = 'pending'").run(order.id);
+  payFailed(req, res, order, 'لم يتم تأكيد الدفع. لم يُقتطع أي مبلغ، أو سيُعاد تلقائياً إن اقتُطع.');
+});
+shop.get('/pay/:orderId/cancel', (req, res) => {
+  const order = payOrder(req);
+  if (!order) return res.redirect(req.base || '/');
+  if (order.payment_status === 'paid') return res.redirect(`${req.base}/thanks/${order.id}`);
+  const reasons = {
+    declined: 'رُفضت العملية من البنك. تأكّد من معلومات البطاقة أو جرّب بطاقة أخرى.',
+    unconfirmed: 'لم يتم تأكيد الدفع بالبطاقة.',
+  };
+  payFailed(req, res, order, reasons[req.query.r] || 'ألغيت عملية الدفع. طلبك محفوظ، يمكنك المحاولة من جديد.');
+});
+// Give up on paying online: switch the order to cash on delivery (if the store accepts it).
+shop.post('/pay/:orderId/cod', (req, res) => {
+  const order = payOrder(req);
+  if (!order) return res.redirect(req.base || '/');
+  if (order.payment_status !== 'paid' && order.status === 'new' && payments.available(req.store).includes('cod')) {
+    const changed = db.prepare("UPDATE orders SET payment_method = 'cod', payment_status = 'unpaid' WHERE id = ? AND payment_status != 'paid'").run(order.id).changes;
+    if (changed) notifyNewOrder(req, order.id);
+  }
+  res.redirect(`${req.base}/thanks/${order.id}`);
+});
+// CMI: server-to-server confirmation, and the customer's browser coming back (both signed).
+function cmiOrder(req) {
+  const order = db.prepare("SELECT * FROM orders WHERE id = ? AND store_id = ? AND payment_method = 'cmi'").get(req.params.orderId, req.store.id);
+  return order && { order, result: payments.PROVIDERS.cmi.check(req.store, order, req.body || {}) };
+}
+shop.post('/pay/:orderId/cmi/callback', (req, res) => {
+  const c = cmiOrder(req);
+  res.type('text');
+  if (!c || !c.result.signed) return res.send('FAILURE');
+  if (!c.result.paid) return res.send('APPROVED');
+  markPaid(req, c.order, c.result.ref);
+  res.send('ACTION=POSTAUTH');
+});
+// The browser comes back with a POST; answer with a redirect so the next page is a normal GET
+// (with the customer's own cookies). Unsigned posts learn nothing.
+shop.post('/pay/:orderId/cmi/ok', (req, res) => {
+  const c = cmiOrder(req);
+  if (!c || !c.result.signed) return res.redirect(303, req.base || '/');
+  if (c.result.paid) {
+    markPaid(req, c.order, c.result.ref);
+    return res.redirect(303, `${req.base}/thanks/${c.order.id}`);
+  }
+  res.redirect(303, `${req.base}/pay/${c.order.id}/cancel?t=${c.order.pay_token}&r=unconfirmed`);
+});
+shop.post('/pay/:orderId/cmi/fail', (req, res) => {
+  const c = cmiOrder(req);
+  if (!c || !c.result.signed) return res.redirect(303, req.base || '/');
+  if (c.order.payment_status !== 'paid') db.prepare("UPDATE orders SET payment_status = 'failed' WHERE id = ? AND payment_status = 'pending'").run(c.order.id);
+  res.redirect(303, `${req.base}/pay/${c.order.id}/cancel?t=${c.order.pay_token}&r=declined`);
 });
 
 // ----- Storefront live chat -----
@@ -1635,20 +1841,23 @@ function notifyNewOrder(req, orderId) {
   // A returning customer who received earlier orders is worth knowing about.
   const delivered = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND customer_phone = ? AND status = 'delivered' AND id != ?")
     .get(store.id, order.customer_phone, orderId).n;
-  const title = `${delivered ? '⭐ عميل موثوق · ' : '🛒 '}طلب جديد #${orderId} · ${money(order.total, store.currency)}`;
+  const paidNow = order.payment_status === 'paid';
+  const payLabel = `${payments.METHODS[order.payment_method]?.label || ''}${paidNow ? ' · ✅ مدفوع' : ''}`;
+  const title = `${paidNow ? '💳 ' : delivered ? '⭐ عميل موثوق · ' : '🛒 '}طلب جديد #${orderId} · ${money(order.total, store.currency)}${paidNow ? ' · مدفوع' : ''}`;
   const lines = items.map((i) => `• ${i.name} × ${i.quantity} — ${money(i.price * i.quantity, store.currency)}`).join('\n');
   notifier.notify(store.owner_id, {
     kind: 'order', storeId: store.id, link: path, tag: `order-${orderId}`,
     title, body: `${order.customer_name} · ${items.map((i) => i.name).join('، ').slice(0, 120)}`,
     email: {
       subject: `${title} · ${store.name}`,
-      text: `طلب جديد في متجر ${store.name}\n\nالعميل: ${order.customer_name}\nالهاتف: ${order.customer_phone}\nالعنوان: ${order.customer_address}\n\n${lines}\n\nالإجمالي: ${money(order.total, store.currency)}\n\nعرض الطلب: ${link}`,
+      text: `طلب جديد في متجر ${store.name}\n\nالعميل: ${order.customer_name}\nالهاتف: ${order.customer_phone}\nالعنوان: ${order.customer_address}\n\n${lines}\n\nالإجمالي: ${money(order.total, store.currency)}\nالدفع: ${payLabel}\n\nعرض الطلب: ${link}`,
       html: mailer.layout(`طلب جديد #${orderId}`, `
         <p>وصلك طلب جديد في متجر <strong>${e(store.name)}</strong> 🎉${delivered ? ' — <strong>عميل موثوق</strong> استلم طلبات سابقة.' : ''}</p>
         <table style="width:100%;border-collapse:collapse;margin:12px 0">
           ${items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${e(i.name)} × ${i.quantity}</td><td style="text-align:left;border-bottom:1px solid #eee">${e(money(i.price * i.quantity, store.currency))}</td></tr>`).join('')}
           ${order.shipping ? `<tr><td style="padding:6px 0">التوصيل</td><td style="text-align:left">${e(money(order.shipping, store.currency))}</td></tr>` : ''}
           <tr><td style="padding:8px 0"><strong>الإجمالي</strong></td><td style="text-align:left"><strong>${e(money(order.total, store.currency))}</strong></td></tr>
+          <tr><td style="padding:6px 0">الدفع</td><td style="text-align:left">${e(payLabel)}</td></tr>
         </table>
         <p><strong>العميل:</strong> ${e(order.customer_name)}<br><strong>الهاتف:</strong> <span dir="ltr">${e(order.customer_phone)}</span><br><strong>العنوان:</strong> ${e(order.customer_address)}</p>
         <p><a href="${e(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">عرض الطلب وتأكيده</a></p>`),
@@ -1679,9 +1888,11 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   const server = app.listen(PORT, () => console.log(`YASSER running on http://localhost:${PORT}`));
   maintenance.scheduleMaintenance();
+  setInterval(() => { try { expireUnpaid(); } catch (err) { console.error('expireUnpaid:', err.message); } }, 15 * MIN).unref();
   // Stop cleanly (finish in-flight requests, close the database) when the host restarts the app.
   const stop = () => { server.close(() => { db.close(); process.exit(0); }); setTimeout(() => process.exit(0), 10000).unref(); };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
 }
 module.exports = app;
+app.expireUnpaid = () => expireUnpaid();

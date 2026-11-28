@@ -26,11 +26,12 @@
     <input name="customer_phone" type="tel" required dir="ltr" inputmode="tel" placeholder="📞 06XXXXXXXX" aria-label="رقم الهاتف" autocomplete="tel">
     <textarea name="customer_address" required minlength="8" rows="2" maxlength="500" placeholder="المدينة والعنوان الكامل" autocomplete="street-address"></textarea>
   </div>
+  <% if (typeof payMethods !== 'undefined' && payMethods.length > 1) { %><%- include('pay-methods', { values: null }) %><% } else { %><input type="hidden" name="payment_method" value="<%= typeof payMethods !== 'undefined' ? payMethods[0] : 'cod' %>"><% } %>
   <div class="lo-total">
     <span>المجموع <small class="lo-ship"></small></span>
     <strong class="lo-sum"><%= money(P.price, store.currency) %></strong>
   </div>
-  <button class="btn big full lo-submit"><%= btnLabel || 'اطلب الآن · الدفع عند الاستلام' %></button>
+  <button class="btn big full lo-submit"><%= btnLabel || ((typeof payMethods === 'undefined' || payMethods.length === 1 && payMethods[0] === 'cod') ? 'اطلب الآن · الدفع عند الاستلام' : 'اطلب الآن') %></button>
   <p class="lo-trust small">بتأكيد الطلب توافق على استعمال معلوماتك لتوصيله · <a href="/privacy" target="_blank">الخصوصية</a></p>
-  <p class="lo-trust">💵 الدفع عند الاستلام · 🚚 توصيل لكل المدن · 📞 نتصل بك للتأكيد</p>
+  <p class="lo-trust"><%= typeof payMethods === 'undefined' || payMethods.includes('cod') ? '💵 الدفع عند الاستلام' : '🔒 دفع آمن' %> · 🚚 توصيل لكل المدن · 📞 نتصل بك للتأكيد</p>
 </form>

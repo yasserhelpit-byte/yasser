@@ -1,0 +1,12 @@
+<%- include('../partials/store-header', { title: 'الدفع' }) %>
+<section class="card center empty">
+  <div class="big-icon">🔒</div>
+  <h1>جارٍ تحويلك إلى صفحة الدفع الآمنة…</h1>
+  <p class="muted">طلب #<%= order.id %> · <%= money(order.total, store.currency) %></p>
+  <form method="post" action="<%= form.action %>" id="payform">
+    <% Object.entries(form.fields).forEach(([k, v]) => { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% }) %>
+    <button class="btn big">متابعة إلى الدفع ←</button>
+  </form>
+</section>
+<script>document.getElementById('payform').submit();</script>
+<%- include('../partials/store-footer') %>

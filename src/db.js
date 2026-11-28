@@ -210,6 +210,16 @@ addColumn('products', 'sku', "TEXT NOT NULL DEFAULT ''");
 addColumn('products', 'cost_price', 'REAL NOT NULL DEFAULT 0');
 addColumn('orders', 'ip', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
+addColumn('stores', 'payment_config', "TEXT NOT NULL DEFAULT ''");
+addColumn('stores', 'payment_secrets', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'customer_email', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'payment_method', "TEXT NOT NULL DEFAULT 'cod'");
+addColumn('orders', 'payment_status', "TEXT NOT NULL DEFAULT 'unpaid'");
+addColumn('orders', 'payment_ref', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'payment_amount', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'payment_note', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'pay_token', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'paid_at', 'TEXT');
 
 // Platform-wide settings (key/value).
 const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '1', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '' };

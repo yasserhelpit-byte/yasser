@@ -763,3 +763,190 @@ test('legal pages and signup consent', async (t) => {
   assert.match(r.text, /الموافقة على شروط الاستخدام/);
   assert.match((await fetch(base + '/')).ok ? await (await fetch(base + '/')).text() : '', /href="\/privacy"/);
 });
+
+test('payments: merchant picks methods, bank transfer, Stripe, CMI, expiry', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const payments = require('../src/payments');
+  const notes = (uid) => db.prepare("SELECT title FROM notifications WHERE user_id = ? AND kind = 'order' ORDER BY id DESC").all(uid).map((n) => n.title);
+
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Payer', email: 'payer@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  let r = await m('POST', '/dashboard/stores', { _csrf: c, name: 'Pay Shop', slug: 'pay-shop', currency: 'MAD', color: '#123456' });
+  const storeUrl = r.location;
+  const sid = Number(storeUrl.split('/').pop());
+  const uid = db.prepare('SELECT owner_id FROM stores WHERE id = ?').get(sid).owner_id;
+  await m('POST', `${storeUrl}/products`, { _csrf: c, name: 'Lamp', price: '200', stock: '10', active: '1' });
+  const pid = db.prepare('SELECT id FROM products WHERE store_id = ?').get(sid).id;
+  const stock = () => db.prepare('SELECT stock FROM products WHERE id = ?').get(pid).stock;
+
+  // Default: cash on delivery only.
+  let page = await (await fetch(`${base}/s/pay-shop/checkout`)).text();
+  assert.match((await m('GET', `${storeUrl}/payments`)).text, /طرق الدفع/);
+
+  // Validation: a bad RIB and a bad Stripe key are refused, nothing saved.
+  const form = {
+    _csrf: c, cod_enabled: '1', bank_enabled: '1', bank_bank_name: 'CIH', bank_holder: 'Payer SARL', bank_rib: '123',
+    stripe_enabled: '1', stripe_secret_key: 'nope', cmi_enabled: '1', cmi_client_id: '600001234', cmi_store_key: 'TEST|key\\1', cmi_mode: 'test',
+  };
+  r = await m('POST', `${storeUrl}/payments`, form);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.text, /24 رقماً/);
+  assert.match(r.text, /sk_live_/);
+  assert.doesNotMatch(r.text, /TEST\|key/); // secrets never echoed
+  r = await m('POST', `${storeUrl}/payments`, { ...form, bank_rib: '230 780 1234567890123456 78', stripe_secret_key: 'sk_test_abcdefghijklmnop' });
+  assert.strictEqual(r.status, 302);
+  const row = db.prepare('SELECT payment_config, payment_secrets FROM stores WHERE id = ?').get(sid);
+  assert.doesNotMatch(row.payment_secrets, /sk_test|TEST/); // encrypted at rest
+  page = (await m('GET', `${storeUrl}/payments`)).text;
+  assert.match(page, /محفوظ ومشفّر/);
+  assert.doesNotMatch(page, /sk_test_abcdefghijklmnop/);
+  // Saving again with blank secret fields keeps them.
+  await m('POST', `${storeUrl}/payments`, { ...form, bank_rib: '230780123456789012345678', stripe_secret_key: '', cmi_store_key: '' });
+  const store = () => db.prepare('SELECT * FROM stores WHERE id = ?').get(sid);
+  assert.strictEqual(payments.credentials(store(), 'stripe').secret_key, 'sk_test_abcdefghijklmnop');
+  assert.deepStrictEqual(payments.available(store()), ['cod', 'bank', 'cmi', 'stripe']);
+
+  // The customer sees every method.
+  const cu = client(base);
+  page = (await cu('GET', `/s/pay-shop/p/${pid}`)).text;
+  const cc = csrfOf(page);
+  await cu('POST', '/s/pay-shop/cart', { _csrf: cc, product_id: pid, quantity: '1' });
+  page = (await cu('GET', '/s/pay-shop/checkout')).text;
+  for (const v of ['cod', 'bank', 'cmi', 'stripe']) assert.match(page, new RegExp(`name="payment_method" value="${v}"`));
+  const buyer = { _csrf: cc, customer_name: 'Sara', customer_address: 'Rabat, Agdal 12' };
+
+  // 1) Bank transfer: thanks page shows the RIB; the merchant confirms receipt.
+  r = await cu('POST', '/s/pay-shop/checkout', { ...buyer, customer_phone: '0611111111', payment_method: 'bank' });
+  const bankId = Number(r.location.match(/thanks\/(\d+)/)[1]);
+  page = (await cu('GET', r.location)).text;
+  assert.match(page, /230780123456789012345678/);
+  assert.match(page, /Payer SARL/);
+  assert.strictEqual(db.prepare('SELECT payment_status FROM orders WHERE id = ?').get(bankId).payment_status, 'awaiting');
+  assert.match(notes(uid)[0], new RegExp(`#${bankId}`)); // notified right away
+  page = (await m('GET', `${storeUrl}/orders/${bankId}`)).text;
+  assert.match(page, /وصلني المبلغ/);
+  await m('POST', `${storeUrl}/orders/${bankId}/paid`, { _csrf: c });
+  assert.strictEqual(db.prepare('SELECT payment_status FROM orders WHERE id = ?').get(bankId).payment_status, 'paid');
+
+  // 2) Stripe: pay page sends the customer to Stripe; paid only after the server checks the session.
+  const calls = [];
+  let sessionPaid = false;
+  payments.http.fetch = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    const body = opts.body ? new URLSearchParams(String(opts.body)) : null;
+    if (opts.method === 'POST') {
+      assert.strictEqual(opts.headers.Authorization, 'Bearer sk_test_abcdefghijklmnop');
+      return new Response(JSON.stringify({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1', amount: body.get('line_items[0][price_data][unit_amount]') }));
+    }
+    return new Response(JSON.stringify({ id: 'cs_test_1', payment_status: sessionPaid ? 'paid' : 'unpaid', client_reference_id: String(stripeId), amount_total: 20000, currency: 'mad', payment_intent: 'pi_1' }));
+  };
+  t.after(() => { payments.http.fetch = (...a) => fetch(...a); });
+  await cu('POST', '/s/pay-shop/cart', { _csrf: cc, product_id: pid, quantity: '1' });
+  r = await cu('POST', '/s/pay-shop/checkout', { ...buyer, customer_phone: '0622222222', payment_method: 'stripe' });
+  assert.match(r.location, /\/s\/pay-shop\/pay\/\d+\?t=[a-f0-9]{32}$/);
+  var stripeId = Number(r.location.match(/pay\/(\d+)/)[1]);
+  const payLink = r.location;
+  assert.ok(!notes(uid).some((n) => n.includes(`#${stripeId}`))); // not before payment
+  // Without the token: nothing.
+  assert.strictEqual((await cu('GET', `/s/pay-shop/pay/${stripeId}`)).location, '/s/pay-shop');
+  assert.doesNotMatch((await cu('GET', `/s/pay-shop/thanks/${stripeId}`)).text, /t=[a-f0-9]{32}/); // the thanks page never leaks the link
+  r = await cu('GET', payLink);
+  assert.strictEqual(r.status, 303);
+  assert.strictEqual(r.location, 'https://checkout.stripe.com/c/pay/cs_test_1');
+  const sent1 = new URLSearchParams(String(calls[0].opts.body));
+  assert.strictEqual(sent1.get('line_items[0][price_data][unit_amount]'), '20000');
+  assert.strictEqual(sent1.get('line_items[0][price_data][currency]'), 'mad');
+  assert.match(sent1.get('success_url'), /\/pay\/\d+\/return\?t=[a-f0-9]{32}&session_id=\{CHECKOUT_SESSION_ID\}$/);
+  const tok = payLink.split('t=')[1];
+  // A return without payment is not trusted.
+  page = (await cu('GET', `/s/pay-shop/pay/${stripeId}/return?t=${tok}&session_id=cs_test_1`)).text;
+  assert.match(page, /لم يكتمل الدفع/);
+  assert.match(page, /الدفع عند الاستلام بدلاً من ذلك/);
+  assert.notStrictEqual(db.prepare('SELECT payment_status FROM orders WHERE id = ?').get(stripeId).payment_status, 'paid');
+  sessionPaid = true;
+  r = await cu('GET', `/s/pay-shop/pay/${stripeId}/return?t=${tok}&session_id=cs_test_1`);
+  assert.strictEqual(r.location, `/s/pay-shop/thanks/${stripeId}`);
+  assert.match((await cu('GET', r.location)).text, /تم الدفع بنجاح/);
+  assert.strictEqual(db.prepare('SELECT payment_status FROM orders WHERE id = ?').get(stripeId).payment_status, 'paid');
+  assert.match(notes(uid)[0], new RegExp(`#${stripeId}.*مدفوع`));
+
+  // 3) CMI: a signed auto-post form; only a correctly signed callback marks it paid.
+  await cu('POST', '/s/pay-shop/cart', { _csrf: cc, product_id: pid, quantity: '1' });
+  r = await cu('POST', '/s/pay-shop/checkout', { ...buyer, customer_phone: '0633333333', payment_method: 'cmi' });
+  assert.match(r.text, /بريدك الإلكتروني/); // email required for card receipts
+  r = await cu('POST', '/s/pay-shop/checkout', { ...buyer, customer_phone: '0633333333', payment_method: 'cmi', customer_email: 'sara@example.com' });
+  const cmiId = Number(r.location.match(/pay\/(\d+)/)[1]);
+  page = (await cu('GET', r.location)).text;
+  assert.match(page, /action="https:\/\/testpayment\.cmi\.co\.ma\/fim\/est3Dgate"/);
+  const fields = Object.fromEntries([...page.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)].map((x) => [x[1], x[2].replace(/&#43;/g, '+').replace(/&#x2F;/g, '/').replace(/&#61;/g, '=').replace(/&amp;/g, '&')]));
+  assert.strictEqual(fields.amount, '200.00');
+  assert.strictEqual(fields.currency, '504');
+  assert.strictEqual(fields.hash, payments.cmiHash(fields, 'TEST|key\\1'));
+  const reply = { ...fields, ProcReturnCode: '00', Response: 'Approved', TransId: 'T123', mdStatus: '1' };
+  delete reply.hash;
+  const post = (p, body) => fetch(`${base}/s/pay-shop/pay/${cmiId}/cmi/${p}`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
+  r = await post('callback', { ...reply, HASH: 'forged' });
+  assert.strictEqual(await r.text(), 'FAILURE');
+  assert.strictEqual(r.headers.get('set-cookie'), null); // no session cookie for CMI's posts
+  r = await post('callback', { ...reply, ProcReturnCode: '05', Response: 'Declined', HASH: payments.cmiHash({ ...reply, ProcReturnCode: '05', Response: 'Declined' }, 'TEST|key\\1') });
+  assert.strictEqual(await r.text(), 'APPROVED');
+  assert.notStrictEqual(db.prepare('SELECT payment_status FROM orders WHERE id = ?').get(cmiId).payment_status, 'paid');
+  r = await post('callback', { ...reply, HASH: payments.cmiHash(reply, 'TEST|key\\1') });
+  assert.strictEqual(await r.text(), 'ACTION=POSTAUTH');
+  assert.strictEqual(db.prepare('SELECT payment_status, payment_note FROM orders WHERE id = ?').get(cmiId).payment_note, 'T123');
+  r = await post('ok', { ...reply, HASH: payments.cmiHash(reply, 'TEST|key\\1') });
+  assert.strictEqual(r.status, 303);
+  assert.strictEqual(r.headers.get('location'), `/s/pay-shop/thanks/${cmiId}`);
+
+  // 4) An online order never paid gives its stock back after 2 hours.
+  sessionPaid = false;
+  await cu('POST', '/s/pay-shop/cart', { _csrf: cc, product_id: pid, quantity: '2' });
+  const before = stock();
+  r = await cu('POST', '/s/pay-shop/checkout', { ...buyer, customer_phone: '0644444444', payment_method: 'stripe' });
+  const lateId = Number(r.location.match(/pay\/(\d+)/)[1]);
+  assert.strictEqual(stock(), before - 2);
+  db.prepare("UPDATE orders SET created_at = datetime('now', '-3 hours') WHERE id = ?").run(lateId);
+  assert.strictEqual(app.expireUnpaid(), 1);
+  assert.strictEqual(stock(), before);
+  assert.deepStrictEqual({ ...db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(lateId) }, { status: 'cancelled', payment_status: 'expired' });
+});
+
+test('payments: PayPal converts the amount and only trusts a completed capture', async (t) => {
+  const payments = require('../src/payments');
+  t.after(() => { payments.http.fetch = (...a) => fetch(...a); });
+  const store = { id: 1, name: 'Shop', currency: 'MAD',
+    payment_config: JSON.stringify({ enabled: ['paypal'], values: { paypal: { client_id: 'cid', mode: 'sandbox', currency: 'EUR', rate: '0.092' } } }),
+    payment_secrets: payments.encrypt({ paypal: { secret: 'sec' } }) };
+  let created; let captureStatus = 'COMPLETED';
+  payments.http.fetch = async (url, opts = {}) => {
+    assert.match(url, /^https:\/\/api-m\.sandbox\.paypal\.com\//);
+    if (url.endsWith('/v1/oauth2/token')) {
+      assert.strictEqual(opts.headers.Authorization, `Basic ${Buffer.from('cid:sec').toString('base64')}`);
+      return new Response(JSON.stringify({ access_token: 'AT' }));
+    }
+    if (url.endsWith('/v2/checkout/orders')) {
+      created = JSON.parse(opts.body);
+      return new Response(JSON.stringify({ id: 'PP1', links: [{ rel: 'payer-action', href: 'https://www.sandbox.paypal.com/checkoutnow?token=PP1' }] }));
+    }
+    if (url.endsWith('/PP1/capture')) {
+      return new Response(JSON.stringify({ id: 'PP1', status: captureStatus, purchase_units: [{ payments: { captures: [{ id: 'CAP1', status: captureStatus, amount: { value: '18.40', currency_code: 'EUR' } }] } }] }), { status: captureStatus === 'COMPLETED' ? 201 : 422 });
+    }
+    throw new Error('unexpected ' + url);
+  };
+  const order = { id: 7, total: 200 };
+  const step = await payments.PROVIDERS.paypal.start({ store, order, urls: { return: 'https://x/r?t=1', cancel: 'https://x/c?t=1' } });
+  assert.strictEqual(created.purchase_units[0].amount.value, '18.40');
+  assert.strictEqual(created.purchase_units[0].amount.currency_code, 'EUR');
+  assert.strictEqual(step.redirect, 'https://www.sandbox.paypal.com/checkoutnow?token=PP1');
+  const saved = { ...order, payment_ref: step.ref, payment_amount: step.amount };
+  assert.deepStrictEqual(await payments.PROVIDERS.paypal.verify({ store, order: saved, query: { token: 'OTHER' } }), { paid: false });
+  assert.strictEqual((await payments.PROVIDERS.paypal.verify({ store, order: saved, query: { token: 'PP1' } })).paid, true);
+  captureStatus = 'PENDING';
+  assert.strictEqual((await payments.PROVIDERS.paypal.verify({ store, order: saved, query: { token: 'PP1' } })).paid, false);
+});

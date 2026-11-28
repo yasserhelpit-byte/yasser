@@ -1,0 +1,20 @@
+<%- include('../partials/store-header', { title: 'لم يكتمل الدفع' }) %>
+<section class="card center empty">
+  <div class="big-icon">💳</div>
+  <h1>لم يكتمل الدفع</h1>
+  <p><%= reason %></p>
+  <p class="muted">طلب #<%= order.id %> · <%= money(order.total, store.currency) %></p>
+  <% if (order.status !== 'cancelled' && order.payment_status !== 'paid') { %>
+  <div class="row" style="justify-content:center">
+    <a href="<%= retry %>" class="btn">🔁 حاول الدفع مرة أخرى</a>
+    <% if (codOk) { %>
+    <form method="post" action="<%= base %>/pay/<%= order.id %>/cod" class="inline">
+      <%- include('../partials/csrf') %><input type="hidden" name="t" value="<%= order.pay_token %>">
+      <button class="btn ghost">💵 الدفع عند الاستلام بدلاً من ذلك</button>
+    </form>
+    <% } %>
+  </div>
+  <% } %>
+  <p><a href="<%= base || '/' %>">العودة إلى المتجر</a><% if (store.whatsapp) { %> · <a target="_blank" rel="noopener" href="https://wa.me/<%= store.whatsapp %>?text=<%= encodeURIComponent('مرحباً، واجهت مشكلة في دفع طلبي رقم #' + order.id) %>">تواصل معنا عبر واتساب</a><% } %></p>
+</section>
+<%- include('../partials/store-footer') %>

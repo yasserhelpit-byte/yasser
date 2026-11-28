@@ -3,10 +3,25 @@
   <div class="big-icon">✅</div>
   <h1>تم استلام طلبك</h1>
   <p>رقم الطلب <strong>#<%= order.id %></strong> — الإجمالي <%= money(order.total, store.currency) %></p>
-  <p class="muted">سنتواصل معك قريباً لتأكيد الطلب. الدفع عند الاستلام.</p>
+  <% const PM = PAY_METHODS[order.payment_method] || PAY_METHODS.cod; %>
+  <% if (order.payment_status === 'paid') { %>
+    <p class="pay-done">✅ تم الدفع بنجاح عبر <%= PM.label %>.</p>
+    <p class="muted">سنتواصل معك قريباً لتأكيد التوصيل.</p>
+  <% } else if (payDetails.length) { %>
+    <div class="pay-info">
+      <h3><%= PM.icon %> أكمل الدفع: <%= PM.label %></h3>
+      <p>أرسل مبلغ <strong><%= money(order.total, store.currency) %></strong> واكتب رقم الطلب <strong>#<%= order.id %></strong> كمرجع.</p>
+      <dl>
+        <% payDetails.forEach(f => { %><dt><%= f.label.replace(/ \(.*\)$/, '') %></dt><dd <%= f.ltr ? 'dir=ltr' : '' %> class="<%= f.ltr ? 'mono' : '' %>"><%= f.k === 'rib' && f.value.replace(/\D/g, '').length === 24 ? f.value.replace(/\D/g, '').replace(/^(\d{3})(\d{3})(\d{16})(\d{2})$/, '$1 $2 $3 $4') : f.value %></dd><% }) %>
+      </dl>
+      <p class="muted small">بعد وصول المبلغ يؤكد المتجر طلبك ويشحنه.</p>
+    </div>
+  <% } else { %>
+    <p class="muted">سنتواصل معك قريباً لتأكيد الطلب. <%= PM.label %>.</p>
+  <% } %>
   <div class="row" style="justify-content:center">
     <a href="<%= base || '/' %>" class="btn">العودة إلى المتجر</a>
-    <% if (store.whatsapp) { %><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/<%= store.whatsapp %>?text=<%= encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + order.id) %>">تواصل عبر واتساب</a><% } %>
+    <% if (store.whatsapp) { %><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/<%= store.whatsapp %>?text=<%= encodeURIComponent((payDetails.length && order.payment_status !== 'paid' ? 'مرحباً، أرسلت مبلغ طلبي رقم #' + order.id + '، وهذا وصل التحويل:' : 'مرحباً، بخصوص طلبي رقم #' + order.id)) %>">تواصل عبر واتساب</a><% } %>
   </div>
 </section>
 <% if (typeof pixels !== 'undefined' && pixels) { %>
