@@ -130,6 +130,8 @@ const STATUSES = {
   cancelled: 'ملغى',
 };
 app.locals.STATUSES = STATUSES;
+// Changes on every deploy, so browsers fetch the new CSS/JS right away instead of a cached copy.
+app.locals.assetV = (process.env.RAILWAY_GIT_COMMIT_SHA || Date.now().toString(36)).slice(0, 10);
 app.locals.PAY_METHODS = payments.METHODS;
 app.locals.PAY_STATUS = payments.PAY_STATUS;
 app.locals.payOrder = payments.ORDER;

@@ -26,8 +26,8 @@
   <div class="save-bar pf-save"><button class="btn big">💾 حفظ الصفحة</button></div>
 </form>
 <script>window.CSRF = <%- js(csrf) %>; window.SCHEMA = <%- js(SCHEMA) %>; window.PRODUCTS = <%- js(productChoices) %>;</script>
-<script src="/upload.js"></script>
-<script src="/builder.js"></script>
+<script src="/upload.js?v=<%= assetV %>"></script>
+<script src="/builder.js?v=<%= assetV %>"></script>
 <script>
 initBuilder({ root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: <%- js(sectionsData) %>, uploadUrl: '/dashboard/stores/<%= store.id %>/uploads' });
 </script>

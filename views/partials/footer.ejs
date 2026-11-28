@@ -8,7 +8,7 @@
 <% } %>
 <% if (user && typeof shell !== 'undefined' && shell) { %>
 <script>window.CSRF = window.CSRF || <%- js(csrf) %>; window.VAPID_KEY = <%- js(vapidKey) %>;</script>
-<script src="/notify.js"></script>
+<script src="/notify.js?v=<%= assetV %>"></script>
 <% } %>
 <% if (user && typeof pendingOrders !== 'undefined') { %>
 <div id="toast" class="toast" hidden></div>

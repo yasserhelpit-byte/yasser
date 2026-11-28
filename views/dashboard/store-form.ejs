@@ -102,7 +102,7 @@
 </form>
 <% if (editing) { %>
 <script>window.CSRF = <%- js(csrf) %>;</script>
-<script src="/upload.js"></script>
+<script src="/upload.js?v=<%= assetV %>"></script>
 <script>
 document.querySelectorAll('.img-field').forEach((f) => {
   const hidden = f.querySelector('input[type=hidden]');

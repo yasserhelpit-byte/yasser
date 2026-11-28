@@ -108,7 +108,7 @@
   </div>
 </form>
 <script>window.CSRF = <%- js(csrf) %>; window.CURRENCY = <%- js(cur) %>;</script>
-<script src="/upload.js"></script>
+<script src="/upload.js?v=<%= assetV %>"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
