@@ -38,7 +38,7 @@
     <% if (u.id !== user.id) { %>
     <section class="card">
       <h3>🛡️ الصلاحية</h3>
-      <form method="post" action="/admin/merchants/<%= u.id %>/role" onsubmit="return confirm('تغيير صلاحية هذا الحساب؟')">
+      <form method="post" action="/admin/merchants/<%= u.id %>/role" data-confirm="سيتغير ما يستطيع هذا الحساب فعله في المنصة." data-confirm-title="تغيير صلاحية الحساب؟" data-confirm-ok="نعم، غيّر الصلاحية" data-confirm-icon="🛡️">
         <%- include('../partials/csrf') %>
         <input type="hidden" name="role" value="<%= u.role === 'admin' ? 'merchant' : 'admin' %>">
         <button class="btn ghost full"><%= u.role === 'admin' ? 'إزالة صلاحية المسؤول' : 'جعله مسؤولاً' %></button>
@@ -49,7 +49,7 @@
     <section class="card">
       <h3><%= u.suspended ? '▶️ إعادة تفعيل الحساب' : '⏸️ إيقاف الحساب' %></h3>
       <p class="muted small"><%= u.suspended ? 'سيتمكن من الدخول مجدداً.' : 'سيتم تسجيل خروجه ولن يستطيع الدخول. متاجره تبقى كما هي (أوقفها منفصلة إن أردت).' %></p>
-      <form method="post" action="/admin/merchants/<%= u.id %>/suspend" <% if (!u.suspended) { %>onsubmit="return confirm('إيقاف هذا الحساب؟')"<% } %>>
+      <form method="post" action="/admin/merchants/<%= u.id %>/suspend" <% if (!u.suspended) { %>data-confirm="لن يستطيع صاحب الحساب الدخول، وستتوقف متاجره عن استقبال الطلبات حتى تعيد تفعيله." data-confirm-title="إيقاف هذا الحساب؟" data-confirm-ok="إيقاف الحساب" data-danger<% } %>>
         <%- include('../partials/csrf') %><input type="hidden" name="suspend" value="<%= u.suspended ? 0 : 1 %>">
         <button class="btn full <%= u.suspended ? '' : 'ghost danger-btn' %>"><%= u.suspended ? 'إعادة التفعيل' : 'إيقاف الحساب' %></button>
       </form>

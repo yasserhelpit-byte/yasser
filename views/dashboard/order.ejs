@@ -28,13 +28,13 @@
   </div>
   <div class="row">
     <% if (!paid && PM.kind === 'manual') { %>
-      <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/paid" class="inline" onsubmit="return confirm('هل وصلك المبلغ فعلاً إلى حسابك؟')"><%- include('../partials/csrf') %><button class="btn">✓ وصلني المبلغ</button></form>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/paid" class="inline" data-confirm="تأكد من وصول المبلغ إلى حسابك أو وكالتك قبل التأكيد. سيظهر الطلب «مدفوعاً»." data-confirm-title="هل وصلك المبلغ فعلاً؟" data-confirm-ok="نعم، وصلني المبلغ" data-confirm-icon="💰"><%- include('../partials/csrf') %><button class="btn">✓ وصلني المبلغ</button></form>
     <% } %>
     <% if (!paid && PM.kind === 'online' && order.payment_method !== 'cmi') { %>
       <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/verify" class="inline"><%- include('../partials/csrf') %><button class="btn ghost">🔄 التحقق من الدفع</button></form>
     <% } %>
     <% if (paid && PM.kind === 'manual') { %>
-      <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/paid" class="inline" onsubmit="return confirm('إلغاء تأكيد الدفع؟')"><%- include('../partials/csrf') %><input type="hidden" name="undo" value="1"><button class="link danger">تراجع</button></form>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/paid" class="inline" data-confirm="سيعود الطلب إلى حالة «بانتظار التحويل»." data-confirm-title="إلغاء تأكيد الدفع؟" data-confirm-ok="نعم، تراجع"><%- include('../partials/csrf') %><input type="hidden" name="undo" value="1"><button class="link danger">تراجع</button></form>
     <% } %>
   </div>
   <% if (check === 'unpaid') { %><p class="small muted">لم يكتمل الدفع بعد عند <%= PM.label %>.</p><% } %>
@@ -56,7 +56,7 @@
     <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/status" class="inline">
       <%- include('../partials/csrf') %><input type="hidden" name="status" value="confirmed"><button class="btn">✓ العميل أكّد</button>
     </form>
-    <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/status" class="inline" onsubmit="return confirm('إلغاء الطلب وإرجاع المخزون؟')">
+    <form method="post" action="/dashboard/stores/<%= store.id %>/orders/<%= order.id %>/status" class="inline" data-confirm="سيُلغى الطلب وتعود كمياته إلى المخزون. يمكنك إعادة تفعيله لاحقاً من حالة الطلب." data-confirm-title="إلغاء هذا الطلب؟" data-confirm-ok="نعم، ألغِ الطلب" data-danger>
       <%- include('../partials/csrf') %><input type="hidden" name="status" value="cancelled"><button class="btn ghost danger-btn">✕ إلغاء (لم يرد / وهمي)</button>
     </form>
   </div>

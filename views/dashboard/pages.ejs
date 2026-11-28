@@ -34,7 +34,7 @@
         <form method="post" action="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>/move" class="inline"><%- include('../partials/csrf') %><input type="hidden" name="dir" value="<%= dir %>"><button class="link"><%= dir === 'up' ? '↑' : '↓' %></button></form>
       <% } }) %>
       <a href="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>">تعديل</a>
-      <form method="post" action="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>/delete" class="inline" onsubmit="return confirm('حذف الصفحة؟')"><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/pages/<%= p.id %>/delete" class="inline" data-confirm="ستُحذف هذه الصفحة وتختفي من قائمة المتجر. لا يمكن التراجع." data-confirm-title="حذف الصفحة؟" data-confirm-ok="حذف الصفحة" data-danger><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
     </div></td>
   </tr>
   <% }) %>

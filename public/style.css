@@ -1615,3 +1615,25 @@ a.promo-card:hover { transform: translateY(-3px); }
 .tpl-card .tpl-txt { display: grid; gap: 2px; flex: 1; min-width: 0; }
 .tpl-pro { font-style: normal; font-size: .68rem; font-weight: 800; padding: 1px 8px; border-radius: 999px; background: linear-gradient(135deg, #f59e0b, #ec4899); color: #fff; vertical-align: 2px; }
 .tpl-swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--line); }
+
+/* =========================================================
+   YASSER dialog (replaces the browser's confirm / alert)
+   ========================================================= */
+.ydlg { border: 0; padding: 0; background: transparent; max-width: min(440px, calc(100vw - 32px)); width: 100%; color: var(--text); overflow: visible; }
+.ydlg::backdrop { background: rgba(15, 23, 42, .45); backdrop-filter: blur(3px); animation: ydlg-fade .18s ease; }
+.ydlg[open] .ydlg-card { animation: ydlg-pop .22s cubic-bezier(.2, .9, .3, 1.2); }
+.ydlg.out .ydlg-card { animation: ydlg-out .15s ease forwards; }
+.ydlg-card { background: var(--card); border-radius: 18px; padding: 26px 24px 20px; text-align: center; box-shadow: 0 30px 70px -20px rgba(0,0,0,.45); border: 1px solid var(--line); }
+.ydlg-ic { width: 60px; height: 60px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 1.7rem; background: color-mix(in srgb, var(--brand) 12%, var(--card)); }
+.ydlg.danger .ydlg-ic { background: #fee2e2; }
+.ydlg-title { margin: 0 0 6px; font-size: 1.2rem; }
+.ydlg-msg { margin: 0 0 20px; color: var(--muted); line-height: 1.7; white-space: pre-line; }
+.ydlg-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.ydlg-actions .btn { flex: 1 1 140px; justify-content: center; padding: 11px 18px; }
+.ydlg.danger .ydlg-ok { background: #dc2626; border-color: #dc2626; color: #fff; }
+.ydlg.danger .ydlg-ok:hover { background: #b91c1c; }
+.ydlg-actions .btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand) 45%, transparent); outline-offset: 2px; }
+@keyframes ydlg-pop { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes ydlg-out { to { opacity: 0; transform: scale(.97); } }
+@keyframes ydlg-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ydlg-card, .ydlg::backdrop { animation: none !important; } }

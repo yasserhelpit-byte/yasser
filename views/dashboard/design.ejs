@@ -178,9 +178,12 @@
   }));
 
   // Templates: rebuild the builder with the preset's sections.
-  document.querySelectorAll('.tpl-card').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tpl-card').forEach((b) => b.addEventListener('click', async () => {
     const p = presets[b.dataset.preset];
-    if (!confirm(`استبدال الأقسام الحالية بقالب «${p.label}»؟${p.style ? '\nسيُطبَّق أيضاً أسلوبه (الألوان والخطوط)، ويمكنك تغييره من «الأسلوب».' : ''}`)) return;
+    const okd = await yConfirm(
+      `سيحلّ هذا القالب محل أقسام صفحتك الحالية${p.style ? '، وسيُطبَّق معه أسلوبه (الألوان والخطوط وشكل الأزرار). يمكنك تعديل كل شيء بعدها' : ''}.\nلن يتغير شيء في متجرك حتى تضغط «حفظ».`,
+      { title: `استعمال قالب «${p.label}»؟`, ok: 'استعمل القالب', cancel: 'ليس الآن', icon: p.icon || '✨' });
+    if (!okd) return;
     if (p.style) {
       Object.entries(p.style.theme || {}).forEach(([k, v]) => pick('t_' + k, v));
       if (p.style.font) pick('font', p.style.font);

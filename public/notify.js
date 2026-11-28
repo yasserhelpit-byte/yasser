@@ -94,7 +94,7 @@
     const label = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'جارٍ التفعيل…';
-    try { await enable(); await refreshState(); } catch (e) { alert(MSG[e.message] || 'تعذّر تفعيل الإشعارات: ' + e.message); }
+    try { await enable(); await refreshState(); } catch (e) { (window.yAlert || alert)(MSG[e.message] || 'تعذّر تفعيل الإشعارات: ' + e.message, { title: 'الإشعارات', icon: '🔔' }); }
     btn.textContent = label;
     btn.disabled = false;
   }));

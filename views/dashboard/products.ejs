@@ -30,7 +30,7 @@
       <%- include('../partials/ai-launch', { p, compact: true }) %>
       <a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>">تعديل</a>
       <a href="/s/<%= store.slug %>/p/<%= p.id %>" target="_blank" class="muted">عرض ↗</a>
-      <form method="post" action="/dashboard/stores/<%= store.id %>/products/<%= p.id %>/delete" class="inline" onsubmit="return confirm('حذف المنتج؟')"><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/products/<%= p.id %>/delete" class="inline" data-confirm="سيُحذف المنتج من متجرك. الطلبات السابقة تبقى محفوظة." data-confirm-title="حذف المنتج؟" data-confirm-ok="حذف المنتج" data-danger><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
     </div></td>
   </tr>
   <% }) %>

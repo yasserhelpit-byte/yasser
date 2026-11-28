@@ -139,7 +139,7 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus 
           ...moveBtns(sections, i, (to, from) => { const a = open.has(from), b = open.has(to); open.delete(from); open.delete(to); if (a) open.add(to); if (b) open.add(from); render(to); }),
           h('button', { type: 'button', class: 'b-ic', title: sec.hidden ? 'إظهار' : 'إخفاء', onclick: () => { sec.hidden = !sec.hidden; touch(); render(); } }, sec.hidden ? '🙈' : '👁️'),
           h('button', { type: 'button', class: 'b-ic', title: 'نسخ', onclick: () => { sections.splice(i + 1, 0, JSON.parse(JSON.stringify(sec))); touch(); render(i + 1); } }, '⧉'),
-          h('button', { type: 'button', class: 'b-ic danger', title: 'حذف', onclick: () => { if (confirm('حذف هذا القسم؟')) { sections.splice(i, 1); open.clear(); touch(); render(); } } }, '✕'),
+          h('button', { type: 'button', class: 'b-ic danger', title: 'حذف', onclick: async () => { if (await yConfirm('سيُحذف هذا القسم من الصفحة. يمكنك التراجع بعدم الحفظ.', { title: 'حذف القسم؟', ok: 'حذف القسم', danger: true })) { sections.splice(i, 1); open.clear(); touch(); render(); } } }, '✕'),
           h('span', { class: 'b-chev' }, isOpen ? '▴' : '▾')));
       const card = h('div', { class: 'b-sec' + (sec.hidden ? ' hidden-sec' : '') + (isOpen ? ' open' : ''), id: 'sec-' + i }, head);
       // Drag and drop to reorder (closed cards only, so text inputs stay selectable).
@@ -177,9 +177,9 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus 
 
   if (presets) {
     const sel = document.getElementById('preset-select');
-    document.getElementById('preset-apply')?.addEventListener('click', () => {
+    document.getElementById('preset-apply')?.addEventListener('click', async () => {
       const p = presets[sel.value];
-      if (p && confirm(`استبدال كل الأقسام الحالية بقالب «${p.label}»؟`)) { sections = JSON.parse(JSON.stringify(p.sections)); open.clear(); touch(); render(); }
+      if (p && await yConfirm('سيحلّ هذا القالب محل كل أقسام الصفحة الحالية. لن يتغير شيء حتى تحفظ.', { title: `استعمال قالب «${p.label}»؟`, ok: 'استعمل القالب', icon: '✨' })) { sections = JSON.parse(JSON.stringify(p.sections)); open.clear(); touch(); render(); }
     });
   }
   input.form.addEventListener('submit', () => { input.value = JSON.stringify(sections); dirty = false; });

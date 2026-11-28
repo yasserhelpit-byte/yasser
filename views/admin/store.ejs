@@ -61,7 +61,7 @@
     <section class="card danger-zone">
       <h3>🗑️ حذف المتجر نهائياً</h3>
       <p class="muted small">يحذف المتجر مع كل منتجاته وطلباته وصفحاته ومحادثاته. <strong>لا يمكن التراجع.</strong> للتأكيد اكتب رابط المتجر: <code dir="ltr"><%= s.slug %></code></p>
-      <form method="post" action="/admin/stores/<%= s.id %>/delete" class="form" onsubmit="return confirm('حذف المتجر <%= s.slug %> نهائياً؟')">
+      <form method="post" action="/admin/stores/<%= s.id %>/delete" class="form" data-confirm="سيُحذف المتجر «<%= s.slug %>» نهائياً مع منتجاته وطلباته وصفحاته. لا يمكن التراجع." data-confirm-title="حذف المتجر نهائياً؟" data-confirm-ok="نعم، احذف المتجر" data-danger>
         <%- include('../partials/csrf') %>
         <input name="confirm" dir="ltr" autocomplete="off" placeholder="<%= s.slug %>" required>
         <button class="btn danger-solid">حذف نهائي</button>

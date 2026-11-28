@@ -85,7 +85,7 @@
 <section class="card">
   <div class="row between">
     <div><h3>إزالة النطاق</h3><p class="muted small">سيعود متجرك للعمل على رابط المنصة فقط.</p></div>
-    <form method="post" action="/dashboard/stores/<%= store.id %>/domain/remove" class="inline" onsubmit="return confirm('إزالة النطاق <%= d %>؟')"><%- include('../partials/csrf') %><button class="btn ghost danger-btn">إزالة</button></form>
+    <form method="post" action="/dashboard/stores/<%= store.id %>/domain/remove" class="inline" data-confirm="سيتوقف متجرك عن العمل على <%= d %>، ويبقى متاحاً على رابط YASSER." data-confirm-title="إزالة النطاق؟" data-confirm-ok="إزالة النطاق" data-danger><%- include('../partials/csrf') %><button class="btn ghost danger-btn">إزالة</button></form>
   </div>
 </section>
 <% } %>
