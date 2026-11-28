@@ -825,7 +825,7 @@ test('payments: merchant picks methods, bank transfer, Stripe, CMI, expiry', asy
   r = await cu('POST', '/s/pay-shop/checkout', { ...buyer, customer_phone: '0611111111', payment_method: 'bank' });
   const bankId = Number(r.location.match(/thanks\/(\d+)/)[1]);
   page = (await cu('GET', r.location)).text;
-  assert.match(page, /230780123456789012345678/);
+  assert.match(page, /230 780 1234567890123456 78/); // RIB shown in its usual groups
   assert.match(page, /Payer SARL/);
   assert.strictEqual(db.prepare('SELECT payment_status FROM orders WHERE id = ?').get(bankId).payment_status, 'awaiting');
   assert.match(notes(uid)[0], new RegExp(`#${bankId}`)); // notified right away
