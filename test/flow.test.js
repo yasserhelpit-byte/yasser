@@ -1523,3 +1523,56 @@ test('visitor analytics: anonymous visits, sources, conversion; owner and bots n
   assert.match(page, /فيسبوك/);
   assert.match(page, /33\.3%/);
 });
+
+test('product reviews: moderation, verified buyers, average rating', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Rev', email: 'rev@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = Number((await m('POST', '/dashboard/stores', { _csrf: c, name: 'Rev Shop', slug: 'rev-shop', currency: 'MAD' })).location.split('/').pop());
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Kettle', price: '200', stock: '20', active: '1' });
+  const pid = db.prepare('SELECT id FROM products WHERE store_id = ?').get(sid).id;
+  const v = client(base);
+  const vc = csrfOf((await v('GET', `/s/rev-shop/p/${pid}`)).text);
+  // A delivered order from 0611223344 makes that phone a verified buyer.
+  await v('POST', '/s/rev-shop/quick-order', { _csrf: vc, product_id: pid, quantity: '1', customer_name: 'Buyer', customer_phone: '0611223344', customer_address: 'Fes, Atlas 9' });
+  const oid = db.prepare('SELECT id FROM orders WHERE store_id = ?').get(sid).id;
+  await m('POST', `/dashboard/stores/${sid}/orders/${oid}/status`, { _csrf: c, status: 'delivered' });
+
+  let r = await v('POST', `/s/rev-shop/p/${pid}/review`, { _csrf: vc, name: 'Buyer', rating: '5', body: 'ممتاز <script>x</script>', phone: '0611223344' });
+  assert.match(r.location, /review=sent#reviews$/);
+  await v('POST', `/s/rev-shop/p/${pid}/review`, { _csrf: vc, name: 'Someone', rating: '3', body: 'عادي' });
+  r = await v('POST', `/s/rev-shop/p/${pid}/review`, { _csrf: vc, name: 'Bad', rating: '9', body: 'x' });
+  assert.match(decodeURIComponent(r.location), /اختر عدد النجوم/);
+  const rows = db.prepare('SELECT * FROM reviews WHERE product_id = ? ORDER BY id').all(pid);
+  assert.deepStrictEqual(rows.map((x) => [x.rating, x.verified, x.status]), [[5, 1, 'pending'], [3, 0, 'pending']]);
+  assert.ok(!JSON.stringify(rows).includes('0611223344')); // the phone is only used to check, never stored
+  // Nothing public before approval; the merchant is notified and sees them.
+  let page = (await fetch(`${base}/s/rev-shop/p/${pid}`).then((x) => x.text()));
+  assert.doesNotMatch(page, /ممتاز/);
+  assert.ok(db.prepare("SELECT 1 FROM notifications WHERE kind = 'review'").get());
+  assert.match((await m('GET', `/dashboard/stores/${sid}/reviews`)).text, /Someone/);
+  for (const x of rows) await m('POST', `/dashboard/stores/${sid}/reviews/${x.id}`, { _csrf: c, action: 'approved' });
+  await m('POST', `/dashboard/stores/${sid}/reviews/${rows[0].id}`, { _csrf: c, action: 'reply', reply: 'شكراً لك!' });
+  const prod = db.prepare('SELECT rating_avg, rating_count FROM products WHERE id = ?').get(pid);
+  assert.deepStrictEqual({ ...prod }, { rating_avg: 4, rating_count: 2 });
+  page = await fetch(`${base}/s/rev-shop/p/${pid}`).then((x) => x.text());
+  assert.match(page, /اشترى المنتج/);
+  assert.match(page, /شكراً لك!/);
+  assert.match(page, /&lt;script&gt;x&lt;\/script&gt;/); // escaped
+  assert.match(page, /"aggregateRating":\{"@type":"AggregateRating","ratingValue":4,"reviewCount":2\}/);
+  // Hiding one updates the average.
+  await m('POST', `/dashboard/stores/${sid}/reviews/${rows[1].id}`, { _csrf: c, action: 'hidden' });
+  assert.strictEqual(db.prepare('SELECT rating_avg FROM products WHERE id = ?').get(pid).rating_avg, 5);
+  // Another store can't moderate these.
+  const m2 = client(base);
+  const c2 = csrfOf((await m2('GET', '/signup')).text);
+  await m2('POST', '/signup', { _csrf: c2, name: 'Other', email: 'rev-other@example.com', password: 'password123', accept_terms: '1' });
+  const c3 = csrfOf((await m2('GET', '/dashboard')).text);
+  assert.strictEqual((await m2('POST', `/dashboard/stores/${sid}/reviews/${rows[0].id}`, { _csrf: c3, action: 'delete' })).status, 404);
+});

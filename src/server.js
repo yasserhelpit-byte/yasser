@@ -519,6 +519,7 @@ function ownStore(req, res, next) {
   if (!store) return res.status(404).render('message', { title: 'غير موجود', message: 'المتجر غير موجود.' });
   req.store = store;
   res.locals.store = store;
+  res.locals.pendingReviews = db.prepare("SELECT COUNT(*) AS n FROM reviews WHERE store_id = ? AND status = 'pending'").get(store.id).n;
   // An admin working inside someone else's store sees a clear banner.
   if (store.owner_id !== req.user.id) {
     res.locals.actingAs = db.prepare('SELECT name, email FROM users WHERE id = ?').get(store.owner_id);
@@ -934,6 +935,30 @@ dash.post('/stores/:storeId/billing/request', ownStore, (req, res) => {
 dash.post('/stores/:storeId/billing/cancel', ownStore, (req, res) => {
   db.prepare("DELETE FROM subscriptions WHERE store_id = ? AND status = 'pending'").run(req.store.id);
   res.redirect(`/dashboard/stores/${req.store.id}/billing`);
+});
+
+// ----- Reviews (merchant side) -----
+// Keep products.rating_avg / rating_count in step with the approved reviews.
+function refreshRating(productId) {
+  const r = db.prepare("SELECT COUNT(*) AS n, COALESCE(AVG(rating), 0) AS a FROM reviews WHERE product_id = ? AND status = 'approved'").get(productId);
+  db.prepare('UPDATE products SET rating_count = ?, rating_avg = ? WHERE id = ?').run(r.n, Math.round(r.a * 10) / 10, productId);
+}
+dash.get('/stores/:storeId/reviews', ownStore, (req, res) => {
+  const status = ['pending', 'approved', 'hidden'].includes(req.query.status) ? req.query.status : 'pending';
+  const reviews = db.prepare(`SELECT r.*, p.name AS product_name FROM reviews r JOIN products p ON p.id = r.product_id
+    WHERE r.store_id = ? AND r.status = ? ORDER BY r.id DESC LIMIT 200`).all(req.store.id, status);
+  const counts = Object.fromEntries(db.prepare('SELECT status, COUNT(*) AS n FROM reviews WHERE store_id = ? GROUP BY status').all(req.store.id).map((r) => [r.status, r.n]));
+  res.render('dashboard/reviews', { reviews, status, counts });
+});
+dash.post('/stores/:storeId/reviews/:reviewId', ownStore, (req, res) => {
+  const r = db.prepare('SELECT * FROM reviews WHERE id = ? AND store_id = ?').get(req.params.reviewId, req.store.id);
+  if (!r) return res.status(404).render('message', { title: 'غير موجود', message: 'التقييم غير موجود.' });
+  const action = req.body.action;
+  if (action === 'delete') db.prepare('DELETE FROM reviews WHERE id = ?').run(r.id);
+  else if (['approved', 'hidden'].includes(action)) db.prepare('UPDATE reviews SET status = ? WHERE id = ?').run(action, r.id);
+  else if (action === 'reply') db.prepare('UPDATE reviews SET reply = ? WHERE id = ?').run(str(req.body.reply, 500), r.id);
+  refreshRating(r.product_id);
+  res.redirect(`/dashboard/stores/${req.store.id}/reviews?status=${action === 'delete' ? r.status : action === 'reply' ? r.status : action}`);
 });
 
 // ----- Analytics -----
@@ -1819,7 +1844,8 @@ shop.get('/p/:productId', (req, res) => {
   const product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.params.productId, req.store.id);
   if (!product) return res.status(404).render('message', { title: 'غير موجود', message: 'المنتج غير موجود.' });
   analytics.track(req, req.store, 'product', product.id);
-  res.render('store/product', { product, choose: !!req.query.choose });
+  const reviews = db.prepare("SELECT name, rating, body, verified, reply, created_at FROM reviews WHERE product_id = ? AND status = 'approved' ORDER BY verified DESC, id DESC LIMIT 30").all(product.id);
+  res.render('store/product', { product, choose: !!req.query.choose, reviews, reviewSent: req.query.review === 'sent', reviewError: str(req.query.review_error, 200), zones: pricing.zonesOf(req.store) });
 });
 
 shop.post('/cart', (req, res) => {
@@ -2015,6 +2041,31 @@ function safeBack(req) {
   const inStore = !base || b === base || b.startsWith(base + '/') || b.startsWith(base + '?');
   return /^\/(?![\/\\])/.test(b) && !/[\\\s]/.test(b) && inStore ? b : base || '/';
 }
+
+// ----- Reviews (customer side) -----
+shop.post('/p/:productId/review', (req, res) => {
+  const product = db.prepare('SELECT id, name FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.params.productId, req.store.id);
+  if (!product) return res.status(404).render('message', { title: 'غير موجود', message: 'المنتج غير موجود.' });
+  const back = (q) => res.redirect(`${req.base}/p/${product.id}?${q}#reviews`);
+  if (req.body.website) return back('review=sent'); // bots
+  const name = str(req.body.name, 60);
+  const rating = parseInt(req.body.rating, 10);
+  const body = str(req.body.body, 1000);
+  const phone = cleanPhone(req.body.phone);
+  if (name.length < 2) return back(`review_error=${encodeURIComponent('اكتب اسمك.')}`);
+  if (!(rating >= 1 && rating <= 5)) return back(`review_error=${encodeURIComponent('اختر عدد النجوم.')}`);
+  if (body.length < 3) return back(`review_error=${encodeURIComponent('اكتب رأيك في المنتج.')}`);
+  if (!limiter.hit(`review:${req.ip}`, 3, 60 * MIN)) return back(`review_error=${encodeURIComponent('تقييمات كثيرة. حاول لاحقاً.')}`);
+  // "Verified buyer": the phone matches a delivered order that contains this product. The phone itself isn't stored.
+  const verified = validPhone(phone) && !!db.prepare(`SELECT 1 FROM orders o JOIN order_items i ON i.order_id = o.id
+    WHERE o.store_id = ? AND o.customer_phone = ? AND o.status = 'delivered' AND i.product_id = ? LIMIT 1`).get(req.store.id, phone, product.id);
+  db.prepare('INSERT INTO reviews (store_id, product_id, name, rating, body, verified) VALUES (?, ?, ?, ?, ?, ?)').run(req.store.id, product.id, name, rating, body, verified ? 1 : 0);
+  notifier.notify(req.store.owner_id, {
+    kind: 'review', storeId: req.store.id, link: `/dashboard/stores/${req.store.id}/reviews`, tag: `review-${product.id}`,
+    title: `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)} تقييم جديد · ${product.name}`, body: `${name}: ${body.slice(0, 140)}`,
+  });
+  back('review=sent');
+});
 
 // ----- Payments -----
 // Where to send the customer right after the order is created.

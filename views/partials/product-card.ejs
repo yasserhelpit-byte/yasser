@@ -12,6 +12,7 @@
   <div class="pcard-body">
     <% if (p.category) { %><small class="pcard-cat"><%= p.category %></small><% } %>
     <a href="<%= base %>/p/<%= p.id %>" class="pcard-name"><%= p.name %></a>
+    <% if (p.rating_count) { %><span class="pcard-rating"><span class="stars" style="--r: <%= p.rating_avg %>" aria-hidden="true">★★★★★</span> <small>(<%= p.rating_count %>)</small></span><% } %>
     <div class="price-row"><span class="price"><%= money(p.price, store.currency) %></span><% if (p.compare_price > p.price) { %><s class="compare"><%= money(p.compare_price, store.currency) %></s><% } %></div>
   </div>
   <% if (p.stock && hasOpts) { %>

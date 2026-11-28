@@ -242,6 +242,23 @@ CREATE TABLE IF NOT EXISTS visits (
 );
 CREATE INDEX IF NOT EXISTS visits_store_day ON visits(store_id, day);
 `);
+addColumn('products', 'rating_avg', 'REAL NOT NULL DEFAULT 0');
+addColumn('products', 'rating_count', 'INTEGER NOT NULL DEFAULT 0');
+db.exec(`
+CREATE TABLE IF NOT EXISTS reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  rating INTEGER NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  verified INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  reply TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS reviews_product ON reviews(product_id, status);
+`);
 addColumn('stores', 'shipping_zones', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'customer_city', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'discount', 'REAL NOT NULL DEFAULT 0');

@@ -13,6 +13,7 @@
   <div>
     <% if (product.category) { %><span class="pill"><%= product.category %></span><% } %>
     <h1><%= product.name %></h1>
+    <% if (product.rating_count) { %><a class="pd-rating" href="#reviews"><span class="stars" style="--r: <%= product.rating_avg %>" aria-hidden="true">★★★★★</span> <strong><%= product.rating_avg.toFixed(1) %></strong> <span class="muted">(<%= product.rating_count %> <%= product.rating_count === 1 ? 'تقييم' : 'تقييمات' %>)</span></a><% } %>
     <div class="price-row big"><%- include('../partials/price', { p: product }) %></div>
     <% if (product.stock > 0) { %>
       <p class="<%= product.stock <= 3 ? 'warn-text' : 'ok-text' %>"><%= product.stock <= 3 ? '🔥 بقي ' + product.stock + ' فقط في المخزون' : '✓ متوفر' %></p>
@@ -38,12 +39,53 @@
       <% } %>
     <% } else { %><p class="badge s-cancelled">نفدت الكمية</p><% } %>
     <ul class="perks">
-      <li>💵 الدفع عند الاستلام</li>
-      <li>🚚 <%= store.shipping_fee > 0 ? 'التوصيل ' + money(store.shipping_fee, store.currency) : 'توصيل مجاني' %><%= store.free_shipping_over > 0 ? ' · مجاني فوق ' + money(store.free_shipping_over, store.currency) : '' %></li>
+      <% if (payMethods.includes('cod')) { %><li>💵 الدفع عند الاستلام</li><% } %>
+      <% if (payMethods.some(m => PAY_METHODS[m].kind !== 'offline')) { %><li>🔒 <%= payMethods.filter(m => m !== 'cod').map(m => PAY_METHODS[m].label).join(' · ') %></li><% } %>
+      <li>🚚 <%= zones.length ? 'التوصيل حسب مدينتك (من ' + money(Math.min(...zones.map(z => z.fee), store.shipping_fee), store.currency) + ')' : store.shipping_fee > 0 ? 'التوصيل ' + money(store.shipping_fee, store.currency) : 'توصيل مجاني' %><%= store.free_shipping_over > 0 ? ' · مجاني فوق ' + money(store.free_shipping_over, store.currency) : '' %></li>
     </ul>
     <% if (product.description) { %><h3>الوصف</h3><p class="pre"><%= product.description %></p><% } %>
   </div>
 </section>
+
+<section class="reviews" id="reviews">
+  <div class="rv-head">
+    <h2>آراء العملاء</h2>
+    <% if (product.rating_count) { %><div class="rv-avg"><strong><%= product.rating_avg.toFixed(1) %></strong><span class="stars big" style="--r: <%= product.rating_avg %>" aria-label="<%= product.rating_avg %> من 5">★★★★★</span><span class="muted"><%= product.rating_count %> <%= product.rating_count === 1 ? 'تقييم' : 'تقييمات' %></span></div><% } %>
+  </div>
+  <% if (reviewSent) { %><div class="alert ok">✓ شكراً! وصل تقييمك، وسيظهر بعد مراجعته من المتجر.</div><% } %>
+  <% if (reviewError) { %><div class="alert"><%= reviewError %></div><% } %>
+  <% if (reviews.length) { %>
+  <div class="rv-list">
+    <% reviews.forEach(r => { %>
+      <article class="rv-item">
+        <div class="rv-top"><span class="rv-av"><%= r.name.trim().charAt(0) %></span><div><strong><%= r.name %></strong><% if (r.verified) { %> <span class="rv-verified">✓ اشترى المنتج</span><% } %><br><span class="stars" style="--r: <%= r.rating %>" aria-label="<%= r.rating %> من 5">★★★★★</span> <small class="muted"><%= r.created_at.slice(0, 10) %></small></div></div>
+        <p class="pre"><%= r.body %></p>
+        <% if (r.reply) { %><div class="rv-reply"><strong><%= store.name %>:</strong> <%= r.reply %></div><% } %>
+      </article>
+    <% }) %>
+  </div>
+  <% } else if (!reviewSent) { %><p class="muted">لا توجد تقييمات بعد. كن أول من يقيّم هذا المنتج!</p><% } %>
+  <details class="rv-form-wrap" <%= reviewError ? 'open' : '' %>>
+    <summary class="btn ghost">✍️ اكتب تقييمك</summary>
+    <form method="post" action="<%= base %>/p/<%= product.id %>/review" class="form rv-form">
+      <%- include('../partials/csrf') %>
+      <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+      <fieldset class="rate-pick"><legend>تقييمك</legend>
+        <div class="rp-stars" dir="ltr"><% [5, 4, 3, 2, 1].forEach(n => { %><input type="radio" name="rating" value="<%= n %>" id="rate<%= n %>" required><label for="rate<%= n %>" title="<%= n %> من 5">★</label><% }) %></div>
+      </fieldset>
+      <label>اسمك<input name="name" required minlength="2" maxlength="60" autocomplete="name"></label>
+      <label>رأيك في المنتج<textarea name="body" required minlength="3" maxlength="1000" rows="3"></textarea></label>
+      <label>رقم هاتفك (اختياري)<input name="phone" type="tel" dir="ltr" inputmode="tel" placeholder="06XXXXXXXX"><small class="muted">إذا اشتريت هذا المنتج بنفس الرقم، يظهر تقييمك بشارة «✓ اشترى المنتج». لا يُنشر رقمك.</small></label>
+      <button class="btn">إرسال التقييم</button>
+    </form>
+  </details>
+</section>
+<script type="application/ld+json"><%- js({
+  '@context': 'https://schema.org', '@type': 'Product', name: product.name, image: product.image_url ? abs(product.image_url) : undefined,
+  description: (product.description || '').slice(0, 500) || undefined, sku: product.sku || undefined,
+  offers: { '@type': 'Offer', price: product.price.toFixed(2), priceCurrency: store.currency, availability: 'https://schema.org/' + (product.stock > 0 ? 'InStock' : 'OutOfStock') },
+  aggregateRating: product.rating_count ? { '@type': 'AggregateRating', ratingValue: product.rating_avg, reviewCount: product.rating_count } : undefined,
+}) %></script>
 <% const track = (ev, data, id) => (typeof pixels !== 'undefined' && pixels) ? `<script>window.yTrack && yTrack(${js(ev)}, ${js(data)}${id ? ', ' + js(id) : ''});</script>` : ''; %>
 <%- track('ViewContent', { value: product.price, currency: store.currency, name: product.name, contents: [{ id: product.id, quantity: 1, price: product.price }] }) %>
 <%- include('../partials/store-footer') %>

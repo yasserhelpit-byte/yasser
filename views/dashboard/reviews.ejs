@@ -1,0 +1,36 @@
+<%- include('../partials/header', { title: 'التقييمات' }) %>
+<% const tabs = [['pending', '🕓 بانتظار المراجعة'], ['approved', '✅ منشورة'], ['hidden', '🙈 مخفية']]; const base = `/dashboard/stores/${store.id}/reviews`; %>
+<div class="page-head-row"><div>
+  <h1>⭐ تقييمات المنتجات</h1>
+  <p class="muted">يكتب عملاؤك آراءهم في صفحات المنتجات. لا يظهر أي تقييم قبل أن توافق عليه. الآراء الحقيقية، حتى المتوسطة منها، تزيد ثقة الزبائن.</p>
+</div></div>
+<nav class="ord-tabs">
+  <% tabs.forEach(([k, l]) => { %><a href="<%= base %>?status=<%= k %>" class="<%= status === k ? 'on' : '' %>"><%= l %> <b><%= counts[k] || 0 %></b></a><% }) %>
+</nav>
+<% if (!reviews.length) { %>
+  <section class="card center empty"><div class="big-icon">⭐</div><p class="muted"><%= status === 'pending' ? 'لا توجد تقييمات جديدة.' : 'لا توجد تقييمات هنا.' %></p></section>
+<% } %>
+<div class="rv-admin">
+<% reviews.forEach(r => { const act = `${base}/${r.id}`; %>
+  <article class="card rv-card">
+    <div class="rv-top">
+      <span class="rv-av"><%= r.name.trim().charAt(0) %></span>
+      <div class="rv-who">
+        <strong><%= r.name %></strong><% if (r.verified) { %> <span class="rv-verified">✓ اشترى المنتج</span><% } %>
+        <div><span class="stars" style="--r: <%= r.rating %>">★★★★★</span> <small class="muted"><%= r.created_at.slice(0, 16) %> · <a href="/dashboard/stores/<%= store.id %>/products/<%= r.product_id %>"><%= r.product_name %></a></small></div>
+      </div>
+    </div>
+    <p class="pre"><%= r.body %></p>
+    <% if (r.reply) { %><div class="rv-reply"><strong>ردّك:</strong> <%= r.reply %></div><% } %>
+    <div class="rv-actions">
+      <% if (r.status !== 'approved') { %><form method="post" action="<%= act %>" class="inline"><%- include('../partials/csrf') %><input type="hidden" name="action" value="approved"><button class="btn small">✓ نشر</button></form><% } %>
+      <% if (r.status !== 'hidden') { %><form method="post" action="<%= act %>" class="inline"><%- include('../partials/csrf') %><input type="hidden" name="action" value="hidden"><button class="btn small ghost">🙈 إخفاء</button></form><% } %>
+      <details class="rv-reply-form"><summary class="btn small ghost">↩️ ردّ</summary>
+        <form method="post" action="<%= act %>" class="row"><%- include('../partials/csrf') %><input type="hidden" name="action" value="reply"><input name="reply" maxlength="500" value="<%= r.reply %>" placeholder="شكراً على ثقتك!"><button class="btn small">حفظ الرد</button></form>
+      </details>
+      <form method="post" action="<%= act %>" class="inline" data-confirm="سيُحذف هذا التقييم نهائياً." data-confirm-title="حذف التقييم؟" data-confirm-ok="حذف" data-danger><%- include('../partials/csrf') %><input type="hidden" name="action" value="delete"><button class="link danger">حذف</button></form>
+    </div>
+  </article>
+<% }) %>
+</div>
+<%- include('../partials/footer') %>

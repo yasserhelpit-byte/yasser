@@ -1882,3 +1882,43 @@ tr.cpn-off { opacity: .6; }
 .src-bar { height: 10px; background: var(--bg); border-radius: 999px; overflow: hidden; }
 .src-bar span { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
 .src-row strong { text-align: end; }
+
+/* Stars + reviews */
+.stars { --r: 0; position: relative; display: inline-block; font-size: 1rem; line-height: 1; letter-spacing: 2px; color: #e5e7eb; direction: ltr; }
+.stars::before { content: '★★★★★'; position: absolute; inset: 0; width: calc(var(--r) / 5 * 100%); overflow: hidden; color: #f59e0b; white-space: nowrap; }
+.stars.big { font-size: 1.4rem; }
+.pd-rating { display: inline-flex; align-items: center; gap: 6px; color: var(--text); margin-bottom: 6px; }
+.pd-rating:hover { text-decoration: none; }
+.pcard-rating { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; }
+.pcard-rating small { color: var(--muted); }
+.reviews { margin: 48px 0 24px; }
+.rv-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.rv-head h2 { margin: 0; }
+.rv-avg { display: flex; align-items: center; gap: 10px; }
+.rv-avg strong { font-size: 2rem; }
+.rv-list { display: grid; gap: 12px; margin-bottom: 16px; }
+.rv-item { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.rv-item p { margin: 10px 0 0; }
+.rv-top { display: flex; gap: 10px; align-items: center; }
+.rv-av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: color-mix(in srgb, var(--brand) 12%, var(--card)); color: var(--brand); flex: none; }
+.rv-verified { font-size: .75rem; font-weight: 700; color: #15803d; background: #dcfce7; padding: 1px 8px; border-radius: 999px; }
+.rv-reply { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-size: .92rem; }
+.rv-form-wrap > summary { list-style: none; display: inline-block; cursor: pointer; }
+.rv-form-wrap > summary::-webkit-details-marker { display: none; }
+.rv-form { max-width: 560px; margin-top: 12px; }
+.rate-pick { border: 0; padding: 0; margin: 0; }
+.rate-pick legend { font-weight: 700; margin-bottom: 4px; padding: 0; }
+/* Stars are laid out 5…1 left to right, so the filled ones grow from the right (the start in Arabic). */
+.rp-stars { display: inline-flex; gap: 4px; }
+.rp-stars input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.rp-stars label { font-size: 2rem; color: #d1d5db; cursor: pointer; line-height: 1; transition: color .1s; }
+.rp-stars label:hover, .rp-stars label:hover ~ label, .rp-stars input:checked ~ label { color: #f59e0b; }
+.rp-stars input:focus-visible + label { outline: 2px solid var(--brand); border-radius: 4px; }
+.rv-admin { display: grid; gap: 12px; }
+.rv-card { margin: 0; }
+.rv-card p { margin: 10px 0; }
+.rv-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rv-reply-form > summary { list-style: none; cursor: pointer; display: inline-block; }
+.rv-reply-form > summary::-webkit-details-marker { display: none; }
+.rv-reply-form[open] { flex-basis: 100%; }
+.rv-reply-form form { margin-top: 8px; gap: 8px; } .rv-reply-form input { flex: 1; }
