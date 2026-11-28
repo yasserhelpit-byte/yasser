@@ -1316,8 +1316,8 @@ label.check span a { font-weight: 700; }
    ========================================================= */
 .pay-pick { border: 0; padding: 0; margin: 4px 0; display: grid; gap: 8px; }
 .pay-pick legend { font-weight: 700; margin-bottom: 6px; }
-.pay-pick label { display: block; cursor: pointer; }
-.pay-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.pay-pick label { display: block; cursor: pointer; position: relative; }
+.pay-pick input { position: absolute; inset-inline-start: 12px; top: 12px; width: 1px !important; height: 1px; margin: 0; padding: 0; opacity: 0; pointer-events: none; }
 .pay-pick label > span { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 10px; background: var(--card); transition: border-color .15s, background .15s; }
 .pay-pick input:checked + span { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 7%, transparent); }
 .pay-pick input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
