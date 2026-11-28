@@ -133,6 +133,7 @@ app.locals.STATUSES = STATUSES;
 app.locals.PAY_METHODS = payments.METHODS;
 app.locals.PAY_STATUS = payments.PAY_STATUS;
 app.locals.payOrder = payments.ORDER;
+app.locals.SECTION_COUNT = Object.keys(sections.SCHEMA).length; // shown on the landing page
 const FONTS = {
   tajawal: { label: 'Tajawal · عصري', css: "'Tajawal'", g: 'Tajawal:wght@400;500;700;800' },
   cairo: { label: 'Cairo · واضح', css: "'Cairo'", g: 'Cairo:wght@400;600;700;800' },
