@@ -21,7 +21,7 @@
     <% } else { %><div class="alert ok">✓ Claude متصل (<span dir="ltr"><%= ai.model %></span>). هذا الشهر: <strong><%= ai.n %></strong> إعلان · التكلفة التقديرية <strong dir="ltr">$<%= ai.cost.toFixed(2) %></strong> من سقف <span dir="ltr">$<%= ai.settings.ai_cap_usd_month %></span></div><% } %>
     <label class="switch"><input type="checkbox" name="ai_enabled" value="1" <%= platform.ai_enabled === '1' ? 'checked' : '' %>><span class="slider"></span> تفعيل زر «🚀 أطلق إعلاناً» للتجار</label>
     <div class="row">
-      <label>إعلانات لكل متجر شهرياً<input name="ai_per_store_month" type="number" min="0" max="1000" value="<%= platform.ai_per_store_month %>"></label>
+      <p class="muted small">🎯 عدد الإعلانات لكل متجر شهرياً يُحدَّد الآن حسب باقته، من <a href="/admin/billing#settings">إعدادات الباقات</a>.</p>
       <label>سقف التكلفة الشهري للمنصة ($)<input name="ai_cap_usd_month" type="number" min="0" step="1" dir="ltr" value="<%= platform.ai_cap_usd_month %>"></label>
     </div>
     <p class="muted small">عند الوصول إلى السقف يتوقف الزر لكل المتاجر حتى بداية الشهر القادم.</p>

@@ -48,6 +48,36 @@
       </a>
       <% if (s.whatsapp) { %><a class="btn small wa full" href="https://wa.me/<%= s.whatsapp %>" target="_blank" rel="noopener">مراسلة على واتساب</a><% } %>
     </section>
+    <% if (typeof sub !== 'undefined') { const pname = (k) => k === 'trial' ? 'تجريبية' : (plans.find(p => p.key === k) || { name: k }).name; %>
+    <section class="card sub-admin sub-<%= sub.state %>">
+      <h3>💎 الاشتراك</h3>
+      <p><strong><%= sub.label %></strong> · <%= { trial: 'تجربة', active: 'فعّال', expiring: 'ينتهي قريباً', grace: 'مهلة', expired: 'مغلق أمام الزبائن' }[sub.state] %><% if (s.plan_until) { %> · حتى <%= s.plan_until.slice(0, 10) %><% } %></p>
+      <% if (pending) { %><p class="alert">🕓 للتاجر طلب معلّق: <%= pname(pending.plan) %> · <%= pending.months %> شهر · <%= pending.amount %> درهم. <a href="/admin/billing">راجعه ←</a></p><% } %>
+      <form method="post" action="/admin/stores/<%= s.id %>/plan" class="form" data-confirm="سيُفعَّل الاشتراك لهذا المتجر ويصل للتاجر إشعار." data-confirm-title="تفعيل الباقة؟" data-confirm-ok="✓ تفعيل" data-confirm-icon="💎">
+        <%- include('../partials/csrf') %>
+        <div class="row">
+          <select name="plan"><% plans.forEach(p => { %><option value="<%= p.key %>" <%= p.key === s.plan ? 'selected' : '' %>><%= p.name %> · <%= p.price %> د/شهر</option><% }) %></select>
+          <select name="months"><% Object.entries(PLAN_PERIODS).forEach(([m, p]) => { %><option value="<%= m %>"><%= p.label %></option><% }) %></select>
+        </div>
+        <div class="row">
+          <select name="method"><% Object.entries(PAY_WAYS).forEach(([k, l]) => { %><option value="<%= k %>"><%= l %></option><% }) %></select>
+          <input name="amount" type="number" min="0" placeholder="المبلغ (تلقائي)">
+        </div>
+        <input name="reference" maxlength="80" placeholder="رقم الوصل أو ملاحظة (اختياري)">
+        <button class="btn">✓ تفعيل الباقة</button>
+      </form>
+      <% if (sub.state !== 'expired' && sub.state !== 'grace') { %>
+      <form method="post" action="/admin/stores/<%= s.id %>/plan/end" class="inline" data-confirm="ينتهي الاشتراك الآن، وبعد أيام المهلة يُغلق المتجر أمام الزبائن." data-confirm-title="إنهاء الاشتراك؟" data-confirm-ok="إنهاء الاشتراك" data-danger>
+        <%- include('../partials/csrf') %><button class="link danger small">إنهاء الاشتراك الآن</button>
+      </form>
+      <% } %>
+      <% if (payments.length) { %>
+        <details class="sub-hist"><summary>سجل الدفعات (<%= payments.length %>)</summary>
+          <% payments.forEach(b => { %><div class="row between small"><span><%= (b.decided_at || b.created_at).slice(0, 10) %> · <%= pname(b.plan) %> · <%= b.months %> شهر</span><span><%= b.status === 'approved' ? b.amount + ' درهم' : 'مرفوض' %></span></div><% }) %>
+        </details>
+      <% } %>
+    </section>
+    <% } %>
     <section class="card">
       <h3><%= s.suspended ? '▶️ إعادة تفعيل' : '⏸️ إيقاف المتجر' %></h3>
       <p class="muted small"><%= s.suspended ? 'سيعود المتجر للظهور للعملاء واستقبال الطلبات.' : 'يختفي المتجر عن العملاء ولا يستقبل طلبات. يبقى صاحبه قادراً على الدخول.' %></p>

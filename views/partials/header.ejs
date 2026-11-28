@@ -35,6 +35,8 @@
       <a href="<%= sb %>/design" class="<%= on(sb + '/design') %>"><span>🎨</span>التصميم</a>
       <a href="<%= sb %>/pages" class="<%= on(sb + '/pages') %>"><span>📄</span>الصفحات</a>
       <a href="<%= sb %>/payments" class="<%= on(sb + '/payments') %>"><span>💳</span>الدفع</a>
+      <% const curSub = billingOf(cur); %>
+      <a href="<%= sb %>/billing" class="<%= on(sb + '/billing') %>"><span>💎</span>الاشتراك<% if (['expiring', 'grace', 'expired'].includes(curSub.state)) { %> <b class="pending" title="<%= curSub.state === 'expiring' ? 'ينتهي قريباً' : 'منتهٍ' %>">!</b><% } else if (curSub.state === 'trial') { %> <small class="side-tag">تجربة</small><% } %></a>
       <a href="<%= sb %>/settings" class="<%= on(sb + '/settings') %>"><span>⚙️</span>الإعدادات</a>
       <a href="<%= sb %>/domain" class="<%= on(sb + '/domain') %>"><span>🌐</span>النطاق<% if (cur.custom_domain && !cur.domain_verified) { %> <b class="pending" title="بانتظار التحقق">!</b><% } %></a>
       <a href="/s/<%= cur.slug %>" target="_blank"><span>↗</span>عرض المتجر</a>
@@ -53,6 +55,7 @@
         <a href="/admin/stores" class="<%= on('/admin/stores') %>"><span>🏪</span>كل المتاجر</a>
         <a href="/admin/merchants" class="<%= on('/admin/merchants') %>"><span>👥</span>التجار</a>
         <a href="/admin/orders" class="<%= on('/admin/orders') %>"><span>🧾</span>كل الطلبات</a>
+        <a href="/admin/billing" class="<%= on('/admin/billing') %>"><span>💎</span>الاشتراكات<% if (typeof pendingSubs !== 'undefined' && pendingSubs) { %><b class="pending" title="طلبات بانتظار التفعيل"><%= pendingSubs %></b><% } %></a>
         <a href="/admin/settings" class="<%= on('/admin/settings') %>"><span>⚙️</span>إعدادات المنصة</a>
       <% } %>
     </nav>
@@ -81,6 +84,18 @@
     </div>
     <script>(function () { const b = document.getElementById('notice-bar'); let seen = ''; try { seen = localStorage.getItem('yasser:notice') } catch {} b.hidden = seen === b.dataset.key; })();</script>
     <% } %>
+    <% if (cur && !path.endsWith('/billing')) { const bs = billingOf(cur); const showIt = bs.state === 'trial' ? bs.daysLeft <= 7 : bs.state !== 'active'; %>
+    <% if (showIt) { %>
+    <div class="sub-bar sb-<%= bs.state %>">
+      <span><%= {
+        trial: `🎁 بقي ${bs.daysLeft} ${bs.daysLeft === 1 ? 'يوم' : 'أيام'} على نهاية الفترة التجريبية لمتجر «${cur.name}».`,
+        expiring: `⏳ ينتهي اشتراك «${cur.name}» بعد ${bs.daysLeft} ${bs.daysLeft === 1 ? 'يوم' : 'أيام'}.`,
+        grace: `⚠️ انتهى اشتراك «${cur.name}». سيُغلق المتجر أمام الزبائن بعد ${bs.graceLeft} ${bs.graceLeft === 1 ? 'يوم' : 'أيام'}.`,
+        expired: `⛔ متجر «${cur.name}» مغلق أمام الزبائن لانتهاء الاشتراك.`,
+      }[bs.state] %></span>
+      <a href="/dashboard/stores/<%= cur.id %>/billing" class="btn small"><%= bs.state === 'trial' ? 'اختر باقتك' : 'جدّد الآن' %></a>
+    </div>
+    <% } } %>
     <% if (typeof actingAs !== 'undefined' && actingAs) { %>
     <div class="acting-bar">🛡️ أنت تدير متجر التاجر <strong><%= actingAs.name %></strong> (<span dir="ltr"><%= actingAs.email %></span>) بصفتك مسؤولاً. أي تعديل هنا يغيّر متجره. <a href="/admin">← لوحة المسؤول</a></div>
     <% } %>

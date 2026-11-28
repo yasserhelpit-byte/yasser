@@ -541,7 +541,10 @@ test('AI ads: one button builds the ad + landing page, with limits', async (t) =
     const demo = await real.gen(args); // same shape as a real answer
     return { ad: { ...demo.ad, headline: 'Claude headline' }, usage: { input: 3000, output: 1500, cost: 0.042 }, demo: false };
   };
-  setSetting('ai_per_store_month', '2');
+  // The monthly AI limit comes from the store's plan (a new store is on the trial = middle plan).
+  const billingLib = require('../src/billing');
+  setSetting('plans', JSON.stringify(billingLib.DEFAULT_PLANS.map((p) => (p.key === 'pro' ? { ...p, ai: 2 } : p))));
+  t.after(() => setSetting('plans', ''));
   for (let i = 0; i < 2; i++) {
     require('../src/limiter').clear();
     r = await m('POST', `/dashboard/stores/${sid}/products/${lamp}/ad`, { _csrf: c });
@@ -558,7 +561,7 @@ test('AI ads: one button builds the ad + landing page, with limits', async (t) =
   assert.strictEqual(used.n, 2);
   assert.ok(Math.abs(used.c - 0.084) < 1e-9);
   // Platform-wide monthly cap.
-  setSetting('ai_per_store_month', '100');
+  setSetting('plans', JSON.stringify(billingLib.DEFAULT_PLANS.map((p) => (p.key === 'pro' ? { ...p, ai: 100 } : p))));
   setSetting('ai_cap_usd_month', '0.05');
   require('../src/limiter').clear();
   r = await m('POST', `/dashboard/stores/${sid}/products/${lamp}/ad`, { _csrf: c });
@@ -1119,4 +1122,109 @@ test('templates: every template renders, and template styles use valid values', 
     assert.strictEqual(res.status, 200, k);
     assert.match(res.text, /class="storefront /, k);
   }
+});
+
+test('subscriptions: trial, request, admin activation, limits, closing and renewal', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db, setSetting } = require('../src/db');
+  const billing = require('../src/billing');
+  t.after(() => setSetting('plans', ''));
+  const day = 86400000;
+
+  // Admin and merchant.
+  const a = client(base);
+  let ac = csrfOf((await a('GET', '/signup')).text);
+  await a('POST', '/signup', { _csrf: ac, name: 'Boss', email: 'billing-boss@example.com', password: 'password123', accept_terms: '1' });
+  db.prepare("UPDATE users SET role = 'admin' WHERE email = 'billing-boss@example.com'").run();
+  ac = csrfOf((await a('GET', '/admin/billing')).text);
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Sub', email: 'sub@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const r = await m('POST', '/dashboard/stores', { _csrf: c, name: 'Sub Shop', slug: 'sub-shop', currency: 'MAD', color: '#123456' });
+  const sid = Number(r.location.split('/').pop());
+  const store = () => db.prepare('SELECT * FROM stores WHERE id = ?').get(sid);
+
+  // A new store starts on a 14-day trial.
+  let s = billing.statusOf(store());
+  assert.strictEqual(s.state, 'trial');
+  assert.ok(s.daysLeft >= 13 && s.daysLeft <= 14);
+  let page = (await m('GET', `/dashboard/stores/${sid}/billing`)).text;
+  assert.match(page, /فترة تجريبية/);
+  for (const p of billing.plans()) assert.match(page, new RegExp(p.name));
+
+  // Merchant asks for the basic plan for 3 months; the admin sees it.
+  let res = await m('POST', `/dashboard/stores/${sid}/billing/request`, { _csrf: c, plan: 'basic', months: '3', method: 'bank', note: 'تحويل يوم الإثنين' });
+  assert.strictEqual(res.location, `/dashboard/stores/${sid}/billing?sent=1`);
+  const reqRow = billing.pendingOf(sid);
+  assert.strictEqual(reqRow.amount, 99 * 3);
+  page = (await m('GET', `/dashboard/stores/${sid}/billing`)).text;
+  assert.match(page, new RegExp(`YS-${sid}-${reqRow.id}`)); // payment reference
+  page = (await a('GET', '/admin/billing')).text;
+  assert.match(page, /Sub Shop/);
+  assert.match(page, /تحويل يوم الإثنين/);
+  assert.ok(db.prepare("SELECT 1 FROM notifications n JOIN users u ON u.id = n.user_id WHERE u.email = 'billing-boss@example.com' AND n.title LIKE '%طلب اشتراك%'").get());
+
+  // Merchants can't reach admin routes.
+  assert.notStrictEqual((await m('POST', `/admin/billing/${reqRow.id}/approve`, { _csrf: c })).status, 302);
+
+  // Admin approves -> active ~3 months, merchant notified.
+  res = await a('POST', `/admin/billing/${reqRow.id}/approve`, { _csrf: ac, plan: 'basic', months: '3', amount: '297', reference: 'REC-77' });
+  assert.match(res.location, /\/admin\/billing/);
+  s = billing.statusOf(store());
+  assert.strictEqual(s.state, 'active');
+  assert.strictEqual(s.plan.key, 'basic');
+  assert.ok(s.daysLeft >= 88 && s.daysLeft <= 93, String(s.daysLeft));
+  assert.strictEqual(db.prepare('SELECT status FROM subscriptions WHERE id = ?').get(reqRow.id).status, 'approved');
+  assert.ok(db.prepare("SELECT 1 FROM notifications WHERE kind = 'billing' AND title LIKE '%الأساسية%'").get());
+
+  // Plan limits: basic has no custom domain, and a product cap.
+  res = await m('POST', `/dashboard/stores/${sid}/domain`, { _csrf: c, domain: 'mysubshop.com' });
+  assert.match(res.text, /الباقة الاحترافية/);
+  setSetting('plans', JSON.stringify(billing.DEFAULT_PLANS.map((p) => (p.key === 'basic' ? { ...p, products: 1 } : p))));
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'One', price: '10', stock: '5', active: '1' });
+  res = await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Two', price: '10', stock: '5', active: '1' });
+  assert.strictEqual(res.status, 400);
+  assert.match(res.text, /الحد الأقصى لباقتك/);
+
+  // Early renewal of the same plan adds to the remaining time.
+  const before = billing.parse(store().plan_until);
+  await a('POST', `/admin/stores/${sid}/plan`, { _csrf: ac, plan: 'basic', months: '1', method: 'cash', amount: '' });
+  const after = billing.parse(store().plan_until);
+  assert.ok(after - before > 27 * day && after - before < 32 * day);
+
+  // Expiry: grace days keep the shop open, then it closes to customers (not to its owner).
+  db.prepare('UPDATE stores SET plan_until = ? WHERE id = ?').run(billing.iso(Date.now() - 1 * day), sid);
+  assert.strictEqual(billing.statusOf(store()).state, 'grace');
+  assert.strictEqual((await fetch(`${base}/s/sub-shop`)).status, 200);
+  assert.match((await m('GET', `/dashboard/stores/${sid}`)).text, /سيُغلق المتجر أمام الزبائن/);
+  db.prepare('UPDATE stores SET plan_until = ? WHERE id = ?').run(billing.iso(Date.now() - 10 * day), sid);
+  assert.strictEqual(billing.statusOf(store()).state, 'expired');
+  res = await fetch(`${base}/s/sub-shop`);
+  assert.strictEqual(res.status, 503);
+  assert.match(await res.text(), /مغلق مؤقتاً/);
+  assert.strictEqual((await m('GET', '/s/sub-shop')).status, 200); // the owner can still look
+  assert.match((await m('GET', `/dashboard/stores/${sid}`)).text, /مغلق أمام الزبائن لانتهاء الاشتراك/);
+
+  // Renewal by the admin reopens it; a rejected request notifies the merchant.
+  await a('POST', `/admin/stores/${sid}/plan`, { _csrf: ac, plan: 'pro', months: '12', method: 'bank', amount: '' });
+  assert.strictEqual((await fetch(`${base}/s/sub-shop`)).status, 200);
+  assert.strictEqual(db.prepare("SELECT amount FROM subscriptions WHERE store_id = ? ORDER BY id DESC").get(sid).amount, 199 * 10); // a year = 10 months
+  await m('POST', `/dashboard/stores/${sid}/billing/request`, { _csrf: c, plan: 'business', months: '1', method: 'cash' });
+  const rej = billing.pendingOf(sid);
+  await a('POST', `/admin/billing/${rej.id}/reject`, { _csrf: ac, reason: 'لم يصل المبلغ' });
+  assert.strictEqual(db.prepare('SELECT status FROM subscriptions WHERE id = ?').get(rej.id).status, 'rejected');
+  assert.ok(db.prepare("SELECT 1 FROM notifications WHERE kind = 'billing' AND body = 'لم يصل المبلغ'").get());
+
+  // Admin edits the plans; the landing page and merchant page follow.
+  await a('POST', '/admin/billing/settings', { _csrf: ac, plan0_name: 'Starter', plan0_price: '79', plan0_products: '30', plan0_ai: '3', plan0_features: 'a',
+    plan1_name: 'Pro', plan1_price: '149', plan1_products: '300', plan1_ai: '10', plan1_domain: '1', plan1_features: 'b',
+    plan2_name: 'Max', plan2_price: '299', plan2_products: '0', plan2_ai: '40', plan2_domain: '1', plan2_features: 'c', featured: 'business', trial_days: '7', grace_days: '2', billing_info: 'RIB 123' });
+  const pl = billing.plans();
+  assert.deepStrictEqual(pl.map((p) => [p.name, p.price, p.featured]), [['Starter', 79, false], ['Pro', 149, false], ['Max', 299, true]]);
+  assert.strictEqual(billing.settings().trialDays, 7);
+  assert.match((await fetch(base + '/')).ok ? await (await fetch(base + '/')).text() : '', /Starter[\s\S]*79/);
 });

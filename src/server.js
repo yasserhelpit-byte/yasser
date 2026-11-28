@@ -13,6 +13,7 @@ const aiAds = require('./ai-ads');
 const notifier = require('./notify');
 const payments = require('./payments');
 const themeLib = require('./theme');
+const billing = require('./billing');
 
 const dns = require('dns').promises;
 const maintenance = require('./maintenance');
@@ -150,6 +151,9 @@ const HEADERS = { classic: 'كلاسيكي (الشعار يميناً)', centere
 app.locals.FONTS = FONTS;
 app.locals.THEME_OPTIONS = themeLib.withFonts(FONTS);
 app.locals.THEME_KITS = themeLib.KITS;
+app.locals.billingOf = (store) => billing.statusOf(store);
+app.locals.PLAN_PERIODS = billing.PERIODS;
+app.locals.PAY_WAYS = billing.METHODS;
 app.locals.RADII = RADII;
 app.locals.HEADERS = HEADERS;
 app.locals.SCHEMA = sections.SCHEMA;
@@ -206,7 +210,7 @@ app.get('/', (req, res) => {
               (SELECT COUNT(*) FROM orders) AS orders`
     )
     .get();
-  res.render('home', { counts });
+  res.render('home', { counts, plans: billing.plans(), trialDays: billing.settings().trialDays });
 });
 
 // Phone helpers. Local numbers starting with 0 get the default country code (Morocco unless configured).
@@ -482,6 +486,7 @@ dash.post('/stores', (req, res) => {
   const { lastInsertRowid } = db
     .prepare(`INSERT INTO stores (owner_id, ${STORE_FIELDS.join(', ')}) VALUES (?, ${STORE_FIELDS.map(() => '?').join(', ')})`)
     .run(req.user.id, ...STORE_FIELDS.map((f) => values[f]));
+  billing.startTrial(lastInsertRowid);
   if (!req.user.isAdmin) notifier.notifyAdmins({ title: `🏪 متجر جديد: ${values.name}`, body: `${req.user.name} · /s/${values.slug}`, link: `/admin/stores/${lastInsertRowid}` });
   res.redirect(`/dashboard/stores/${lastInsertRowid}`);
 });
@@ -658,7 +663,9 @@ dash.get('/stores/:storeId/products/new', ownStore, (req, res) =>
 );
 dash.post('/stores/:storeId/products', ownStore, (req, res) => {
   const p = readProductForm(req.body);
-  const error = validateProduct(p);
+  const max = billing.statusOf(req.store).limits.products;
+  const count = db.prepare('SELECT COUNT(*) AS n FROM products WHERE store_id = ?').get(req.store.id).n;
+  const error = validateProduct(p) || (max && count >= max ? `وصلت إلى الحد الأقصى لباقتك (${max} منتجاً). رقِّ باقتك من صفحة «الاشتراك» لإضافة المزيد.` : null);
   if (error) return res.status(400).render('dashboard/product-form', { error, values: p, action: req.originalUrl });
   db.prepare(`INSERT INTO products (store_id, ${PRODUCT_FIELDS.join(', ')}) VALUES (?, ${PRODUCT_FIELDS.map(() => '?').join(', ')})`).run(
     req.store.id, ...PRODUCT_FIELDS.map((f) => p[f])
@@ -742,6 +749,31 @@ dash.post('/stores/:storeId/orders/:orderId/verify', ownStore, async (req, res) 
     msg = 'error';
   }
   res.redirect(`/dashboard/stores/${req.store.id}/orders/${order.id}?check=${msg}`);
+});
+
+// ----- Subscription (merchant side) -----
+dash.get('/stores/:storeId/billing', ownStore, (req, res) => {
+  const pending = billing.pendingOf(req.store.id);
+  res.render('dashboard/billing', {
+    sub: billing.statusOf(req.store), plans: billing.plans(), pending, ref: pending ? billing.reference(pending) : '',
+    history: billing.historyOf(req.store.id), info: billing.settings().info, sent: !!req.query.sent,
+    productCount: db.prepare('SELECT COUNT(*) AS n FROM products WHERE store_id = ?').get(req.store.id).n,
+  });
+});
+dash.post('/stores/:storeId/billing/request', ownStore, (req, res) => {
+  const sub = billing.request({ store: req.store, userId: req.user.id, planKey: str(req.body.plan, 20), months: parseInt(req.body.months, 10), method: str(req.body.method, 20), note: str(req.body.note, 300) });
+  if (!sub) return res.status(400).render('message', { title: 'خطأ', message: 'اختر باقة ومدة صحيحتين.' });
+  const plan = billing.planByKey(sub.plan);
+  notifier.notifyAdmins({
+    title: `💎 طلب اشتراك: ${req.store.name}`,
+    body: `${plan.name} · ${billing.PERIODS[sub.months].label} · ${sub.amount} درهم (${billing.METHODS[sub.method]})`,
+    link: '/admin/billing',
+  });
+  res.redirect(`/dashboard/stores/${req.store.id}/billing?sent=1`);
+});
+dash.post('/stores/:storeId/billing/cancel', ownStore, (req, res) => {
+  db.prepare("DELETE FROM subscriptions WHERE store_id = ? AND status = 'pending'").run(req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/billing`);
 });
 
 // ----- Payment methods -----
@@ -866,7 +898,8 @@ function aiQuota(storeId) {
   const st = getSettings();
   const usedStore = db.prepare(`SELECT COUNT(*) AS n FROM ai_usage WHERE store_id = ? AND kind = 'ad' AND ok = 1 AND created_at >= ${monthStart}`).get(storeId).n;
   const spent = db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS c FROM ai_usage WHERE created_at >= ${monthStart}`).get().c;
-  const perStore = Math.max(0, parseInt(st.ai_per_store_month, 10) || 0);
+  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
+  const perStore = store ? billing.statusOf(store).limits.ai : 0; // set by the store's plan
   const cap = Math.max(0, Number(st.ai_cap_usd_month) || 0);
   let blocked = null;
   if (st.ai_enabled !== '1') blocked = 'ميزة الإعلانات الذكية متوقفة حالياً من إدارة المنصة.';
@@ -974,6 +1007,7 @@ dash.get('/stores/:storeId/domain', ownStore, (req, res) => {
 dash.post('/stores/:storeId/domain', ownStore, (req, res) => {
   const domain = cleanDomain(req.body.domain);
   const fail = (error) => res.status(400).render('dashboard/domain', { error, notice: null, dnsTarget: DNS_TARGET, dnsIp: DNS_IP });
+  if (!billing.statusOf(req.store).limits.domain) return fail('النطاق الخاص متاح في الباقة الاحترافية وباقة الأعمال. رقِّ باقتك من صفحة «الاشتراك».');
   if (!DOMAIN_RE.test(domain)) return fail('النطاق غير صحيح. مثال: myshop.com أو shop.myshop.com');
   if (PLATFORM_HOSTS.has(domain) || [...PLATFORM_HOSTS].some((h) => domain.endsWith('.' + h))) return fail('لا يمكن استعمال نطاق المنصة.');
   if (db.prepare('SELECT 1 FROM stores WHERE custom_domain = ? AND id != ?').get(domain, req.store.id)) return fail('هذا النطاق مربوط بمتجر آخر.');
@@ -1109,6 +1143,7 @@ admin.use((req, res, next) => {
   res.locals.pendingOrders = pendingFor(req.user.id);
   res.locals.unreadChats = unreadChatsFor(req.user.id);
   res.locals.notesUnread = db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(req.user.id).n;
+  res.locals.pendingSubs = billing.pendingCount();
   next();
 });
 const likeOf = (q) => `%${q.replace(/[%_\\]/g, '\\$&')}%`;
@@ -1228,7 +1263,7 @@ admin.get('/stores/:id', adminStore, (req, res) => {
   ).get(s.id, s.id, s.id, s.id, s.id, s.id, s.id);
   const orders = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC LIMIT 10').all(s.id);
   const sales = series(`SELECT date(created_at) AS day, SUM(total) AS v FROM orders WHERE store_id = ${Number(s.id)} AND status != 'cancelled' AND created_at >= date('now', '-29 days') GROUP BY day`, lastDays(30));
-  res.render('admin/store', { s, stats, orders, sales, error: null });
+  res.render('admin/store', { s, stats, orders, sales, error: null, sub: billing.statusOf(s), plans: billing.plans(), payments: billing.historyOf(s.id), pending: billing.pendingOf(s.id) });
 });
 admin.post('/stores/:id/suspend', adminStore, (req, res) => {
   const on = req.body.suspend === '1' ? 1 : 0;
@@ -1327,13 +1362,64 @@ admin.post('/settings', (req, res) => {
   setSetting('legal_name', str(req.body.legal_name, 120));
   setSetting('legal_address', str(req.body.legal_address, 300));
   if (req.body.legal_bump) setSetting('legal_updated', new Date().toISOString().slice(0, 10));
-  setSetting('ai_per_store_month', String(Math.min(Math.max(0, parseInt(req.body.ai_per_store_month, 10) || 0), 1000)));
   setSetting('ai_cap_usd_month', String(Math.min(Math.max(0, Number(req.body.ai_cap_usd_month) || 0), 100000)));
   setSetting('notice', str(req.body.notice, 400));
   setSetting('notice_level', ['info', 'warning', 'success'].includes(req.body.notice_level) ? req.body.notice_level : 'info');
   setSetting('support_whatsapp', str(req.body.support_whatsapp, 20).replace(/\D/g, ''));
   setSetting('support_email', str(req.body.support_email, 200));
   res.redirect('/admin/settings?saved=1');
+});
+
+// ----- Subscriptions (admin side) -----
+function tellMerchant(storeId, title, body) {
+  const s = db.prepare('SELECT id, owner_id FROM stores WHERE id = ?').get(storeId);
+  if (s) notifier.notify(s.owner_id, { kind: 'billing', storeId: s.id, link: `/dashboard/stores/${s.id}/billing`, title, body });
+}
+admin.get('/billing', (req, res) => {
+  const pending = db.prepare(`SELECT b.*, s.name AS store_name, s.slug, s.plan AS cur_plan, s.plan_until, u.name AS owner_name, u.email AS owner_email
+                              FROM subscriptions b JOIN stores s ON s.id = b.store_id LEFT JOIN users u ON u.id = s.owner_id
+                              WHERE b.status = 'pending' ORDER BY b.id`).all();
+  const recent = db.prepare(`SELECT b.*, s.name AS store_name FROM subscriptions b JOIN stores s ON s.id = b.store_id
+                             WHERE b.status != 'pending' ORDER BY b.id DESC LIMIT 30`).all();
+  const stores = db.prepare('SELECT s.*, u.name AS owner_name FROM stores s LEFT JOIN users u ON u.id = s.owner_id ORDER BY s.plan_until').all()
+    .map((s) => ({ ...s, sub: billing.statusOf(s) }));
+  const monthIncome = db.prepare("SELECT COALESCE(SUM(amount), 0) AS v FROM subscriptions WHERE status = 'approved' AND decided_at >= date('now', 'start of month')").get().v;
+  res.render('admin/billing', { pending, recent, stores, monthIncome, plans: billing.plans(), cfg: billing.settings(), saved: !!req.query.saved, ref: billing.reference });
+});
+admin.post('/billing/:subId/approve', (req, res) => {
+  const sub = db.prepare("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'").get(req.params.subId);
+  if (!sub) return res.redirect('/admin/billing');
+  const r = billing.activate({ storeId: sub.store_id, planKey: str(req.body.plan, 20) || sub.plan, months: parseInt(req.body.months, 10) || sub.months, adminId: req.user.id,
+    method: str(req.body.method, 20) || sub.method, amount: req.body.amount ?? null, reference: str(req.body.reference, 80), requestId: sub.id });
+  tellMerchant(sub.store_id, `✅ تم تفعيل باقة ${r.plan.name}`, `اشتراكك فعّال حتى ${r.until.slice(0, 10)}. شكراً لثقتك!`);
+  res.redirect(`/admin/billing?ok=${sub.store_id}`);
+});
+admin.post('/billing/:subId/reject', (req, res) => {
+  const sub = db.prepare("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'").get(req.params.subId);
+  if (sub) {
+    db.prepare("UPDATE subscriptions SET status = 'rejected', note = ?, decided_at = datetime('now'), decided_by = ? WHERE id = ?").run(str(req.body.reason, 300) || sub.note, req.user.id, sub.id);
+    tellMerchant(sub.store_id, '❌ لم يُقبل طلب الاشتراك', str(req.body.reason, 300) || 'تواصل مع فريق YASSER لمعرفة التفاصيل.');
+  }
+  res.redirect('/admin/billing');
+});
+// Activate a plan directly (the merchant paid in person, by phone…).
+admin.post('/stores/:id/plan', adminStore, (req, res) => {
+  const months = parseInt(req.body.months, 10);
+  if (!billing.planByKey(req.body.plan) || !billing.PERIODS[months]) return res.status(400).render('message', { title: 'خطأ', message: 'اختر باقة ومدة صحيحتين.' });
+  db.prepare("DELETE FROM subscriptions WHERE store_id = ? AND status = 'pending'").run(req.target.id);
+  const r = billing.activate({ storeId: req.target.id, planKey: req.body.plan, months, adminId: req.user.id, method: str(req.body.method, 20), amount: req.body.amount === '' ? null : req.body.amount, reference: str(req.body.reference, 80) });
+  tellMerchant(req.target.id, `✅ تم تفعيل باقة ${r.plan.name}`, `اشتراكك فعّال حتى ${r.until.slice(0, 10)}. شكراً لثقتك!`);
+  const back = req.get('referer') || '';
+  res.redirect(back.includes('/admin') ? back : `/admin/stores/${req.target.id}`);
+});
+// End a subscription now (e.g. a payment that bounced). The grace days still apply.
+admin.post('/stores/:id/plan/end', adminStore, (req, res) => {
+  db.prepare('UPDATE stores SET plan_until = ? WHERE id = ?').run(billing.iso(Date.now() - 1000), req.target.id);
+  res.redirect(`/admin/stores/${req.target.id}`);
+});
+admin.post('/billing/settings', (req, res) => {
+  billing.savePlans(req.body);
+  res.redirect('/admin/billing?saved=1#settings');
 });
 
 app.use('/admin', admin);
@@ -1364,6 +1450,10 @@ shop.use((req, res, next) => {
   const canSee = req.user && (req.user.id === store.owner_id || req.user.isAdmin);
   if (store.suspended && !canSee) return res.status(503).render('message', { title: 'غير متاح', message: 'هذا المتجر غير متاح حالياً.' });
   if (store.suspended && req.method === 'POST') return res.status(503).render('message', { title: 'غير متاح', message: 'هذا المتجر موقوف ولا يستقبل طلبات.' });
+  // Subscription ended (after the grace days): closed to customers until it is renewed.
+  if (!billing.statusOf(store).open && !canSee && !CMI_POST.test(req.baseUrl + req.path)) {
+    return res.status(503).render('message', { title: 'المتجر مغلق مؤقتاً', message: 'هذا المتجر غير متاح حالياً. عُد لاحقاً.' });
+  }
   req.store = store;
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);

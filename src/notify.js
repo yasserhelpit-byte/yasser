@@ -11,6 +11,7 @@ const KINDS = {
   order: { label: 'طلب جديد', icon: '🛒', push: true, email: true },
   chat: { label: 'رسائل العملاء', icon: '💬', push: true, email: true },
   stock: { label: 'مخزون منخفض', icon: '⚠️', push: true, email: false },
+  billing: { label: 'الاشتراك والباقات', icon: '💎', push: true, email: true },
   admin: { label: 'إدارة المنصة (للمسؤول)', icon: '🛡️', push: true, email: false, adminOnly: true },
 };
 

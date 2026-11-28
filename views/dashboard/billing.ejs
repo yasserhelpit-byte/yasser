@@ -1,0 +1,113 @@
+<%- include('../partials/header', { title: 'الاشتراك' }) %>
+<%
+  const stateText = {
+    trial: `🎁 فترة تجريبية مجانية · بقي ${sub.daysLeft} يوماً`,
+    active: `✅ اشتراك فعّال · بقي ${sub.daysLeft} يوماً`,
+    expiring: `⏳ ينتهي اشتراكك بعد ${sub.daysLeft} أيام`,
+    grace: `⚠️ انتهى اشتراكك · سيُغلق متجرك بعد ${sub.graceLeft} يوم`,
+    expired: '⛔ انتهى اشتراكك · متجرك مغلق أمام الزبائن',
+  }[sub.state];
+  const fmt = (n) => Number(n).toLocaleString('fr-FR');
+%>
+<div class="page-head-row"><div>
+  <h1>💎 الاشتراك</h1>
+  <p class="muted">اختر الباقة المناسبة لمتجرك. الدفع نقداً أو بالتحويل، ويُفعَّل اشتراكك من فريق YASSER فور التأكد من الدفع.</p>
+</div></div>
+
+<section class="card sub-now sub-<%= sub.state %>">
+  <div>
+    <span class="sub-label">باقتك الحالية</span>
+    <strong class="sub-plan"><%= sub.label %></strong>
+    <span class="sub-state"><%= stateText %></span>
+    <% if (sub.until) { %><small class="muted">حتى <%= sub.until.slice(0, 10) %></small><% } %>
+  </div>
+  <div class="sub-usage">
+    <div><span>المنتجات</span><b><%= productCount %> / <%= sub.limits.products || '∞' %></b></div>
+    <div><span>إعلانات الذكاء الاصطناعي</span><b><%= sub.limits.ai %> / شهر</b></div>
+    <div><span>النطاق الخاص</span><b><%= sub.limits.domain ? '✓ متاح' : '—' %></b></div>
+  </div>
+</section>
+
+<% if (pending) { const pp = plans.find(p => p.key === pending.plan); %>
+<section class="card sub-pending" id="pay">
+  <div class="row between">
+    <h3>🕓 طلبك قيد المراجعة</h3>
+    <form method="post" action="/dashboard/stores/<%= store.id %>/billing/cancel" class="inline" data-confirm="سيُلغى طلب الاشتراك، ويمكنك طلب باقة أخرى." data-confirm-title="إلغاء الطلب؟" data-confirm-ok="إلغاء الطلب">
+      <%- include('../partials/csrf') %><button class="link danger">إلغاء الطلب</button>
+    </form>
+  </div>
+  <p>باقة <strong><%= pp ? pp.name : pending.plan %></strong> · <%= PLAN_PERIODS[pending.months] ? PLAN_PERIODS[pending.months].label : pending.months + ' أشهر' %> · المبلغ <strong><%= fmt(pending.amount) %> درهم</strong> · <%= PAY_WAYS[pending.method] %></p>
+  <div class="sub-steps">
+    <div><b>1</b><span>ادفع المبلغ <%= pending.method === 'cash' ? 'نقداً' : 'بالتحويل' %> واكتب المرجع <code dir="ltr"><%= ref %></code></span></div>
+    <div><b>2</b><span>أرسل صورة الوصل أو أخبرنا عبر واتساب</span></div>
+    <div><b>3</b><span>نفعّل باقتك ويصلك إشعار</span></div>
+  </div>
+  <% if (info) { %><div class="sub-info pre"><%= info %></div><% } %>
+  <% if (platform.support_whatsapp) { %>
+    <a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/<%= platform.support_whatsapp %>?text=<%= encodeURIComponent(`مرحباً، أرسلت مبلغ الاشتراك لمتجر ${store.name}.\nالباقة: ${pp ? pp.name : pending.plan} · ${PLAN_PERIODS[pending.months] ? PLAN_PERIODS[pending.months].label : ''}\nالمبلغ: ${pending.amount} درهم\nالمرجع: ${ref}\nوهذا الوصل:`) %>">💬 أرسل الوصل عبر واتساب</a>
+  <% } %>
+</section>
+<% } %>
+<% if (sent) { %><div class="alert ok">✓ وصل طلبك إلى فريق YASSER. ادفع المبلغ كما هو موضّح، وسيُفعَّل اشتراكك فور التأكد.</div><% } %>
+
+<form method="post" action="/dashboard/stores/<%= store.id %>/billing/request" class="sub-form" id="sub-form">
+  <%- include('../partials/csrf') %>
+  <div class="sub-periods seg" role="radiogroup" aria-label="المدة">
+    <% Object.entries(PLAN_PERIODS).forEach(([m, p], i) => { %>
+      <label><input type="radio" name="months" value="<%= m %>" <%= i === 0 ? 'checked' : '' %>><span><%= p.label %><% if (p.note) { %> <em><%= p.note %></em><% } %></span></label>
+    <% }) %>
+  </div>
+  <div class="sub-plans">
+    <% plans.forEach(p => { const current = !sub.trial && sub.plan && sub.plan.key === p.key; %>
+      <label class="sub-card <%= p.featured ? 'featured' : '' %> <%= current ? 'current' : '' %>">
+        <input type="radio" name="plan" value="<%= p.key %>" required <%= p.featured ? 'checked' : '' %>>
+        <span class="sub-card-in">
+          <% if (p.featured) { %><span class="plan-flag">⭐ الأكثر اختياراً</span><% } %>
+          <% if (current) { %><span class="plan-flag cur">باقتك الحالية</span><% } %>
+          <strong class="sub-name"><%= p.name %></strong>
+          <span class="sub-price"><b data-price="<%= p.price %>"><%= fmt(p.price) %></b> درهم <small class="sub-per">/ شهر</small></span>
+          <span class="sub-total muted small" data-price="<%= p.price %>"></span>
+          <ul><% p.features.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => { %><li><%= l %></li><% }) %></ul>
+          <span class="sub-pick">اختر هذه الباقة</span>
+        </span>
+      </label>
+    <% }) %>
+  </div>
+  <div class="card sub-send">
+    <label>طريقة الدفع
+      <select name="method"><% Object.entries(PAY_WAYS).forEach(([k, l]) => { %><option value="<%= k %>"><%= l %></option><% }) %></select>
+    </label>
+    <label>ملاحظة (اختياري)<input name="note" maxlength="300" placeholder="مثال: سأدفع في مكتبكم يوم الإثنين"></label>
+    <button class="btn big"><%= pending ? '🔄 استبدال طلبي بهذه الباقة' : '💎 اطلب الاشتراك' %></button>
+  </div>
+</form>
+
+<% if (history.length) { %>
+<section class="card">
+  <h3>🧾 سجل الاشتراكات</h3>
+  <div class="table-wrap"><table>
+    <tr><th>التاريخ</th><th>الباقة</th><th>المدة</th><th>المبلغ</th><th>الحالة</th><th>حتى</th></tr>
+    <% history.forEach(h => { const pp = plans.find(p => p.key === h.plan); %>
+      <tr><td><%= (h.decided_at || h.created_at).slice(0, 10) %></td><td><%= pp ? pp.name : h.plan %></td><td><%= h.months %> شهر</td><td><%= fmt(h.amount) %> درهم</td>
+        <td><span class="badge <%= h.status === 'approved' ? 's-delivered' : 's-cancelled' %>"><%= h.status === 'approved' ? 'مفعّل' : 'مرفوض' %></span></td><td><%= h.until ? h.until.slice(0, 10) : '—' %></td></tr>
+    <% }) %>
+  </table></div>
+</section>
+<% } %>
+
+<script>
+(function () {
+  const f = document.getElementById('sub-form'), periods = <%- js(PLAN_PERIODS) %>;
+  const fmt = (n) => Number(n).toLocaleString('fr-FR');
+  function update() {
+    const m = f.querySelector('input[name=months]:checked').value, p = periods[m];
+    f.querySelectorAll('.sub-total').forEach((el) => {
+      const total = el.dataset.price * p.pay;
+      el.textContent = m === '1' ? '' : `المجموع ${fmt(total)} درهم لـ${p.label}${p.note ? ' (' + p.note + ')' : ''}`;
+    });
+  }
+  f.querySelectorAll('input[name=months]').forEach((r) => r.addEventListener('change', update));
+  update();
+})();
+</script>
+<%- include('../partials/footer') %>

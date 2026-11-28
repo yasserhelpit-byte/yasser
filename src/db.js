@@ -210,6 +210,27 @@ addColumn('products', 'sku', "TEXT NOT NULL DEFAULT ''");
 addColumn('products', 'cost_price', 'REAL NOT NULL DEFAULT 0');
 addColumn('orders', 'ip', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
+addColumn('stores', 'plan', "TEXT NOT NULL DEFAULT 'trial'");
+addColumn('stores', 'plan_until', 'TEXT');
+db.exec(`
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  user_id INTEGER,
+  plan TEXT NOT NULL,
+  months INTEGER NOT NULL,
+  amount REAL NOT NULL DEFAULT 0,
+  method TEXT NOT NULL DEFAULT 'cash',
+  reference TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  until TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  decided_at TEXT,
+  decided_by INTEGER
+);
+CREATE INDEX IF NOT EXISTS subscriptions_store ON subscriptions(store_id, status);
+`);
 addColumn('stores', 'theme', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'payment_config', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'payment_secrets', "TEXT NOT NULL DEFAULT ''");
@@ -223,7 +244,7 @@ addColumn('orders', 'pay_token', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'paid_at', 'TEXT');
 
 // Platform-wide settings (key/value).
-const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '1', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '' };
+const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '1', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '', trial_days: '14', grace_days: '3', billing_info: '', plans: '' };
 function getSettings() {
   const out = { ...SETTING_DEFAULTS };
   for (const r of db.prepare('SELECT key, value FROM settings').all()) out[r.key] = r.value;
@@ -231,6 +252,12 @@ function getSettings() {
 }
 function setSetting(key, value) {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value));
+}
+
+// Stores created before subscriptions existed start their free trial now.
+{
+  const days = parseInt(getSettings().trial_days, 10) || 14;
+  db.prepare(`UPDATE stores SET plan = 'trial', plan_until = datetime('now', ?) WHERE plan_until IS NULL`).run(`+${days} days`);
 }
 
 function transaction(fn) {
