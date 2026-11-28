@@ -14,6 +14,7 @@ const notifier = require('./notify');
 const payments = require('./payments');
 const themeLib = require('./theme');
 const billing = require('./billing');
+const pricing = require('./pricing');
 
 const dns = require('dns').promises;
 const maintenance = require('./maintenance');
@@ -593,7 +594,7 @@ dash.post('/stores', (req, res) => {
   res.redirect(`/dashboard/stores/${lastInsertRowid}`);
 });
 
-const STORE_FIELDS = 'name, slug, description, color, currency, logo_url, banner_url, tagline, announcement, whatsapp, phone, email, instagram, facebook, tiktok, city, shipping_fee, free_shipping_over, fb_pixel_id, tiktok_pixel_id, ad_language, ad_daily_budget, ad_days'.split(', ');
+const STORE_FIELDS = 'name, slug, description, color, currency, logo_url, banner_url, tagline, announcement, whatsapp, phone, email, instagram, facebook, tiktok, city, shipping_fee, free_shipping_over, shipping_zones, fb_pixel_id, tiktok_pixel_id, ad_language, ad_daily_budget, ad_days'.split(', ');
 const url = (v) => (/^https?:\/\//i.test(str(v, 1000)) ? str(v, 1000) : '');
 const money0 = (v) => Math.max(0, Number(v) || 0);
 // Accept a full profile URL or just a username for social links.
@@ -623,6 +624,10 @@ function readStoreForm(body) {
     city: str(body.city, 100),
     shipping_fee: money0(body.shipping_fee),
     free_shipping_over: money0(body.free_shipping_over),
+    // "City = fee" lines -> JSON. Parse problems are reported by validateStore.
+    shipping_zones: JSON.stringify(pricing.parseZones(body.shipping_zones_text).zones),
+    zone_errors: pricing.parseZones(body.shipping_zones_text).errors,
+    shipping_zones_text: str(body.shipping_zones_text, 6000), // re-shown as typed if there is an error
     // Pixel IDs: Meta = digits; TikTok = letters and digits.
     fb_pixel_id: (str(body.fb_pixel_id, 40).match(/^\d{8,20}$/) || [''])[0],
     tiktok_pixel_id: (str(body.tiktok_pixel_id, 40).toUpperCase().match(/^[A-Z0-9]{10,32}$/) || [''])[0],
@@ -634,6 +639,7 @@ function readStoreForm(body) {
 
 function validateStore(values, excludeId = 0) {
   if (!values.name) return 'اسم المتجر مطلوب.';
+  if (values.zone_errors?.length) return `أسعار التوصيل حسب المدينة: ${values.zone_errors[0]}`;
   if (!values.slug || values.slug.length < 3) return 'رابط المتجر يجب أن يكون 3 أحرف إنجليزية على الأقل (a-z, 0-9, -).';
   if (db.prepare('SELECT 1 FROM stores WHERE slug = ? AND id != ?').get(values.slug, excludeId)) return 'هذا الرابط مستخدم، اختر رابطاً آخر.';
   return null;
@@ -835,11 +841,11 @@ dash.get('/stores/:storeId/orders.csv', ownStore, (req, res) => {
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const head = ['رقم الطلب', 'التاريخ', 'الحالة', 'العميل', 'الهاتف', 'العنوان', 'المنتجات', 'المجموع', 'التوصيل', 'الإجمالي', 'العملة', 'طريقة الدفع', 'حالة الدفع', 'ملاحظة'];
+  const head = ['رقم الطلب', 'التاريخ', 'الحالة', 'العميل', 'الهاتف', 'المدينة', 'العنوان', 'المنتجات', 'المجموع', 'الخصم', 'كود الخصم', 'التوصيل', 'الإجمالي', 'العملة', 'طريقة الدفع', 'حالة الدفع', 'ملاحظة'];
   const lines = rows.map((o) => [
-    o.id, o.created_at, STATUSES[o.status] || o.status, o.customer_name, o.customer_phone, o.customer_address,
+    o.id, o.created_at, STATUSES[o.status] || o.status, o.customer_name, o.customer_phone, o.customer_city, o.customer_address,
     items.all(o.id).map((i) => `${i.name} × ${i.quantity}`).join(' | '),
-    (o.total - (o.shipping || 0)).toFixed(2), Number(o.shipping || 0).toFixed(2), Number(o.total).toFixed(2), req.store.currency,
+    (o.total - (o.shipping || 0) + (o.discount || 0)).toFixed(2), Number(o.discount || 0).toFixed(2), o.coupon_code, Number(o.shipping || 0).toFixed(2), Number(o.total).toFixed(2), req.store.currency,
     (payments.METHODS[o.payment_method] || {}).label || o.payment_method, payments.PAY_STATUS[o.payment_status] || o.payment_status, o.note,
   ].map(cell).join(','));
   const name = `orders-${req.store.slug}-${new Date().toISOString().slice(0, 10)}${f.status ? '-' + f.status : ''}.csv`;
@@ -927,6 +933,38 @@ dash.post('/stores/:storeId/billing/request', ownStore, (req, res) => {
 dash.post('/stores/:storeId/billing/cancel', ownStore, (req, res) => {
   db.prepare("DELETE FROM subscriptions WHERE store_id = ? AND status = 'pending'").run(req.store.id);
   res.redirect(`/dashboard/stores/${req.store.id}/billing`);
+});
+
+// ----- Coupons -----
+const couponsView = (req, extra = {}) => ({
+  coupons: db.prepare('SELECT * FROM coupons WHERE store_id = ? ORDER BY active DESC, id DESC').all(req.store.id),
+  stats: Object.fromEntries(db.prepare("SELECT coupon_code AS code, COUNT(*) AS n, COALESCE(SUM(discount), 0) AS d FROM orders WHERE store_id = ? AND coupon_code != '' AND status != 'cancelled' GROUP BY coupon_code").all(req.store.id).map((r) => [r.code, r])),
+  TYPES: pricing.TYPES, error: null, values: {}, ...extra,
+});
+dash.get('/stores/:storeId/coupons', ownStore, (req, res) => res.render('dashboard/coupons', couponsView(req)));
+dash.post('/stores/:storeId/coupons', ownStore, (req, res) => {
+  const v = {
+    code: pricing.cleanCode(req.body.code), type: pricing.TYPES[req.body.type] ? req.body.type : 'percent',
+    value: Math.max(0, Number(req.body.value) || 0), min_total: money0(req.body.min_total),
+    max_uses: Math.min(Math.max(0, parseInt(req.body.max_uses, 10) || 0), 1000000), ends_at: /^\d{4}-\d{2}-\d{2}$/.test(req.body.ends_at || '') ? `${req.body.ends_at} 23:59:59` : null,
+  };
+  const fail = (error) => res.status(400).render('dashboard/coupons', couponsView(req, { error, values: req.body }));
+  if (v.code.length < 3) return fail('الكود يجب أن يتكون من 3 أحرف أو أرقام إنجليزية على الأقل (مثال: RAMADAN20).');
+  if (v.type === 'percent' && !(v.value > 0 && v.value <= 100)) return fail('النسبة يجب أن تكون بين 1 و100.');
+  if (v.type === 'fixed' && !(v.value > 0)) return fail('أدخل مبلغ الخصم.');
+  if (db.prepare('SELECT 1 FROM coupons WHERE store_id = ? AND code = ?').get(req.store.id, v.code)) return fail('هذا الكود موجود.');
+  if (db.prepare('SELECT COUNT(*) AS n FROM coupons WHERE store_id = ?').get(req.store.id).n >= 200) return fail('وصلت إلى الحد الأقصى (200 كود).');
+  db.prepare('INSERT INTO coupons (store_id, code, type, value, min_total, max_uses, ends_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(req.store.id, v.code, v.type, v.type === 'shipping' ? 0 : v.value, v.min_total, v.max_uses, v.ends_at);
+  res.redirect(`/dashboard/stores/${req.store.id}/coupons`);
+});
+dash.post('/stores/:storeId/coupons/:couponId/toggle', ownStore, (req, res) => {
+  db.prepare('UPDATE coupons SET active = 1 - active WHERE id = ? AND store_id = ?').run(req.params.couponId, req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/coupons`);
+});
+dash.post('/stores/:storeId/coupons/:couponId/delete', ownStore, (req, res) => {
+  db.prepare('DELETE FROM coupons WHERE id = ? AND store_id = ?').run(req.params.couponId, req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/coupons`);
 });
 
 // ----- Payment methods -----
@@ -1803,12 +1841,30 @@ shop.post('/cart', (req, res) => {
   res.redirect(`${req.base}/cart`);
 });
 
-shop.get('/cart', (req, res) => res.render('store/cart', cartLines(req)));
+shop.get('/cart', (req, res) => res.render('store/cart', { ...cartLines(req), zones: pricing.zonesOf(req.store) }));
 
+// Checkout page; ?coupon=CODE (from the "apply" button) shows the discount before ordering.
+function checkoutView(req, cart, values, error = null) {
+  const t = orderTotals(req, cart.subtotal, values);
+  return { ...cart, ...t, zones: pricing.zonesOf(req.store), error, values: { ...values, coupon: t.coupon ? t.coupon.code : values.coupon }, couponNote: t.coupon ? pricing.describe(t.coupon, req.store.currency) : null };
+}
+// Live totals for the checkout page (city change, "apply coupon").
+shop.get('/checkout/quote', (req, res) => {
+  const cart = cartLines(req);
+  if (!limiter.hit(`quote:${req.ip}`, 60, MIN)) return res.status(429).json({ error: 'طلبات كثيرة. انتظر قليلاً.' });
+  const city = str(req.query.city, 60);
+  const t = orderTotals(req, cart.subtotal, { customer_city: city === '__other' ? '' : city, coupon: pricing.cleanCode(req.query.coupon) });
+  const m = (v) => app.locals.money(v, req.store.currency);
+  res.json({
+    subtotal: m(t.subtotal), shipping: t.shipping ? m(t.shipping) : 'مجاني', discount: t.discount ? '− ' + m(t.discount) : '', total: m(t.total), beforeShip: m(t.subtotal - t.discount),
+    coupon: t.coupon ? t.coupon.code : '', couponNote: t.coupon ? pricing.describe(t.coupon, req.store.currency) : '', couponError: req.query.coupon ? t.couponError : null,
+  });
+});
 shop.get('/checkout', (req, res) => {
   const cart = cartLines(req);
   if (!cart.lines.length) return res.redirect(`${req.base}/cart`);
-  res.render('store/checkout', { ...cart, error: null, values: {} });
+  const values = { coupon: pricing.cleanCode(req.query.coupon), customer_city: str(req.query.city, 60) };
+  res.render('store/checkout', checkoutView(req, cart, values));
 });
 
 const orderValues = (body) => ({
@@ -1818,7 +1874,11 @@ const orderValues = (body) => ({
   note: str(body.note, 1000),
   customer_email: str(body.customer_email, 120).toLowerCase(),
   payment_method: str(body.payment_method, 20) || 'cod',
+  customer_city: str(body.customer_city, 60),
+  coupon: pricing.cleanCode(body.coupon),
 });
+// Totals for a cart (or a landing-page line) with the customer's city and coupon.
+const orderTotals = (req, subtotal, values) => pricing.totals(req.store, subtotal, { city: values.customer_city, coupon: values.coupon });
 const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 
 // Validate and create an order from cart lines. Shared by the cart checkout and landing-page orders.
@@ -1832,6 +1892,13 @@ function placeOrder(req, cart, values) {
   if (values.customer_name.length < 3) return fail('الرجاء إدخال الاسم الكامل.');
   if (!validPhone(values.customer_phone)) return fail('رقم الهاتف غير صحيح. مثال: 0612345678');
   if (values.customer_address.length < 8) return fail('الرجاء إدخال العنوان الكامل (المدينة، الحي، الشارع).');
+  const zones = pricing.zonesOf(req.store);
+  if (zones.length && !values.customer_city) return fail('الرجاء اختيار مدينتك.');
+  if (values.customer_city && zones.length && values.customer_city !== '__other' && !zones.some((z) => z.city === values.customer_city)) return fail('الرجاء اختيار مدينتك من القائمة.');
+  if (values.customer_city === '__other') values.customer_city = '';
+  // Shipping and discount are always computed here, never taken from the form.
+  const t = orderTotals(req, cart.lines.reduce((a, l) => a + l.subtotal, 0), values);
+  if (values.coupon && t.couponError) return fail(t.couponError);
   const methods = payments.available(req.store);
   const method = methods.includes(values.payment_method) ? values.payment_method : methods.length === 1 ? methods[0] : null;
   if (!method) return fail('الرجاء اختيار طريقة الدفع.');
@@ -1860,9 +1927,12 @@ function placeOrder(req, cart, values) {
     const orderId = transaction(() => {
       const { lastInsertRowid } = db
         .prepare(`INSERT INTO orders (store_id, customer_name, customer_phone, customer_address, note, shipping, total, ip,
-                   customer_email, payment_method, payment_status, pay_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, cart.shipping, cart.total, req.ip || '',
-          values.customer_email, method, online ? 'pending' : payments.isManual(method) ? 'awaiting' : 'unpaid', crypto.randomBytes(16).toString('hex'));
+                   customer_email, payment_method, payment_status, pay_token, customer_city, discount, coupon_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(req.store.id, values.customer_name, values.customer_phone, values.customer_address, values.note, t.shipping, t.total, req.ip || '',
+          values.customer_email, method, online ? 'pending' : payments.isManual(method) ? 'awaiting' : 'unpaid', crypto.randomBytes(16).toString('hex'),
+          values.customer_city, t.discount, t.coupon ? t.coupon.code : '');
+      // A coupon with a use limit is counted here, atomically with the order.
+      if (t.coupon && db.prepare('UPDATE coupons SET used = used + 1 WHERE id = ? AND active = 1 AND (max_uses = 0 OR used < max_uses)').run(t.coupon.id).changes !== 1) throw new Error('COUPON_USED');
       const take = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
       const addItem = db.prepare('INSERT INTO order_items (order_id, product_id, name, price, quantity) VALUES (?, ?, ?, ?, ?)');
       for (const l of cart.lines) {
@@ -1875,6 +1945,7 @@ function placeOrder(req, cart, values) {
     if (!online) notifyNewOrder(req, orderId); // fire and forget
     return { orderId, next: nextStep(req, orderId) };
   } catch (err) {
+    if (err.message === 'COUPON_USED') return fail('استُعمل كود الخصم بالكامل.', 409);
     if (err.message !== 'OUT_OF_STOCK') throw err;
     return fail('نفدت الكمية المطلوبة من المنتج.', 409);
   }
@@ -1885,7 +1956,7 @@ shop.post('/checkout', (req, res) => {
   const cart = cartLines(req);
   if (!cart.lines.length) return res.redirect(`${req.base}/cart`);
   const r = placeOrder(req, cart, values);
-  if (r.error) return res.status(r.status).render('store/checkout', { ...cartLines(req), error: r.error, values });
+  if (r.error) return res.status(r.status).render('store/checkout', checkoutView(req, cartLines(req), values, r.error));
   delete req.cart[req.store.id];
   auth.saveCart(req);
   res.redirect(r.next);
@@ -1908,10 +1979,7 @@ shop.post('/quick-order', (req, res) => {
   const quantity = Math.min(Math.max(1, parseInt(req.body.quantity, 10) || 1), 20);
   if (product.stock < quantity) return reply({ error: product.stock ? `المتوفر ${product.stock} فقط.` : 'نفدت الكمية.', status: 409 });
   const lines = [{ product, quantity, variant: chosen.join(' / '), subtotal: quantity * product.price }];
-  const subtotal = lines[0].subtotal;
-  const { shipping_fee: fee, free_shipping_over: freeOver } = req.store;
-  const shipping = freeOver > 0 && subtotal >= freeOver ? 0 : fee;
-  reply(placeOrder(req, { lines, subtotal, shipping, total: subtotal + shipping }, orderValues(req.body)));
+  reply(placeOrder(req, { lines, subtotal: lines[0].subtotal }, orderValues(req.body)));
 });
 
 shop.get('/thanks/:orderId', (req, res) => {
@@ -2174,11 +2242,12 @@ function notifyNewOrder(req, orderId) {
         <p>وصلك طلب جديد في متجر <strong>${e(store.name)}</strong> 🎉${delivered ? ' — <strong>عميل موثوق</strong> استلم طلبات سابقة.' : ''}</p>
         <table style="width:100%;border-collapse:collapse;margin:12px 0">
           ${items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${e(i.name)} × ${i.quantity}</td><td style="text-align:left;border-bottom:1px solid #eee">${e(money(i.price * i.quantity, store.currency))}</td></tr>`).join('')}
+          ${order.discount ? `<tr><td style="padding:6px 0">الخصم${order.coupon_code ? ' (' + e(order.coupon_code) + ')' : ''}</td><td style="text-align:left">− ${e(money(order.discount, store.currency))}</td></tr>` : ''}
           ${order.shipping ? `<tr><td style="padding:6px 0">التوصيل</td><td style="text-align:left">${e(money(order.shipping, store.currency))}</td></tr>` : ''}
           <tr><td style="padding:8px 0"><strong>الإجمالي</strong></td><td style="text-align:left"><strong>${e(money(order.total, store.currency))}</strong></td></tr>
           <tr><td style="padding:6px 0">الدفع</td><td style="text-align:left">${e(payLabel)}</td></tr>
         </table>
-        <p><strong>العميل:</strong> ${e(order.customer_name)}<br><strong>الهاتف:</strong> <span dir="ltr">${e(order.customer_phone)}</span><br><strong>العنوان:</strong> ${e(order.customer_address)}</p>
+        <p><strong>العميل:</strong> ${e(order.customer_name)}<br><strong>الهاتف:</strong> <span dir="ltr">${e(order.customer_phone)}</span><br><strong>العنوان:</strong> ${e([order.customer_city, order.customer_address].filter(Boolean).join(' · '))}</p>
         <p><a href="${e(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">عرض الطلب وتأكيده</a></p>`),
     },
   });

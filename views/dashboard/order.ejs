@@ -68,7 +68,7 @@
     <h3>👤 العميل</h3>
     <p><strong><%= order.customer_name %></strong></p>
     <p><a href="tel:<%= order.customer_phone %>" dir="ltr">📞 <%= order.customer_phone %></a> · <a href="https://wa.me/<%= waNumber(order.customer_phone) %>" target="_blank" rel="noopener">واتساب</a></p>
-    <p>📍 <%= order.customer_address %></p>
+    <p>📍 <%= order.customer_city ? order.customer_city + ' · ' : '' %><%= order.customer_address %></p>
     <% if (order.note) { %><p class="note">📝 <%= order.note %></p><% } %>
     <hr>
     <h4>سجلّ هذا العميل في متجرك</h4>
@@ -112,7 +112,8 @@
 <div class="table-wrap"><table>
   <tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>المجموع</th></tr>
   <% items.forEach(i => { %><tr><td><%= i.name %></td><td><%= money(i.price, cur) %></td><td><%= i.quantity %></td><td><%= money(i.price * i.quantity, cur) %></td></tr><% }) %>
-  <% if (order.shipping) { %><tr><td colspan="3">التوصيل</td><td><%= money(order.shipping, cur) %></td></tr><% } %>
+  <% if (order.discount) { %><tr><td colspan="3">🏷️ الخصم<%= order.coupon_code ? ' (' + order.coupon_code + ')' : '' %></td><td>− <%= money(order.discount, cur) %></td></tr><% } %>
+  <% if (order.shipping) { %><tr><td colspan="3">التوصيل<%= order.customer_city ? ' · ' + order.customer_city : '' %></td><td><%= money(order.shipping, cur) %></td></tr><% } %>
   <tr><th colspan="3">الإجمالي</th><th><%= money(order.total, cur) %></th></tr>
 </table></div>
 <%- include('../partials/footer') %>

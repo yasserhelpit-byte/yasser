@@ -1,9 +1,16 @@
+<%
+  const _disc = typeof discount !== 'undefined' ? discount : 0;
+  const _zones = typeof zones !== 'undefined' ? zones : [];
+  const _cityPicked = typeof values !== 'undefined' && values && values.customer_city;
+%>
 <p class="row between"><span>المجموع الفرعي</span><span><%= money(subtotal, store.currency) %></span></p>
-<p class="row between"><span>التوصيل</span><span><%= shipping ? money(shipping, store.currency) : 'مجاني' %></span></p>
+<p class="row between js-discount-row" <%= _disc ? '' : 'hidden' %>><span>🏷️ الخصم</span><span class="js-discount disc-val"><%= _disc ? '− ' + money(_disc, store.currency) : '' %></span></p>
+<p class="row between"><span>التوصيل</span><span class="js-ship"><%= _zones.length && !_cityPicked && shipping ? 'حسب مدينتك' : shipping ? money(shipping, store.currency) : 'مجاني' %></span></p>
 <% if (store.free_shipping_over > 0 && subtotal < store.free_shipping_over) { %>
   <div class="free-ship">
     أضف <strong><%= money(store.free_shipping_over - subtotal, store.currency) %></strong> للحصول على توصيل مجاني
     <div class="progress"><span style="width: <%= Math.round(subtotal / store.free_shipping_over * 100) %>%"></span></div>
   </div>
 <% } %>
-<hr><p class="row between total-line"><strong>الإجمالي</strong><strong><%= money(total, store.currency) %></strong></p>
+<% const _beforeShip = _zones.length && !_cityPicked; %>
+<hr><p class="row between total-line"><strong class="js-total-label"><%= _beforeShip ? 'الإجمالي (قبل التوصيل)' : 'الإجمالي' %></strong><strong class="js-total"><%= money(_beforeShip ? subtotal - _disc : total, store.currency) %></strong></p>

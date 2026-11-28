@@ -486,13 +486,17 @@ document.querySelectorAll('.sec-ph .thumbs button').forEach((b) => b.addEventLis
 }));
 document.querySelectorAll('.lo-form').forEach((f) => {
   const qty = f.querySelector('[name=quantity]'), price = +f.dataset.price, fee = +f.dataset.fee, free = +f.dataset.free, cur = f.dataset.cur;
+  const zones = JSON.parse(f.dataset.zones || '[]'), city = f.querySelector('[name=customer_city]');
   const fmt = (n) => n.toFixed(2) + ' ' + cur;
   const update = () => {
     const q = Math.max(1, Math.min(+qty.max || 20, +qty.value || 1)); qty.value = q;
-    const sub = q * price, ship = free > 0 && sub >= free ? 0 : fee;
-    f.querySelector('.lo-sum').textContent = fmt(sub + ship);
-    f.querySelector('.lo-ship').textContent = ship ? '(شامل التوصيل ' + fmt(ship) + ')' : '(التوصيل مجاني)';
+    const z = city && zones.find((x) => x.city === city.value);
+    const sub = q * price, ship = free > 0 && sub >= free ? 0 : z ? z.fee : fee;
+    const unknown = city && !city.value && !(free > 0 && sub >= free);
+    f.querySelector('.lo-sum').textContent = fmt(unknown ? sub : sub + ship);
+    f.querySelector('.lo-ship').textContent = unknown ? '(+ التوصيل حسب مدينتك)' : ship ? '(شامل التوصيل ' + fmt(ship) + ')' : '(التوصيل مجاني)';
   };
+  if (city) city.addEventListener('change', update);
   f.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => { qty.value = +qty.value + +b.dataset.step; update(); }));
   qty.addEventListener('input', update); update();
   f.addEventListener('submit', async (e) => {

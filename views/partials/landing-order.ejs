@@ -1,8 +1,9 @@
 <%
   // COD order form for one product. Used by the product_hero and order_form sections.
   const P = product; const opts = json(P.options); const fid = 'lo' + bi;
+  let zones = []; try { zones = JSON.parse(store.shipping_zones || '[]'); } catch (e) {}
 %>
-<form class="lo-form" method="post" action="<%= base %>/quick-order" data-price="<%= P.price %>" data-fee="<%= store.shipping_fee %>" data-free="<%= store.free_shipping_over %>" data-cur="<%= store.currency %>" id="<%= fid %>">
+<form class="lo-form" method="post" action="<%= base %>/quick-order" data-price="<%= P.price %>" data-fee="<%= store.shipping_fee %>" data-free="<%= store.free_shipping_over %>" data-cur="<%= store.currency %>" data-zones="<%= JSON.stringify(zones) %>" id="<%= fid %>">
   <%- include('csrf') %>
   <input type="hidden" name="product_id" value="<%= P.id %>">
   <input type="hidden" name="back" value="<%= typeof pagePath !== 'undefined' ? pagePath : base %>">
@@ -24,7 +25,14 @@
   <div class="lo-fields">
     <input name="customer_name" required minlength="3" maxlength="100" placeholder="الاسم الكامل" autocomplete="name">
     <input name="customer_phone" type="tel" required dir="ltr" inputmode="tel" placeholder="📞 06XXXXXXXX" aria-label="رقم الهاتف" autocomplete="tel">
-    <textarea name="customer_address" required minlength="8" rows="2" maxlength="500" placeholder="المدينة والعنوان الكامل" autocomplete="street-address"></textarea>
+    <% if (zones.length) { %>
+    <select name="customer_city" required aria-label="المدينة">
+      <option value="">📍 اختر مدينتك…</option>
+      <% zones.forEach(z => { %><option value="<%= z.city %>"><%= z.city %></option><% }) %>
+      <option value="__other">مدينة أخرى</option>
+    </select>
+    <% } %>
+    <textarea name="customer_address" required minlength="8" rows="2" maxlength="500" placeholder="<%= zones.length ? 'الحي والشارع ورقم المنزل' : 'المدينة والعنوان الكامل' %>" autocomplete="street-address"></textarea>
   </div>
   <% if (typeof payMethods !== 'undefined' && payMethods.length > 1) { %><%- include('pay-methods', { values: null }) %><% } else { %><input type="hidden" name="payment_method" value="<%= typeof payMethods !== 'undefined' ? payMethods[0] : 'cod' %>"><% } %>
   <div class="lo-total">

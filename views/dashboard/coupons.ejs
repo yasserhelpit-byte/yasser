@@ -1,0 +1,57 @@
+<%- include('../partials/header', { title: 'الكوبونات' }) %>
+<% const cur = store.currency; const v = values || {}; %>
+<div class="page-head-row"><div>
+  <h1>🏷️ كوبونات الخصم</h1>
+  <p class="muted">أنشئ أكواد خصم وشاركها مع عملائك في الإعلانات وواتساب وإنستغرام. يكتبها العميل في صفحة إتمام الطلب.</p>
+</div></div>
+<% if (error) { %><div class="alert">⚠️ <%= error %></div><% } %>
+
+<form method="post" class="card form cpn-form">
+  <%- include('../partials/csrf') %>
+  <h3>➕ كود جديد</h3>
+  <div class="cpn-grid">
+    <label>الكود<input name="code" required maxlength="24" dir="ltr" placeholder="RAMADAN20" value="<%= v.code || '' %>" style="text-transform: uppercase"></label>
+    <label>نوع الخصم
+      <select name="type" id="cpn-type"><% Object.entries(TYPES).forEach(([k, l]) => { %><option value="<%= k %>" <%= v.type === k ? 'selected' : '' %>><%= l %></option><% }) %></select>
+    </label>
+    <label id="cpn-value-wrap"><span id="cpn-value-label">النسبة %</span><input name="value" type="number" min="0" step="0.01" value="<%= v.value || '' %>" placeholder="20"></label>
+    <label>حد أدنى للطلب (اختياري)<input name="min_total" type="number" min="0" step="0.01" value="<%= v.min_total || '' %>" placeholder="0"></label>
+    <label>عدد مرات الاستعمال (0 = بلا حد)<input name="max_uses" type="number" min="0" value="<%= v.max_uses || '' %>" placeholder="0"></label>
+    <label>ينتهي في (اختياري)<input name="ends_at" type="date" value="<%= v.ends_at || '' %>"></label>
+  </div>
+  <button class="btn">إنشاء الكود</button>
+</form>
+
+<% if (!coupons.length) { %>
+  <section class="card center empty"><div class="big-icon">🏷️</div><p class="muted">لا توجد كوبونات بعد. جرّب كوداً مثل <strong dir="ltr">WELCOME10</strong> بخصم 10% للعملاء الجدد.</p></section>
+<% } else { %>
+<div class="table-wrap"><table>
+  <tr><th>الكود</th><th>الخصم</th><th>الشروط</th><th>الاستعمال</th><th>الطلبات · الخصم الممنوح</th><th>الحالة</th><th></th></tr>
+  <% coupons.forEach(c => {
+    const st = stats[c.code];
+    const expired = c.ends_at && Date.parse(c.ends_at.replace(' ', 'T') + 'Z') < Date.now();
+    const full = c.max_uses > 0 && c.used >= c.max_uses;
+  %>
+  <tr class="<%= c.active && !expired && !full ? '' : 'cpn-off' %>">
+    <td><code class="cpn-code" dir="ltr"><%= c.code %></code></td>
+    <td><%= c.type === 'percent' ? c.value + '%' : c.type === 'fixed' ? money(c.value, cur) : '🚚 توصيل مجاني' %></td>
+    <td class="small"><%= c.min_total ? 'من ' + money(c.min_total, cur) : '—' %><%= c.ends_at ? ' · حتى ' + c.ends_at.slice(0, 10) : '' %></td>
+    <td><%= c.used %><%= c.max_uses ? ' / ' + c.max_uses : '' %></td>
+    <td class="small"><%= st ? st.n + ' طلب · ' + money(st.d, cur) : '—' %></td>
+    <td><span class="badge <%= !c.active ? 's-cancelled' : expired || full ? 's-shipped' : 's-delivered' %>"><%= !c.active ? 'موقوف' : expired ? 'منتهٍ' : full ? 'مستنفد' : 'فعّال' %></span></td>
+    <td class="row">
+      <form method="post" action="/dashboard/stores/<%= store.id %>/coupons/<%= c.id %>/toggle" class="inline"><%- include('../partials/csrf') %><button class="link"><%= c.active ? 'إيقاف' : 'تفعيل' %></button></form>
+      <form method="post" action="/dashboard/stores/<%= store.id %>/coupons/<%= c.id %>/delete" class="inline" data-confirm="سيُحذف الكود «<%= c.code %>». الطلبات السابقة التي استعملته تبقى كما هي." data-confirm-title="حذف الكود؟" data-confirm-ok="حذف" data-danger><%- include('../partials/csrf') %><button class="link danger">حذف</button></form>
+    </td>
+  </tr>
+  <% }) %>
+</table></div>
+<% } %>
+<script>
+(function () {
+  const t = document.getElementById('cpn-type'), wrap = document.getElementById('cpn-value-wrap'), label = document.getElementById('cpn-value-label');
+  const sync = () => { wrap.hidden = t.value === 'shipping'; label.textContent = t.value === 'percent' ? 'النسبة %' : 'المبلغ (<%= cur %>)'; };
+  t.addEventListener('change', sync); sync();
+})();
+</script>
+<%- include('../partials/footer') %>

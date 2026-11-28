@@ -1858,3 +1858,16 @@ a.u-info:hover strong { text-decoration: underline; }
 .ord-table input[type=checkbox] { width: 18px; height: 18px; }
 .ord-print { font-size: 1.1rem; text-decoration: none; }
 .pager { display: flex; justify-content: center; align-items: center; gap: 14px; margin: 16px 0; }
+
+/* Checkout: coupon */
+.coupon-box { margin: 12px 0 4px; }
+.coupon-row { display: flex; gap: 8px; }
+.coupon-row input { flex: 1; text-transform: uppercase; letter-spacing: .05em; }
+.coupon-msg { margin: 6px 0 0; font-size: .88rem; min-height: 1.2em; }
+.coupon-msg.ok { color: #15803d; font-weight: 700; }
+.coupon-msg.err { color: #dc2626; }
+.disc-val { color: #15803d; font-weight: 700; }
+/* Coupons */
+.cpn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.cpn-code { font-weight: 800; letter-spacing: .06em; background: var(--bg); border: 1px dashed var(--brand); padding: 3px 10px; border-radius: 8px; }
+tr.cpn-off { opacity: .6; }

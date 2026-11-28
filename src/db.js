@@ -231,6 +231,26 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 CREATE INDEX IF NOT EXISTS subscriptions_store ON subscriptions(store_id, status);
 `);
+addColumn('stores', 'shipping_zones', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'customer_city', "TEXT NOT NULL DEFAULT ''");
+addColumn('orders', 'discount', 'REAL NOT NULL DEFAULT 0');
+addColumn('orders', 'coupon_code', "TEXT NOT NULL DEFAULT ''");
+db.exec(`
+CREATE TABLE IF NOT EXISTS coupons (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'percent',
+  value REAL NOT NULL DEFAULT 0,
+  min_total REAL NOT NULL DEFAULT 0,
+  max_uses INTEGER NOT NULL DEFAULT 0,
+  used INTEGER NOT NULL DEFAULT 0,
+  ends_at TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (store_id, code)
+);
+`);
 addColumn('stores', 'theme', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'payment_config', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'payment_secrets', "TEXT NOT NULL DEFAULT ''");

@@ -39,7 +39,7 @@
 </head>
 <body>
   <div class="bar"><span><%= orders.length %> <%= orders.length === 1 ? 'وصل' : 'وصولات' %> · <%= store.name %></span><button onclick="print()">🖨️ طباعة</button></div>
-  <% orders.forEach(o => { const paid = o.payment_status === 'paid'; const sub = o.total - (o.shipping || 0); %>
+  <% orders.forEach(o => { const paid = o.payment_status === 'paid'; const sub = o.total - (o.shipping || 0) + (o.discount || 0); %>
   <section class="slip">
     <div class="top">
       <div>
@@ -56,7 +56,7 @@
         <h3>المستلم</h3>
         <div class="big"><%= o.customer_name %></div>
         <div class="phone"><%= o.customer_phone %></div>
-        <div><%= o.customer_address %></div>
+        <div><% if (o.customer_city) { %><strong><%= o.customer_city %></strong> · <% } %><%= o.customer_address %></div>
       </div>
       <div class="box">
         <h3>المحتوى</h3>
@@ -71,7 +71,7 @@
       <span><%= paid ? '✅ مدفوع مسبقاً · لا تحصّل أي مبلغ' : '💵 المبلغ الواجب تحصيله عند التسليم' %></span>
       <b><%= paid ? '0' : money(o.total, store.currency) %></b>
     </div>
-    <div class="muted">المنتجات <%= money(sub, store.currency) %><%= o.shipping ? ' · التوصيل ' + money(o.shipping, store.currency) : '' %> · الإجمالي <%= money(o.total, store.currency) %></div>
+    <div class="muted">المنتجات <%= money(sub, store.currency) %><%= o.discount ? ' · الخصم − ' + money(o.discount, store.currency) : '' %><%= o.shipping ? ' · التوصيل ' + money(o.shipping, store.currency) : '' %> · الإجمالي <%= money(o.total, store.currency) %></div>
   </section>
   <% }) %>
 </body>

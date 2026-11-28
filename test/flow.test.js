@@ -1407,3 +1407,75 @@ test('account page, orders filter/search/export/print, robots and sitemap', asyn
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders WHERE store_id = ?').get(sid).n, 0);
   assert.strictEqual((await fetch(base + '/s/acc-shop')).status, 404);
 });
+
+test('shipping by city and discount coupons', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Zone', email: 'zone@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = Number((await m('POST', '/dashboard/stores', { _csrf: c, name: 'Zone Shop', slug: 'zone-shop', currency: 'MAD' })).location.split('/').pop());
+  const store = () => db.prepare('SELECT * FROM stores WHERE id = ?').get(sid);
+  const settings = (zones) => m('POST', `/dashboard/stores/${sid}/settings`, { _csrf: c, name: 'Zone Shop', slug: 'zone-shop', currency: 'MAD', shipping_fee: '40', free_shipping_over: '1000', shipping_zones_text: zones });
+  // A bad line is reported and nothing is saved.
+  let r = await settings('الدار البيضاء = 20\nخطأ');
+  assert.match(r.text, /السطر 2/);
+  r = await settings('الدار البيضاء = 20\nالرباط: 30 درهم\n\nالدار البيضاء = 99');
+  assert.deepStrictEqual(JSON.parse(store().shipping_zones), [{ city: 'الدار البيضاء', fee: 20 }, { city: 'الرباط', fee: 30 }]);
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Bag', price: '100', stock: '50', active: '1' });
+  const pid = db.prepare('SELECT id FROM products WHERE store_id = ?').get(sid).id;
+
+  // Coupons: validation, then a percent coupon with a minimum and a use limit.
+  r = await m('POST', `/dashboard/stores/${sid}/coupons`, { _csrf: c, code: 'X', type: 'percent', value: '10' });
+  assert.match(r.text, /3 أحرف/);
+  await m('POST', `/dashboard/stores/${sid}/coupons`, { _csrf: c, code: 'save10', type: 'percent', value: '10', min_total: '150', max_uses: '1' });
+  await m('POST', `/dashboard/stores/${sid}/coupons`, { _csrf: c, code: 'FREESHIP', type: 'shipping' });
+  await m('POST', `/dashboard/stores/${sid}/coupons`, { _csrf: c, code: 'OLD', type: 'fixed', value: '30', ends_at: '2020-01-01' });
+  assert.match((await m('GET', `/dashboard/stores/${sid}/coupons`)).text, /SAVE10/);
+
+  const shop = client(base);
+  const sc = csrfOf((await shop('GET', `/s/zone-shop/p/${pid}`)).text);
+  await shop('POST', '/s/zone-shop/cart', { _csrf: sc, product_id: pid, quantity: '2' });
+  let page = (await shop('GET', '/s/zone-shop/checkout')).text;
+  assert.match(page, /<option value="الرباط"\s*>الرباط · 30\.00 MAD/);
+  assert.match(page, /الإجمالي \(قبل التوصيل\)/);
+  // Live quote: city fee, coupon, unknown city -> default fee, expired coupon refused.
+  const quote = async (q) => JSON.parse((await shop('GET', `/s/zone-shop/checkout/quote?${new URLSearchParams(q)}`)).text);
+  assert.match((await quote({ city: 'الرباط' })).shipping, /30/);
+  assert.match((await quote({ city: '__other' })).shipping, /40/);
+  let qd = await quote({ city: 'الدار البيضاء', coupon: 'save10' });
+  assert.match(qd.discount, /20\.00/);
+  assert.match(qd.total, /200\.00/); // 200 - 20 + 20
+  assert.match((await quote({ coupon: 'OLD' })).couponError, /انتهت صلاحية/);
+
+  const buyer = { _csrf: sc, customer_name: 'Hiba', customer_phone: '0655000001', customer_address: 'Hay Riad, rue 4' };
+  r = await shop('POST', '/s/zone-shop/checkout', buyer);
+  assert.match(r.text, /اختر مدينتك/); // a city is required when zones exist
+  // The total is computed on the server, whatever the form says.
+  r = await shop('POST', '/s/zone-shop/checkout', { ...buyer, customer_city: 'الدار البيضاء', coupon: 'SAVE10', total: '1', shipping: '0' });
+  assert.match(r.location, /thanks/);
+  let o = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC').get(sid);
+  assert.deepStrictEqual([o.customer_city, o.shipping, o.discount, o.coupon_code, o.total], ['الدار البيضاء', 20, 20, 'SAVE10', 200]);
+  // The coupon allowed one use only.
+  require('../src/limiter').clear();
+  await shop('POST', '/s/zone-shop/cart', { _csrf: sc, product_id: pid, quantity: '2' });
+  r = await shop('POST', '/s/zone-shop/checkout', { ...buyer, customer_phone: '0655000002', customer_city: 'الرباط', coupon: 'SAVE10' });
+  assert.match(r.text, /استُعمل كود الخصم بالكامل/);
+  // Free-shipping coupon + landing-page order with a city.
+  r = await shop('POST', '/s/zone-shop/quick-order', { _csrf: sc, product_id: pid, quantity: '1', customer_name: 'Rachid', customer_phone: '0655000003', customer_address: 'Agdal, rue 7', customer_city: 'الرباط' });
+  o = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC').get(sid);
+  assert.deepStrictEqual([o.customer_city, o.shipping, o.total], ['الرباط', 30, 130]);
+  // Free shipping above the store threshold still applies.
+  assert.match((await quote({ city: 'الرباط' })).shipping, /30/);
+  db.prepare('UPDATE stores SET free_shipping_over = 150 WHERE id = ?').run(sid);
+  assert.strictEqual((await quote({ city: 'الرباط' })).shipping, 'مجاني');
+  // Order page and CSV show city, coupon and discount.
+  const first = db.prepare('SELECT id FROM orders WHERE store_id = ? AND coupon_code = ?').get(sid, 'SAVE10').id;
+  page = (await m('GET', `/dashboard/stores/${sid}/orders/${first}`)).text;
+  assert.match(page, /الخصم \(SAVE10\)/);
+  assert.match((await m('GET', `/dashboard/stores/${sid}/orders.csv`)).text, /SAVE10/);
+});

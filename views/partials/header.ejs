@@ -34,6 +34,7 @@
       <div class="side-label">المتجر</div>
       <a href="<%= sb %>/design" class="<%= on(sb + '/design') %>"><span>🎨</span>التصميم</a>
       <a href="<%= sb %>/pages" class="<%= on(sb + '/pages') %>"><span>📄</span>الصفحات</a>
+      <a href="<%= sb %>/coupons" class="<%= on(sb + '/coupons') %>"><span>🏷️</span>الكوبونات</a>
       <a href="<%= sb %>/payments" class="<%= on(sb + '/payments') %>"><span>💳</span>الدفع</a>
       <% const curSub = billingOf(cur); %>
       <a href="<%= sb %>/billing" class="<%= on(sb + '/billing') %>"><span>💎</span>الاشتراك<% if (['expiring', 'grace'].includes(curSub.state)) { %> <b class="pending" title="<%= curSub.state === 'expiring' ? 'ينتهي قريباً' : 'انتهى' %>">!</b><% } else if (curSub.state === 'trial') { %> <small class="side-tag">تجربة</small><% } else if (curSub.state === 'free') { %> <small class="side-tag free">مجانية</small><% } %></a>

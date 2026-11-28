@@ -54,6 +54,11 @@
       <label>توصيل مجاني للطلبات فوق<input name="free_shipping_over" type="number" min="0" step="0.01" value="<%= v.free_shipping_over || 0 %>"></label>
     </div>
     <p class="muted small">اترك سعر التوصيل 0 إذا كان التوصيل مجانياً دائماً. واترك الحد 0 إذا لم يكن هناك توصيل مجاني.</p>
+    <% const zt = typeof v.shipping_zones_text === 'string' ? v.shipping_zones_text : (() => { try { return JSON.parse(v.shipping_zones || '[]').map(z => z.city + ' = ' + z.fee).join('\n'); } catch (e) { return ''; } })(); %>
+    <label>أسعار التوصيل حسب المدينة (اختياري)
+      <textarea name="shipping_zones_text" rows="5" dir="auto" placeholder="الدار البيضاء = 20&#10;الرباط = 30&#10;مراكش = 35&#10;طنجة = 40"><%= zt %></textarea>
+    </label>
+    <p class="muted small">مدينة في كل سطر: <strong>المدينة = السعر</strong>. يختار العميل مدينته عند الطلب، والمدن غير المذكورة تأخذ «سعر التوصيل» أعلاه. التوصيل المجاني فوق الحد يبقى سارياً.</p>
     <label>المدينة<input name="city" maxlength="100" placeholder="مثال: الدار البيضاء" value="<%= v.city || '' %>"></label>
   </section>
 

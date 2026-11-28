@@ -3,27 +3,70 @@
 <section class="grid side">
   <div class="card">
     <%- include('../partials/errors') %>
-    <form method="post" action="<%= base %>/checkout" class="form">
+    <form method="post" action="<%= base %>/checkout" class="form" id="co-form">
       <%- include('../partials/csrf') %>
       <input type="hidden" name="_t" value="<%= Date.now() %>">
       <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
       <label>الاسم الكامل<input name="customer_name" required value="<%= values.customer_name || '' %>"></label>
       <label>رقم الهاتف<input name="customer_phone" type="tel" required dir="ltr" inputmode="tel" placeholder="06XXXXXXXX" pattern="[+0-9 .\-()]{9,20}" value="<%= values.customer_phone || '' %>"></label>
-      <label>العنوان الكامل (المدينة، الحي، الشارع)<textarea name="customer_address" rows="3" required><%= values.customer_address || '' %></textarea></label>
+      <% if (zones.length) { %>
+      <label>المدينة
+        <select name="customer_city" id="co-city" required>
+          <option value="">اختر مدينتك…</option>
+          <% zones.forEach(z => { %><option value="<%= z.city %>" <%= values.customer_city === z.city ? 'selected' : '' %>><%= z.city %> · <%= z.fee ? money(z.fee, store.currency) : 'توصيل مجاني' %></option><% }) %>
+          <option value="__other" <%= values.customer_city === '__other' ? 'selected' : '' %>>مدينة أخرى · <%= store.shipping_fee ? money(store.shipping_fee, store.currency) : 'توصيل مجاني' %></option>
+        </select>
+      </label>
+      <% } %>
+      <label>العنوان الكامل (<%= zones.length ? 'الحي، الشارع، رقم المنزل' : 'المدينة، الحي، الشارع' %>)<textarea name="customer_address" rows="3" required><%= values.customer_address || '' %></textarea></label>
       <label>ملاحظة (اختياري)<textarea name="note" rows="2"><%= values.note || '' %></textarea></label>
+      <input type="hidden" name="coupon" id="co-coupon" value="<%= coupon ? coupon.code : '' %>">
       <%- include('../partials/pay-methods') %>
       <% const priv = menuPages.find(p => p.slug === 'privacy' || p.title.includes('الخصوصية')); %>
       <p class="muted small">بتأكيد الطلب، توافق على استعمال معلوماتك لتوصيل طلبك والتواصل معك بشأنه (<a href="<%= priv ? base + '/page/' + priv.slug : '/privacy' %>" target="_blank">سياسة الخصوصية</a>).</p>
-      <button class="btn big">تأكيد الطلب · <%= money(total, store.currency) %></button>
+      <button class="btn big">تأكيد الطلب<span class="js-btn-total"><%= !zones.length || values.customer_city ? ' · ' + money(total, store.currency) : '' %></span></button>
     </form>
   </div>
   <div class="card">
     <h3>ملخص الطلب</h3>
     <% lines.forEach(l => { %><p class="row between"><span><%= l.product.name %><%= l.variant ? ' (' + l.variant + ')' : '' %> × <%= l.quantity %></span><span><%= money(l.subtotal, store.currency) %></span></p><% }) %>
+    <div class="coupon-box">
+      <div class="coupon-row">
+        <input id="co-code" placeholder="🏷️ كود الخصم" value="<%= coupon ? coupon.code : (values.coupon || '') %>" dir="ltr" autocomplete="off" maxlength="24" aria-label="كود الخصم">
+        <button type="button" class="btn ghost" id="co-apply">تطبيق</button>
+      </div>
+      <p class="coupon-msg <%= coupon ? 'ok' : couponError && values.coupon ? 'err' : '' %>" id="co-msg"><%= coupon ? '✓ ' + couponNote : (couponError && values.coupon ? couponError : '') %></p>
+    </div>
     <hr>
     <%- include('../partials/totals') %>
   </div>
 </section>
+<script>
+(function () {
+  const city = document.getElementById('co-city'), code = document.getElementById('co-code'), hidden = document.getElementById('co-coupon');
+  const msg = document.getElementById('co-msg');
+  const set = (sel, v) => document.querySelectorAll(sel).forEach((el) => { el.textContent = v; });
+  async function quote(showCouponResult) {
+    const q = new URLSearchParams({ city: city ? city.value : '', coupon: code.value.trim() });
+    try {
+      const d = await fetch(location.pathname.replace(/\/checkout$/, '/checkout/quote') + '?' + q).then((r) => r.json());
+      if (d.error) return;
+      if (city && !city.value) { set('.js-discount', d.discount); document.querySelectorAll('.total-line .js-total').forEach((el) => { el.textContent = d.beforeShip; }); }
+      else { set('.js-ship', d.shipping); set('.js-total', d.total); set('.js-btn-total', ' · ' + d.total); set('.js-discount', d.discount); set('.js-total-label', 'الإجمالي'); }
+      document.querySelectorAll('.js-discount-row').forEach((el) => { el.hidden = !d.discount; });
+      hidden.value = d.coupon;
+      if (showCouponResult) {
+        msg.textContent = d.coupon ? '✓ ' + d.couponNote : (d.couponError || '');
+        msg.className = 'coupon-msg ' + (d.coupon ? 'ok' : d.couponError ? 'err' : '');
+      }
+    } catch (e) {}
+  }
+  if (city) city.addEventListener('change', () => quote(false));
+  document.getElementById('co-apply').addEventListener('click', () => quote(true));
+  code.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); quote(true); } });
+  if (city && city.value) quote(false);
+})();
+</script>
 <% const track = (ev, data, id) => (typeof pixels !== 'undefined' && pixels) ? `<script>window.yTrack && yTrack(${js(ev)}, ${js(data)}${id ? ', ' + js(id) : ''});</script>` : ''; %>
 <%- track('InitiateCheckout', { value: total, currency: store.currency, contents: lines.map(l => ({ id: l.product.id, quantity: l.quantity, price: l.product.price })) }) %>
 <%- include('../partials/store-footer') %>
