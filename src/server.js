@@ -76,6 +76,16 @@ app.get('/_domain-check', (req, res) => {
   res.status(ok ? 200 : 404).end(ok ? 'ok' : 'no');
 });
 
+// Remember the platform's public address, seen on platform hosts, for emails sent from store domains.
+let knownOrigin = null;
+app.use((req, res, next) => {
+  const host = hostHeader(req);
+  if (!process.env.BASE_URL && isPlatformHost(host.replace(/:\d+$/, '')) && !/^(localhost|127\.)/.test(host)) {
+    const origin = `${req.protocol}://${host}`;
+    if (origin !== knownOrigin) { knownOrigin = origin; if (getSettings().platform_origin !== origin) setSetting('platform_origin', origin); }
+  }
+  next();
+});
 app.use((req, res, next) => {
   const host = hostOf(req);
   if (!host || PLATFORM_HOSTS.has(host) || host.endsWith('.app.github.dev') || host.endsWith('.up.railway.app')) return next();
@@ -225,7 +235,17 @@ function waNumber(phone) {
 }
 app.locals.waNumber = waNumber;
 
-const baseUrl = (req) => process.env.BASE_URL || `${req.get('x-forwarded-proto') || req.protocol}://${req.get('x-forwarded-host') || req.get('host')}`;
+// The platform's own address, for links in emails and notifications (password reset, new orders…).
+// Never built from X-Forwarded-Host (a client could set it and get reset links pointing to their site),
+// and never a store's custom domain (it only serves the storefront). BASE_URL wins when set.
+const isPlatformHost = (h) => PLATFORM_HOSTS.has(h) || h.endsWith('.up.railway.app') || h.endsWith('.app.github.dev');
+const hostHeader = (req) => String(req.get('host') || '').toLowerCase();
+function baseUrl(req) {
+  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/+$/, '');
+  const host = hostHeader(req);
+  if (isPlatformHost(host.replace(/:\d+$/, ''))) return `${req.protocol}://${host}`;
+  return getSettings().platform_origin || `${req.protocol}://${host}`;
+}
 const MIN = 60 * 1000;
 
 app.get('/signup', (req, res) => res.render('signup', { error: null, values: {} }));
@@ -1412,7 +1432,11 @@ admin.get('/billing', (req, res) => {
 admin.post('/billing/:subId/approve', (req, res) => {
   const sub = db.prepare("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'").get(req.params.subId);
   if (!sub) return res.redirect('/admin/billing');
-  const r = billing.activate({ storeId: sub.store_id, planKey: str(req.body.plan, 20) || sub.plan, months: parseInt(req.body.months, 10) || sub.months, adminId: req.user.id,
+  const planKey = str(req.body.plan, 20) || sub.plan;
+  const months = parseInt(req.body.months, 10) || sub.months;
+  const pl = billing.planByKey(planKey);
+  if (!pl || pl.free || !billing.PERIODS[months]) return res.status(400).render('message', { title: 'خطأ', message: 'اختر باقة مدفوعة ومدة صحيحتين.' });
+  const r = billing.activate({ storeId: sub.store_id, planKey, months, adminId: req.user.id,
     method: str(req.body.method, 20) || sub.method, amount: req.body.amount ?? null, reference: str(req.body.reference, 80), requestId: sub.id });
   tellMerchant(sub.store_id, `✅ تم تفعيل باقة ${r.plan.name}`, `اشتراكك فعّال حتى ${r.until.slice(0, 10)}. شكراً لثقتك!`);
   res.redirect(`/admin/billing?ok=${sub.store_id}`);

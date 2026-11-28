@@ -1286,3 +1286,27 @@ test('subscriptions: free plan, trial, request, admin activation, limits, fallba
   setSetting('ai_enabled', '1');
   assert.match((await m('GET', `/dashboard/stores/${fid}`)).text, /\/ads" class/);
 });
+
+test('security: email links never come from client headers or store domains', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const u = client(base);
+  const c = csrfOf((await u('GET', '/signup')).text);
+  await u('POST', '/signup', { _csrf: c, name: 'Victim', email: 'victim@example.com', password: 'password123', accept_terms: '1' });
+  // An attacker asks for the victim's reset link with forged host headers.
+  const anon = client(base);
+  const ac = csrfOf((await anon('GET', '/forgot')).text);
+  const before = sent.length;
+  await fetch(base + '/forgot', {
+    method: 'POST', redirect: 'manual',
+    headers: { cookie: anon.cookie(), 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' },
+    body: new URLSearchParams({ _csrf: ac, email: 'victim@example.com' }),
+  });
+  const mail = sent.slice(before).find((m) => m.to === 'victim@example.com');
+  assert.ok(mail, 'reset email sent');
+  const text = `${mail.text || ''} ${mail.html || ''}`;
+  assert.doesNotMatch(text, /evil\.example/);
+  assert.match(text, /\/reset\/[a-f0-9]{64}/);
+});
