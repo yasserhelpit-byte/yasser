@@ -1825,3 +1825,15 @@ a.kpi:hover { text-decoration: none; transform: translateY(-2px); box-shadow: 0 
 .b-pro { font-style: normal; font-size: .66rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: linear-gradient(135deg, #f59e0b, #ec4899); color: #fff; margin-inline-start: 6px; vertical-align: 2px; white-space: nowrap; }
 .pro-note { background: linear-gradient(135deg, #fff7ed, #fdf2f8); border: 1px solid #fbcfe8; color: #831843; border-radius: 12px; padding: 10px 12px; font-size: .85rem; line-height: 1.6; }
 .pro-note a { font-weight: 700; color: #be185d; }
+
+/* Free vs professional groups in the editor (sections picker + style tab) */
+.b-picker-wrap { display: grid; gap: 4px; }
+.b-group, .st-group { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding: 8px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.b-group strong, .st-group strong { font-size: .92rem; }
+.b-group small, .st-group small { color: var(--muted); font-size: .76rem; }
+.b-group.pro, .st-group.pro { background: linear-gradient(135deg, #fff7ed, #fdf2f8); border-color: #fbcfe8; }
+.b-group.pro strong, .st-group.pro strong { color: #9d174d; }
+.st-group:first-of-type { margin-top: 0; }
+.b-pick.is-pro { border-color: #fbcfe8; }
+.b-pick.is-pro:hover { border-color: #ec4899; background: #fdf2f8; }
+.b-group, .st-group { scroll-margin-top: 64px; }

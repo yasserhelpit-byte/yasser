@@ -167,12 +167,20 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus,
       root.append(card);
     });
     // Add-section picker
-    const picker = h('div', { class: 'b-picker' },
-      Object.entries(SCHEMA).map(([type, def]) => h('button', { type: 'button', class: 'b-pick', onclick: () => {
+    // Grouped like the templates: free sections first, then the professional ones.
+    const pickBtn = ([type, def]) => h('button', { type: 'button', class: 'b-pick' + (def.pro ? ' is-pro' : ''), onclick: () => {
         const sec = { type, hidden: false, ...blank(def.fields) };
         if (def.items) sec.items = [];
         sections.push(sec); open.clear(); open.add(sections.length - 1); touch(); render(sections.length - 1); onFocus?.(sections.length - 1);
-      } }, h('span', {}, def.icon), h('strong', {}, def.label, proTag(def)), h('small', {}, def.desc))));
+      } }, h('span', {}, def.icon), h('strong', {}, def.label), h('small', {}, def.desc));
+    const all = Object.entries(SCHEMA);
+    const free = all.filter(([, d]) => !d.pro), pro = all.filter(([, d]) => d.pro);
+    const picker = h('div', { class: 'b-picker-wrap' },
+      h('div', { class: 'b-group' }, h('strong', {}, '🆓 أقسام مجانية'), h('small', {}, `${free.length} قسماً متاحاً لكل الباقات`)),
+      h('div', { class: 'b-picker' }, free.map(pickBtn)),
+      h('div', { class: 'b-group pro' }, h('strong', {}, '💎 أقسام احترافية'),
+        h('small', {}, proLocked ? 'جرّبها في المعاينة، وتُنشر مع الباقات المدفوعة' : 'متاحة في باقتك')),
+      h('div', { class: 'b-picker' }, pro.map(pickBtn)));
     root.append(h('details', { class: 'b-add' }, h('summary', { class: 'btn' }, '+ إضافة قسم'), picker));
     if (focus != null) document.getElementById('sec-' + focus)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }

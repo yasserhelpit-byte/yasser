@@ -36,13 +36,7 @@
       <div class="ed-pane" data-pane="style" hidden>
         <div class="form">
           <% const T = theme; %>
-          <% if (!proTemplates) { %><div class="pro-note">💎 الأساليب الجاهزة وخيارات الأسلوب المتقدمة من مزايا الباقات المدفوعة. جرّبها في المعاينة بحرية، وتُحفظ عند الترقية. <a href="/dashboard/stores/<%= store.id %>/billing" target="_blank">الباقات ↗</a></div><% } %>
-          <div>
-            <div class="b-label">✨ مظهر جاهز بضغطة</div>
-            <div class="kits">
-              <% Object.entries(THEME_KITS).forEach(([k, kit]) => { %><button type="button" class="kit" data-kit="<%= k %>"><b><%= kit.icon %></b><span><%= kit.label %></span></button><% }) %>
-            </div>
-          </div>
+          <div class="st-group"><strong>🆓 أسلوب مجاني</strong><small>متاح لكل الباقات</small></div>
           <div>
             <div class="b-label">اللون الرئيسي</div>
             <div class="swatches">
@@ -70,6 +64,13 @@
             <div class="b-label">رأس الصفحة</div>
             <div class="seg">
               <% Object.entries(HEADERS).forEach(([k, l]) => { %><label><input type="radio" name="header_style" value="<%= k %>" <%= store.header_style === k ? 'checked' : '' %>><span><%= l %></span></label><% }) %>
+            </div>
+          </div>
+          <div class="st-group pro"><strong>💎 أسلوب احترافي</strong><small><% if (proTemplates) { %>متاح في باقتك<% } else { %>جرّبه في المعاينة، ويُحفظ مع <a href="/dashboard/stores/<%= store.id %>/billing" target="_blank">الباقات المدفوعة ↗</a><% } %></small></div>
+          <div>
+            <div class="b-label">✨ مظهر جاهز بضغطة</div>
+            <div class="kits">
+              <% Object.entries(THEME_KITS).forEach(([k, kit]) => { %><button type="button" class="kit" data-kit="<%= k %>"><b><%= kit.icon %></b><span><%= kit.label %></span></button><% }) %>
             </div>
           </div>
           <% Object.entries(THEME_OPTIONS).forEach(([k, opt]) => { %>
