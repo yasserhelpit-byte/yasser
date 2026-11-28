@@ -12,6 +12,7 @@ const sections = require('./sections');
 const aiAds = require('./ai-ads');
 const notifier = require('./notify');
 const payments = require('./payments');
+const themeLib = require('./theme');
 
 const dns = require('dns').promises;
 const maintenance = require('./maintenance');
@@ -147,6 +148,8 @@ const FONTS = {
 const RADII = { sharp: { label: 'حادة', v: '2px' }, soft: { label: 'ناعمة', v: '12px' }, round: { label: 'دائرية', v: '22px' } };
 const HEADERS = { classic: 'كلاسيكي (الشعار يميناً)', centered: 'الشعار في الوسط' };
 app.locals.FONTS = FONTS;
+app.locals.THEME_OPTIONS = themeLib.withFonts(FONTS);
+app.locals.THEME_KITS = themeLib.KITS;
 app.locals.RADII = RADII;
 app.locals.HEADERS = HEADERS;
 app.locals.SCHEMA = sections.SCHEMA;
@@ -774,7 +777,7 @@ const storeHome = (store) => {
   return store.home_sections ? list : sections.DEFAULT_HOME;
 };
 dash.get('/stores/:storeId/design', ownStore, (req, res) => {
-  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id) });
+  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id), theme: themeLib.sanitize(req.store.theme) });
 });
 // Live preview for the design editor: renders the storefront home with unsaved changes.
 dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {
@@ -784,6 +787,7 @@ dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {
     font: FONTS[req.body.font] ? req.body.font : req.store.font,
     radius: RADII[req.body.radius] ? req.body.radius : req.store.radius,
     header_style: HEADERS[req.body.header_style] ? req.body.header_style : req.store.header_style,
+    theme: JSON.stringify(themeLib.sanitize(req.body)),
   };
   const list = sections.sanitize(req.body.sections);
   Object.assign(res.locals, storefrontLocals(draft), { store: draft, cartCount: 0, isOwner: false, preview: true });
@@ -797,8 +801,8 @@ dash.post('/stores/:storeId/design', ownStore, (req, res) => {
   const radius = RADII[req.body.radius] ? req.body.radius : 'soft';
   const header = HEADERS[req.body.header_style] ? req.body.header_style : 'classic';
   const color = /^#[0-9a-fA-F]{6}$/.test(req.body.color) ? req.body.color : req.store.color;
-  db.prepare('UPDATE stores SET home_sections = ?, font = ?, radius = ?, header_style = ?, color = ? WHERE id = ?')
-    .run(JSON.stringify(list), font, radius, header, color, req.store.id);
+  db.prepare('UPDATE stores SET home_sections = ?, font = ?, radius = ?, header_style = ?, color = ?, theme = ? WHERE id = ?')
+    .run(JSON.stringify(list), font, radius, header, color, JSON.stringify(themeLib.sanitize(req.body)), req.store.id);
   res.redirect(`/dashboard/stores/${req.store.id}/design?saved=1`);
 });
 
@@ -1345,6 +1349,9 @@ function storefrontLocals(store, customDomain = false) {
     hasProducts: !!db.prepare('SELECT 1 FROM products WHERE store_id = ? AND active = 1 LIMIT 1').get(store.id),
     font: FONTS[store.font] || FONTS.tajawal,
     radius: (RADII[store.radius] || RADII.soft).v,
+    theme: themeLib.sanitize(store.theme),
+    themeClass: themeLib.classes(themeLib.sanitize(store.theme)),
+    hfont: FONTS[themeLib.sanitize(store.theme).hfont] || null,
     // Store-relative links: "/products" -> "/s/<slug>/products".
     href: (link) => (link && link.startsWith('/') ? (link === '/' ? base || '/' : base + link) : link),
   };

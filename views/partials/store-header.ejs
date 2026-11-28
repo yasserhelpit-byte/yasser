@@ -1,5 +1,5 @@
 <%- include('head') %>
-<div class="storefront">
+<div class="storefront <%= typeof themeClass !== 'undefined' ? themeClass : '' %>">
 <% if (isOwner) { %>
 <div class="owner-bar">
   <div class="wrap row between">

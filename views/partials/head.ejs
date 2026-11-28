@@ -26,9 +26,17 @@
   <% if (typeof shell !== 'undefined' && shell) { %><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><% } %>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800<% if (typeof font !== 'undefined' && font.g !== 'Tajawal:wght@400;500;700;800') { %>&family=<%= font.g %><% } %>&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800<% if (typeof font !== 'undefined' && font.g !== 'Tajawal:wght@400;500;700;800') { %>&family=<%= font.g %><% } %><% if (typeof hfont !== 'undefined' && hfont && hfont.g !== 'Tajawal:wght@400;500;700;800' && hfont.g !== font.g) { %>&family=<%= hfont.g %><% } %>&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css?v=<%= assetV %>">
   <% if (typeof pixels !== 'undefined' && pixels && !(typeof preview !== 'undefined' && preview)) { %><%- include('pixels') %><% } %>
-  <% if (typeof font !== 'undefined' && typeof store !== 'undefined' && store) { %><style>:root{--brand:<%= store.color %>;--font:<%- font.css %>, 'Tajawal', system-ui, sans-serif;--radius:<%= radius %>;}</style><% } %>
+  <% if (typeof font !== 'undefined' && typeof store !== 'undefined' && store) { %><%
+    const T = typeof theme !== 'undefined' ? theme : { mode: 'light', size: 'm' };
+    const MODES = {
+      light: '--bg:#f6f7f9;--card:#fff;--text:#1a1d23;--muted:#667085;--line:#e4e7ec;--ink:#14161a;',
+      cream: '--bg:#f8f3ea;--card:#fffdf8;--text:#2b2118;--muted:#7a6a58;--line:#e9dfcf;--ink:#2b2118;',
+      dark: '--bg:#0e1014;--card:#171a20;--text:#eef0f3;--muted:#9aa3b2;--line:#2a2f38;--ink:#f3f4f6;',
+      auto: '',
+    };
+  %><style>:root{--brand:<%= store.color %>;--font:<%- font.css %>, 'Tajawal', system-ui, sans-serif;--hfont:<%- typeof hfont !== 'undefined' && hfont ? hfont.css + ', ' : '' %>var(--font);--radius:<%= radius %>;<%- MODES[T.mode] || '' %>color-scheme:<%= T.mode === 'dark' ? 'dark' : T.mode === 'auto' ? 'light dark' : 'light' %>}html{font-size:<%= { s: '15px', m: '16px', l: '17.5px' }[T.size] || '16px' %>}</style><% } %>
 </head>
 <body>

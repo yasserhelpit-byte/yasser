@@ -1051,3 +1051,42 @@ test('advanced sections: render, styles, contact form reaches the inbox', async 
   assert.match(res.location, /^\/s\/adv-shop\?/);
 });
 var fetchCsp;
+
+test('style options: saved, validated, applied on every storefront page', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Sty', email: 'sty@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const r = await m('POST', '/dashboard/stores', { _csrf: c, name: 'Style Shop', slug: 'style-shop', currency: 'MAD', color: '#9d174d' });
+  const sid = Number(r.location.split('/').pop());
+  const page = (await m('GET', `/dashboard/stores/${sid}/design`)).text;
+  assert.match(page, /data-kit="luxury"/);
+  assert.match(page, /name="t_mode" value="dark"/);
+  assert.match(page, /<option value="amiri"/); // heading font list comes from the fonts
+
+  // Preview shows unsaved choices.
+  let html = (await m('POST', `/dashboard/stores/${sid}/design/preview`, { _csrf: c, sections: '[]', t_mode: 'dark', t_btn: 'outline', t_card: 'minimal', t_hfont: 'amiri', t_size: 'l' })).text;
+  assert.match(html, /class="storefront t-mode-dark t-btn-outline t-card-minimal t-ratio-portrait t-density-m t-head-sticky"/);
+  assert.match(html, /--bg:#0e1014/);
+  assert.match(html, /--hfont:'Amiri'/);
+  assert.match(html, /family=Amiri/);
+  assert.match(html, /html\{font-size:17\.5px\}/);
+
+  // Saving: unknown values fall back to defaults; nothing odd reaches the page.
+  await m('POST', `/dashboard/stores/${sid}/design`, { _csrf: c, sections: '[]', font: 'cairo', radius: 'round', header_style: 'classic', color: '#9d174d',
+    t_mode: 'cream', t_btn: 'x"><script>', t_card: 'shadow', t_ratio: 'square', t_density: 'l', t_head: 'static', t_hfont: 'nope' });
+  assert.deepStrictEqual(JSON.parse(db.prepare('SELECT theme FROM stores WHERE id = ?').get(sid).theme),
+    { mode: 'cream', hfont: 'same', size: 'm', btn: 'solid', card: 'shadow', ratio: 'square', density: 'l', head: 'static' });
+  for (const path of ['/s/style-shop', '/s/style-shop/products', '/s/style-shop/cart']) {
+    html = await (await fetch(base + path)).text();
+    assert.match(html, /class="storefront t-mode-cream t-btn-solid t-card-shadow t-ratio-square t-density-l t-head-static"/, path);
+    assert.match(html, /--bg:#f8f3ea/, path);
+  }
+  // The dashboard keeps the fixed YASSER look.
+  assert.doesNotMatch((await m('GET', '/dashboard')).text, /t-mode-cream|--bg:#f8f3ea/);
+});

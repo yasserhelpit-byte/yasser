@@ -210,6 +210,7 @@ addColumn('products', 'sku', "TEXT NOT NULL DEFAULT ''");
 addColumn('products', 'cost_price', 'REAL NOT NULL DEFAULT 0');
 addColumn('orders', 'ip', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'shipping', 'REAL NOT NULL DEFAULT 0');
+addColumn('stores', 'theme', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'payment_config', "TEXT NOT NULL DEFAULT ''");
 addColumn('stores', 'payment_secrets', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'customer_email', "TEXT NOT NULL DEFAULT ''");

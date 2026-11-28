@@ -35,10 +35,17 @@
 
       <div class="ed-pane" data-pane="style" hidden>
         <div class="form">
+          <% const T = theme; %>
+          <div>
+            <div class="b-label">✨ مظهر جاهز بضغطة</div>
+            <div class="kits">
+              <% Object.entries(THEME_KITS).forEach(([k, kit]) => { %><button type="button" class="kit" data-kit="<%= k %>"><b><%= kit.icon %></b><span><%= kit.label %></span></button><% }) %>
+            </div>
+          </div>
           <div>
             <div class="b-label">اللون الرئيسي</div>
             <div class="swatches">
-              <% ['#0f766e', '#111827', '#1e3a8a', '#7c2d12', '#9d174d', '#6d28d9', '#b45309', '#15803d'].forEach(c => { %>
+              <% ['#0f766e', '#111827', '#1e3a8a', '#7c2d12', '#9d174d', '#6d28d9', '#b45309', '#15803d', '#0e7490', '#be123c', '#a16207', '#475569'].forEach(c => { %>
                 <button type="button" class="swatch <%= store.color === c ? 'on' : '' %>" data-color="<%= c %>" style="background: <%= c %>" aria-label="<%= c %>"></button>
               <% }) %>
               <label class="swatch custom" title="لون مخصص"><input type="color" name="color" id="color-input" value="<%= store.color %>"></label>
@@ -64,6 +71,16 @@
               <% Object.entries(HEADERS).forEach(([k, l]) => { %><label><input type="radio" name="header_style" value="<%= k %>" <%= store.header_style === k ? 'checked' : '' %>><span><%= l %></span></label><% }) %>
             </div>
           </div>
+          <% Object.entries(THEME_OPTIONS).forEach(([k, opt]) => { %>
+          <div>
+            <div class="b-label"><%= opt.label %></div>
+            <% if (k === 'hfont') { %>
+              <select name="t_hfont" class="t-select"><% Object.entries(opt.options).forEach(([v, l]) => { %><option value="<%= v %>" <%= T.hfont === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
+            <% } else { %>
+              <div class="seg"><% Object.entries(opt.options).forEach(([v, l]) => { %><label><input type="radio" name="t_<%= k %>" value="<%= v %>" <%= T[k] === v ? 'checked' : '' %>><span><%= l %></span></label><% }) %></div>
+            <% } %>
+          </div>
+          <% }) %>
           <p class="muted small">الشعار وصورة الغلاف وشريط الإعلانات في <a href="/dashboard/stores/<%= store.id %>/settings">الإعدادات</a>.</p>
         </div>
       </div>
@@ -133,7 +150,16 @@
   });
 
   // Style controls
-  form.querySelectorAll('input[name=font], input[name=radius], input[name=header_style]').forEach((el) => el.addEventListener('change', () => { builder.markDirty(); changed(); }));
+  form.querySelectorAll('[data-pane=style] input[type=radio], [data-pane=style] select').forEach((el) => el.addEventListener('change', () => { builder.markDirty(); changed(); }));
+  // Style kits: set several options at once.
+  const kits = <%- js(THEME_KITS) %>;
+  const pick = (name, value) => { const el = form.querySelector(`[name="${name}"]`); if (!el) return; if (el.tagName === 'SELECT') el.value = value; else { const r = form.querySelector(`[name="${name}"][value="${value}"]`); if (r) r.checked = true; } };
+  document.querySelectorAll('.kit').forEach((b) => b.addEventListener('click', () => {
+    const kit = kits[b.dataset.kit];
+    Object.entries(kit.theme).forEach(([k, v]) => pick('t_' + k, v));
+    pick('font', kit.font); pick('radius', kit.radius);
+    builder.markDirty(); changed();
+  }));
   const colorInput = document.getElementById('color-input');
   colorInput.addEventListener('input', () => { document.querySelectorAll('.swatch').forEach((s) => s.classList.remove('on')); builder.markDirty(); changed(); });
   document.querySelectorAll('.swatch[data-color]').forEach((b) => b.addEventListener('click', () => {
