@@ -648,7 +648,8 @@ h4 { margin: 0 0 8px; }
 .b-pick:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 5%, var(--card)); }
 .b-pick span { font-size: 1.5rem; } .b-pick small { color: var(--muted); font-size: 0.8rem; }
 .font-picks { display: grid; gap: 8px; }
-.font-pick input, .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.font-pick, .seg label { position: relative; }
+.font-pick input, .seg input { position: absolute; inset-inline-start: 6px; top: 6px; opacity: 0; width: 1px; height: 1px; margin: 0; }
 .font-pick span { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border: 2px solid var(--line); border-radius: 10px; cursor: pointer; }
 .font-pick b { font-size: 1.2rem; } .font-pick small { color: var(--muted); font-family: var(--font, 'Tajawal'), sans-serif; }
 .font-pick input:checked + span, .seg input:checked + span { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, var(--card)); }
@@ -816,8 +817,14 @@ a.kpi:hover { text-decoration: none; border-color: var(--brand); }
 .ed-devices button { border: 0; background: none; padding: 6px 12px; border-radius: 7px; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
 .ed-devices button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 10%); }
 .ed-actions { display: flex; gap: 8px; align-items: center; }
-.ed-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 400px minmax(0, 1fr); }
-.ed-panel { background: var(--card); border-inline-start: 1px solid var(--line); overflow-y: auto; display: flex; flex-direction: column; }
+.ed-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 400px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+/* The editor fills exactly the space left under any bars above it, and never makes the page scroll. */
+@media (min-width: 901px) {
+  .app-main:has(.editor) { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  .app-main:has(.editor) > .app-content { flex: 1; min-height: 0; }
+  .app-main:has(.editor) .editor { height: 100%; }
+}
+.ed-panel { background: var(--card); border-inline-start: 1px solid var(--line); overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
 .ed-tabs { display: flex; position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line); padding: 0 10px; }
 .ed-tabs button { flex: 1; border: 0; background: none; padding: 13px 8px; font: inherit; font-weight: 700; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
 .ed-tabs button.on { color: var(--brand); border-bottom-color: var(--brand); }
