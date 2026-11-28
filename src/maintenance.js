@@ -36,6 +36,7 @@ function runMaintenance() {
   try {
     const sessions = auth.cleanupSessions();
     const files = cleanupUploads();
+    require('./analytics').cleanup();
     if (sessions || files.removed) console.log(`🧹 maintenance: ${sessions} old sessions, ${files.removed} unused images (${Math.round(files.bytes / 1024)} KB) removed`);
   } catch (err) {
     console.error('Maintenance failed:', err.message);

@@ -231,6 +231,17 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 CREATE INDEX IF NOT EXISTS subscriptions_store ON subscriptions(store_id, status);
 `);
+db.exec(`
+CREATE TABLE IF NOT EXISTS visits (
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  day TEXT NOT NULL,
+  vkey TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  product_id INTEGER,
+  source TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS visits_store_day ON visits(store_id, day);
+`);
 addColumn('stores', 'shipping_zones', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'customer_city', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'discount', 'REAL NOT NULL DEFAULT 0');

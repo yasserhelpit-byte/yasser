@@ -1871,3 +1871,14 @@ a.u-info:hover strong { text-decoration: underline; }
 .cpn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .cpn-code { font-weight: 800; letter-spacing: .06em; background: var(--bg); border: 1px dashed var(--brand); padding: 3px 10px; border-radius: 8px; }
 tr.cpn-off { opacity: .6; }
+/* Analytics */
+.funnel { display: grid; gap: 14px; }
+.fn-top { display: flex; justify-content: space-between; font-weight: 600; }
+.fn-bar { height: 12px; background: var(--bg); border-radius: 999px; overflow: hidden; margin: 6px 0 2px; }
+.fn-bar span { display: block; height: 100%; background: linear-gradient(90deg, #60a5fa, #2563eb); border-radius: 999px; }
+.src-list { display: grid; gap: 10px; margin-bottom: 10px; }
+.src-row { display: grid; grid-template-columns: 28px 120px 1fr 44px; align-items: center; gap: 8px; }
+.src-ic { font-size: 1.2rem; }
+.src-bar { height: 10px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+.src-bar span { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+.src-row strong { text-align: end; }

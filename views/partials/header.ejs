@@ -29,6 +29,7 @@
       <a href="<%= sb %>" class="<%= on(sb, true) %>"><span>📊</span>نظرة عامة</a>
       <a href="<%= sb %>/orders" class="<%= on(sb + '/orders') %>"><span>🧾</span>الطلبات</a>
       <a href="<%= sb %>/products" class="<%= on(sb + '/products') %>"><span>📦</span>المنتجات</a>
+      <a href="<%= sb %>/analytics" class="<%= on(sb + '/analytics') %>"><span>📈</span>الإحصائيات</a>
       <% if (platform.ai_enabled === '1') { %><a href="<%= sb %>/ads" class="<%= on(sb + '/ads') %>"><span>📣</span>الإعلانات</a><% } %>
       <a href="<%= sb %>/inbox" class="<%= on(sb + '/inbox') %>"><span>💬</span>الرسائل<b class="pending" id="chat-unread" <%= typeof unreadChats !== 'undefined' && unreadChats ? '' : 'hidden' %>><%= typeof unreadChats !== 'undefined' ? unreadChats : '' %></b></a>
       <div class="side-label">المتجر</div>

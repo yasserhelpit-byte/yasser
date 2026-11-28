@@ -15,6 +15,7 @@ const payments = require('./payments');
 const themeLib = require('./theme');
 const billing = require('./billing');
 const pricing = require('./pricing');
+const analytics = require('./analytics');
 
 const dns = require('dns').promises;
 const maintenance = require('./maintenance');
@@ -935,6 +936,12 @@ dash.post('/stores/:storeId/billing/cancel', ownStore, (req, res) => {
   res.redirect(`/dashboard/stores/${req.store.id}/billing`);
 });
 
+// ----- Analytics -----
+dash.get('/stores/:storeId/analytics', ownStore, (req, res) => {
+  const days = [7, 30, 90].includes(Number(req.query.p)) ? Number(req.query.p) : 30;
+  res.render('dashboard/analytics', { r: analytics.report(req.store.id, days), days });
+});
+
 // ----- Coupons -----
 const couponsView = (req, extra = {}) => ({
   coupons: db.prepare('SELECT * FROM coupons WHERE store_id = ? ORDER BY active DESC, id DESC').all(req.store.id),
@@ -1769,16 +1776,19 @@ shop.get('/sitemap.xml', (req, res) => {
 
 shop.get('/', (req, res) => {
   const list = req.store.home_sections ? sections.sanitize(req.store.home_sections) : sections.DEFAULT_HOME;
+  analytics.track(req, req.store, 'home');
   res.render('store/home', { blocks: resolveSections(req.store, list), pageTitle: null });
 });
 
 shop.get('/page/:pageSlug', (req, res) => {
   const page = db.prepare('SELECT * FROM pages WHERE store_id = ? AND slug = ?').get(req.store.id, req.params.pageSlug);
   if (!page) return res.status(404).render('message', { title: 'غير موجود', message: 'الصفحة غير موجودة.' });
+  analytics.track(req, req.store, 'page');
   res.render('store/home', { blocks: resolveSections(req.store, sections.sanitize(page.sections)), pageTitle: page.title });
 });
 
 shop.get('/products', (req, res) => {
+  analytics.track(req, req.store, 'list');
   const q = str(req.query.q, 100);
   const c = str(req.query.c, 60);
   const sale = req.query.sale ? 1 : 0;
@@ -1808,6 +1818,7 @@ shop.get('/products', (req, res) => {
 shop.get('/p/:productId', (req, res) => {
   const product = db.prepare('SELECT * FROM products WHERE id = ? AND store_id = ? AND active = 1').get(req.params.productId, req.store.id);
   if (!product) return res.status(404).render('message', { title: 'غير موجود', message: 'المنتج غير موجود.' });
+  analytics.track(req, req.store, 'product', product.id);
   res.render('store/product', { product, choose: !!req.query.choose });
 });
 
@@ -1841,7 +1852,7 @@ shop.post('/cart', (req, res) => {
   res.redirect(`${req.base}/cart`);
 });
 
-shop.get('/cart', (req, res) => res.render('store/cart', { ...cartLines(req), zones: pricing.zonesOf(req.store) }));
+shop.get('/cart', (req, res) => { analytics.track(req, req.store, 'cart'); res.render('store/cart', { ...cartLines(req), zones: pricing.zonesOf(req.store) }); });
 
 // Checkout page; ?coupon=CODE (from the "apply" button) shows the discount before ordering.
 function checkoutView(req, cart, values, error = null) {
@@ -1863,6 +1874,7 @@ shop.get('/checkout/quote', (req, res) => {
 shop.get('/checkout', (req, res) => {
   const cart = cartLines(req);
   if (!cart.lines.length) return res.redirect(`${req.base}/cart`);
+  analytics.track(req, req.store, 'checkout');
   const values = { coupon: pricing.cleanCode(req.query.coupon), customer_city: str(req.query.city, 60) };
   res.render('store/checkout', checkoutView(req, cart, values));
 });

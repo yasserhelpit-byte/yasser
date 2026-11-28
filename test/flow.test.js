@@ -1479,3 +1479,47 @@ test('shipping by city and discount coupons', async (t) => {
   assert.match(page, /الخصم \(SAVE10\)/);
   assert.match((await m('GET', `/dashboard/stores/${sid}/orders.csv`)).text, /SAVE10/);
 });
+
+test('visitor analytics: anonymous visits, sources, conversion; owner and bots not counted', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  require('../src/limiter').clear();
+  const { db } = require('../src/db');
+  const m = client(base);
+  let c = csrfOf((await m('GET', '/signup')).text);
+  await m('POST', '/signup', { _csrf: c, name: 'Stat', email: 'stat@example.com', password: 'password123', accept_terms: '1' });
+  c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
+  const sid = Number((await m('POST', '/dashboard/stores', { _csrf: c, name: 'Stat Shop', slug: 'stat-shop', currency: 'MAD' })).location.split('/').pop());
+  await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Lamp', price: '80', stock: '50', active: '1' });
+  const pid = db.prepare('SELECT id FROM products WHERE store_id = ?').get(sid).id;
+  assert.match((await m('GET', `/dashboard/stores/${sid}/analytics`)).text, /لا توجد زيارات بعد/);
+
+  // The owner browsing and a bot don't count.
+  await m('GET', '/s/stat-shop');
+  await fetch(`${base}/s/stat-shop`, { headers: { 'user-agent': 'facebookexternalhit/1.1' } });
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM visits WHERE store_id = ?').get(sid).n, 0);
+
+  // Visitor A from a Facebook ad, B from Instagram, C direct. A orders.
+  const A = client(base), B = client(base), C = client(base);
+  await A('GET', '/s/stat-shop?fbclid=abc');
+  const ac = csrfOf((await A('GET', `/s/stat-shop/p/${pid}`)).text);
+  await A('GET', `/s/stat-shop/p/${pid}`); // same visitor twice = one visitor
+  await fetch(`${base}/s/stat-shop`, { headers: { cookie: B.cookie() || '', referer: 'https://l.instagram.com/' } }).then(async (r) => { const set = r.headers.get('set-cookie'); if (set) await fetch(`${base}/s/stat-shop/p/${pid}`, { headers: { cookie: set.split(';')[0] } }); });
+  await C('GET', '/s/stat-shop');
+  await A('POST', '/s/stat-shop/quick-order', { _csrf: ac, product_id: pid, quantity: '1', customer_name: 'Visitor A', customer_phone: '0677123456', customer_address: 'Casablanca, Gauthier 3' });
+  const rows = db.prepare('SELECT * FROM visits WHERE store_id = ?').all(sid);
+  assert.ok(rows.length >= 5);
+  assert.ok(rows.every((r) => !/\d+\.\d+\.\d+\.\d+/.test(JSON.stringify(r)))); // no IP stored
+
+  const r = require('../src/analytics').report(sid, 30);
+  assert.strictEqual(r.totals.visitors, 3);
+  assert.strictEqual(r.orders.n, 1);
+  assert.ok(Math.abs(r.conversion - 33.33) < 0.1);
+  assert.deepStrictEqual(Object.fromEntries(r.sources.map((s) => [s.source, s.n])), { facebook: 1, instagram: 1, direct: 1 });
+  assert.strictEqual(r.products[0].views, 2);
+  assert.strictEqual(r.products[0].sold, 1);
+  const page = (await m('GET', `/dashboard/stores/${sid}/analytics?p=7`)).text;
+  assert.match(page, /فيسبوك/);
+  assert.match(page, /33\.3%/);
+});

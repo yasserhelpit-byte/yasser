@@ -1,0 +1,81 @@
+<%- include('../partials/header', { title: 'الإحصائيات' }) %>
+<%
+  const cur = store.currency;
+  const t = r.totals;
+  const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+  const maxSrc = Math.max(1, ...r.sources.map(s => s.n));
+  const funnel = [
+    ['👀 زاروا المتجر', t.visitors],
+    ['🛍️ شاهدوا منتجاً', t.productVisitors],
+    ['🛒 وصلوا إلى السلة أو الطلب', t.checkoutVisitors],
+    ['✅ طلبوا', r.orders.n],
+  ];
+  const storeUrl = (store.domain_verified && store.custom_domain) ? 'https://' + store.custom_domain : '/s/' + store.slug;
+%>
+<div class="page-head-row">
+  <div><h1>📈 الإحصائيات</h1><p class="muted">كم شخصاً زار متجرك، ومن أين جاؤوا، وكم منهم طلب.</p></div>
+  <nav class="seg-tabs"><% [[7, '7 أيام'], [30, '30 يوماً'], [90, '90 يوماً']].forEach(([d, l]) => { %><a href="?p=<%= d %>" class="<%= days === d ? 'on' : '' %>"><%= l %></a><% }) %></nav>
+</div>
+
+<section class="dh-kpis">
+  <div class="kpi"><span class="kpi-ic c-blue">👀</span><span class="kpi-label">الزوار</span><strong class="kpi-val"><%= t.visitors %></strong><span class="kpi-sub"><%= t.views %> مشاهدة صفحة</span></div>
+  <div class="kpi"><span class="kpi-ic c-green">🧾</span><span class="kpi-label">الطلبات</span><strong class="kpi-val"><%= r.orders.n %></strong><span class="kpi-sub"><%= money(r.orders.revenue, cur) %></span></div>
+  <div class="kpi"><span class="kpi-ic c-violet">🎯</span><span class="kpi-label">نسبة التحويل</span><strong class="kpi-val"><%= r.conversion.toFixed(1) %>%</strong><span class="kpi-sub">من الزوار طلبوا</span></div>
+  <div class="kpi"><span class="kpi-ic c-amber">💰</span><span class="kpi-label">متوسط الطلب</span><strong class="kpi-val"><%= money(r.orders.n ? r.orders.revenue / r.orders.n : 0, cur).replace(/\.00\b/, '') %></strong><span class="kpi-sub">لكل طلب</span></div>
+</section>
+
+<% if (!t.visitors) { %>
+<section class="card center empty">
+  <div class="big-icon">📊</div>
+  <h3>لا توجد زيارات بعد في هذه الفترة</h3>
+  <p class="muted">شارك رابط متجرك على واتساب وإنستغرام وفيسبوك لتبدأ الأرقام بالظهور. زياراتك أنت لمتجرك لا تُحسب.</p>
+  <p dir="ltr"><code><%= storeUrl %></code></p>
+</section>
+<% } else { %>
+<section class="dh-grid">
+  <div class="card">
+    <div class="dh-card-head"><div><h3>الزوار يومياً</h3><span class="muted small">آخر <%= days %> يوماً</span></div><strong><%= t.visitors %></strong></div>
+    <%- include('../partials/linechart', { data: r.visitors, fmt: (v) => String(v), color: '#2563eb', label: 'الزوار' }) %>
+  </div>
+  <div class="card">
+    <div class="dh-card-head"><h3>من الزيارة إلى الطلب</h3></div>
+    <div class="funnel">
+      <% funnel.forEach(([l, n], i) => { %>
+        <div class="fn-row">
+          <div class="fn-top"><span><%= l %></span><strong><%= n %></strong></div>
+          <div class="fn-bar"><span style="width: <%= Math.max(2, pct(n, t.visitors)) %>%"></span></div>
+          <% if (i) { %><small class="muted"><%= pct(n, funnel[i - 1][1]) %>% من الخطوة السابقة</small><% } %>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</section>
+
+<section class="dh-grid">
+  <div class="card">
+    <div class="dh-card-head"><h3>المنتجات الأكثر مشاهدة</h3></div>
+    <% if (!r.products.length) { %><p class="muted">لا توجد مشاهدات لصفحات المنتجات بعد.</p><% } else { %>
+    <div class="table-wrap"><table>
+      <tr><th>المنتج</th><th>زوار</th><th>بيع</th><th>تحويل</th></tr>
+      <% r.products.forEach(p => { %>
+      <tr><td><a href="/dashboard/stores/<%= store.id %>/products/<%= p.id %>"><%= p.name %></a></td><td><%= p.views %></td><td><%= p.sold %></td>
+        <td><span class="badge <%= pct(p.sold, p.views) >= 3 ? 's-delivered' : 's-new' %>"><%= pct(p.sold, p.views) %>%</span></td></tr>
+      <% }) %>
+    </table></div>
+    <p class="muted small">منتج بزوار كثيرين ومبيعات قليلة؟ راجع سعره أو صوره أو وصفه.</p>
+    <% } %>
+  </div>
+  <div class="card">
+    <div class="dh-card-head"><h3>من أين جاء زوارك</h3></div>
+    <div class="src-list">
+      <% r.sources.forEach(s => { %>
+        <div class="src-row"><span class="src-ic"><%= s.icon %></span><span class="src-name"><%= s.label %></span>
+          <span class="src-bar"><span style="width: <%= Math.round(s.n / maxSrc * 100) %>%"></span></span><strong><%= s.n %></strong></div>
+      <% }) %>
+    </div>
+    <p class="muted small">💡 لتعرف أي إعلان جلب الزوار، أضف إلى رابطك <code dir="ltr">?utm_source=facebook</code> أو <code dir="ltr">?utm_source=tiktok</code>.</p>
+  </div>
+</section>
+<% } %>
+<p class="muted small">🔒 الإحصائيات مجهولة: لا نحفظ عناوين IP ولا أي معلومة شخصية عن الزوار. زياراتك أنت لمتجرك لا تُحسب.</p>
+<%- include('../partials/footer') %>
