@@ -27,6 +27,8 @@ function client(base) {
   req.cookie = () => cookie;
   return req;
 }
+// New stores start on the free plan; tests of paid features put their store on a paid plan first.
+const upgrade = (storeId, planKey = 'pro') => require('../src/billing').activate({ storeId: Number(storeId), planKey, months: 1, adminId: 0 });
 const csrfOf = (html) => (html.match(/name="_csrf" value="([^"]+)"/) || html.match(/csrf = "([a-f0-9]{64})"/))[1];
 
 test('merchant creates a store, customer orders, stock decreases', async (t) => {
@@ -290,6 +292,7 @@ test('custom domains serve the store at the root', async (t) => {
   let csrf = csrfOf((await m('GET', '/dashboard/stores/new')).text);
   const r = await m('POST', '/dashboard/stores', { _csrf: csrf, name: 'Dom Shop', slug: 'dom-shop' });
   const sid = r.location.match(/\d+$/)[0];
+  upgrade(sid); // custom domains are a paid feature
   await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: csrf, name: 'Lamp', price: '20', stock: '5', active: '1' });
 
   // Invalid and platform domains are refused; a real one is saved unverified with a token.
@@ -325,6 +328,7 @@ test('custom domains serve the store at the root', async (t) => {
   const c2 = csrfOf((await m2('GET', '/dashboard/stores/new')).text);
   const r2 = await m2('POST', '/dashboard/stores', { _csrf: c2, name: 'Other Shop', slug: 'other-shop' });
   const sid2 = r2.location.match(/\d+$/)[0];
+  upgrade(sid2);
   assert.match((await m2('POST', `/dashboard/stores/${sid2}/domain`, { _csrf: c2, domain: 'lamps-shop.com' })).text, /مربوط بمتجر آخر/);
 });
 
@@ -511,6 +515,7 @@ test('AI ads: one button builds the ad + landing page, with limits', async (t) =
   await m('POST', '/signup', { _csrf: csrfOf((await m('GET', '/signup')).text), name: 'Adder', email: 'adder@example.com', password: 'password123' , accept_terms: '1' });
   const c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
   const sid = (await m('POST', '/dashboard/stores', { _csrf: c, name: 'Ad Shop', slug: 'ad-shop' })).location.match(/\d+$/)[0];
+  upgrade(sid); // AI ads come with the paid plans
   await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Desk Lamp', price: '120', stock: '9', active: '1' });
   await m('POST', `/dashboard/stores/${sid}/products`, { _csrf: c, name: 'Hidden Thing', price: '10', stock: '9' }); // not active
   const lamp = db.prepare("SELECT id FROM products WHERE name = 'Desk Lamp'").get().id;
@@ -1067,6 +1072,7 @@ test('style options: saved, validated, applied on every storefront page', async 
   c = csrfOf((await m('GET', '/dashboard/stores/new')).text);
   const r = await m('POST', '/dashboard/stores', { _csrf: c, name: 'Style Shop', slug: 'style-shop', currency: 'MAD', color: '#9d174d' });
   const sid = Number(r.location.split('/').pop());
+  upgrade(sid); // advanced style options are saved on paid plans
   const page = (await m('GET', `/dashboard/stores/${sid}/design`)).text;
   assert.match(page, /data-kit="luxury"/);
   assert.match(page, /name="t_mode" value="dark"/);
@@ -1153,12 +1159,17 @@ test('subscriptions: free plan, trial, request, admin activation, limits, fallba
   assert.deepStrictEqual(pl.map((p) => [p.key, p.price, p.free]), [['free', 0, true], ['pro', 199, false], ['business', 399, false]]);
   assert.ok(!pl.some((p) => /الذكاء الاصطناعي/.test(p.features)));
 
-  // A new store gets a 14-day trial of the paid features.
+  // By default there is no trial of the paid features: a new store starts on the free plan.
   let s = billing.statusOf(store());
+  assert.strictEqual(s.state, 'free');
+  // An admin can still offer a trial of the paid features to new stores.
+  setSetting('trial_days', '14');
+  const tid = await newStore('trial-shop');
+  s = billing.statusOf(store(tid));
   assert.strictEqual(s.state, 'trial');
   assert.ok(s.daysLeft >= 13 && s.daysLeft <= 14);
   assert.ok(s.limits.templates && s.limits.domain);
-  let page = (await m('GET', `/dashboard/stores/${sid}/billing`)).text;
+  let page = (await m('GET', `/dashboard/stores/${tid}/billing`)).text;
   for (const p of pl) assert.match(page, new RegExp(p.name));
   assert.match(page, /name="plan" value="free"[^>]*disabled/);
 

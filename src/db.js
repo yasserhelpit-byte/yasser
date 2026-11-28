@@ -244,7 +244,7 @@ addColumn('orders', 'pay_token', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'paid_at', 'TEXT');
 
 // Platform-wide settings (key/value).
-const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '0', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '', trial_days: '14', grace_days: '3', billing_info: '', plans: '' };
+const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '0', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '', trial_days: '0', grace_days: '3', billing_info: '', plans: '' };
 function getSettings() {
   const out = { ...SETTING_DEFAULTS };
   for (const r of db.prepare('SELECT key, value FROM settings').all()) out[r.key] = r.value;
@@ -257,10 +257,17 @@ function setSetting(key, value) {
 // Stores created before subscriptions existed start their trial now. Runs on every start, so it must only
 // touch those: a store on the free plan also has no end date and must stay free.
 function backfillTrials() {
-  const days = parseInt(getSettings().trial_days, 10) || 14;
+  const days = parseInt(getSettings().trial_days, 10) || 0;
+  if (!days) return db.prepare("UPDATE stores SET plan = 'free' WHERE plan_until IS NULL AND plan = 'trial'").run().changes;
   return db.prepare(`UPDATE stores SET plan = 'trial', plan_until = datetime('now', ?) WHERE plan_until IS NULL AND plan = 'trial'`).run(`+${days} days`).changes;
 }
 backfillTrials();
+// One time: the platform moved to "the free plan is the trial". Stores given a trial of the paid
+// features before that go to the free plan (paid subscriptions are untouched).
+if (getSettings().trial_policy !== 'free-only') {
+  if (!(parseInt(getSettings().trial_days, 10) > 0)) db.prepare("UPDATE stores SET plan = 'free', plan_until = NULL WHERE plan = 'trial'").run();
+  setSetting('trial_policy', 'free-only');
+}
 
 function transaction(fn) {
   db.exec('BEGIN');

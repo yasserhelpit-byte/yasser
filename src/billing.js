@@ -26,7 +26,7 @@ const int = (v, min, max, dflt) => { const n = parseInt(v, 10); return Number.is
 
 function settings() {
   const st = getSettings();
-  return { trialDays: int(st.trial_days, 0, 365, 14), graceDays: int(st.grace_days, 0, 60, 3), info: st.billing_info || '', currency: st.billing_currency || 'MAD' };
+  return { trialDays: int(st.trial_days, 0, 365, 0), graceDays: int(st.grace_days, 0, 60, 3), info: st.billing_info || '', currency: st.billing_currency || 'MAD' };
 }
 
 function plans() {
@@ -52,7 +52,7 @@ function savePlans(body) {
     features: String(body[`plan${i}_features`] ?? '').trim().slice(0, 1000),
   }));
   setSetting('plans', JSON.stringify(list));
-  setSetting('trial_days', String(int(body.trial_days, 0, 365, 14)));
+  setSetting('trial_days', String(int(body.trial_days, 0, 365, 0)));
   setSetting('grace_days', String(int(body.grace_days, 0, 60, 3)));
   setSetting('billing_info', String(body.billing_info ?? '').trim().slice(0, 1500));
   return list;
