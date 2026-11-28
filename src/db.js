@@ -254,11 +254,13 @@ function setSetting(key, value) {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value));
 }
 
-// Stores created before subscriptions existed start their free trial now.
-{
+// Stores created before subscriptions existed start their trial now. Runs on every start, so it must only
+// touch those: a store on the free plan also has no end date and must stay free.
+function backfillTrials() {
   const days = parseInt(getSettings().trial_days, 10) || 14;
-  db.prepare(`UPDATE stores SET plan = 'trial', plan_until = datetime('now', ?) WHERE plan_until IS NULL`).run(`+${days} days`);
+  return db.prepare(`UPDATE stores SET plan = 'trial', plan_until = datetime('now', ?) WHERE plan_until IS NULL AND plan = 'trial'`).run(`+${days} days`).changes;
 }
+backfillTrials();
 
 function transaction(fn) {
   db.exec('BEGIN');
@@ -272,4 +274,4 @@ function transaction(fn) {
   }
 }
 
-module.exports = { db, transaction, getSettings, setSetting };
+module.exports = { db, transaction, getSettings, setSetting, backfillTrials };

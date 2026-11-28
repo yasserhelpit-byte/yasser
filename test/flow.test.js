@@ -1168,10 +1168,35 @@ test('subscriptions: free plan, trial, request, admin activation, limits, fallba
   s = billing.statusOf(store(fid));
   assert.strictEqual(s.state, 'free');
   assert.strictEqual(s.limits.templates, false);
+  require('../src/db').backfillTrials(); // what every server start runs
+  assert.strictEqual(billing.statusOf(store(fid)).state, 'free', 'a restart must not turn a free store into a trial');
+  let res;
+  // Free plan: professional templates/sections/styles can be tried in the preview, but aren't saved.
   page = (await m('GET', `/dashboard/stores/${fid}/design`)).text;
-  assert.match(page, /data-preset="electronics" data-locked/);
-  assert.doesNotMatch(page, /data-preset="classic" data-locked/);
-  let res = await m('POST', `/dashboard/stores/${fid}/domain`, { _csrf: c, domain: 'myfreeshop.com' });
+  assert.match(page, /const PRO_LOCKED = true/);
+  const { PRESETS } = require('../src/sections');
+  const proForm = { _csrf: c, sections: JSON.stringify(PRESETS.agency.sections), font: 'plex', radius: 'soft', header_style: 'classic', color: '#6d28d9',
+    t_mode: 'dark', t_btn: 'gradient', t_card: 'shadow', t_hfont: 'cairo', t_size: 'm', t_ratio: 'landscape', t_density: 'm', t_head: 'sticky' };
+  const pv = (await m('POST', `/dashboard/stores/${fid}/design/preview`, proForm)).text;
+  assert.match(pv, /sec-pricing/);
+  assert.match(pv, /t-mode-dark/);
+  res = await m('POST', `/dashboard/stores/${fid}/design`, proForm);
+  assert.strictEqual(res.location, `/dashboard/stores/${fid}/design?saved=1&stripped=1`);
+  let saved = JSON.parse(store(fid).home_sections);
+  assert.ok(saved.length > 0 && !saved.some((x) => ['pricing', 'logos', 'steps', 'contact_form'].includes(x.type)));
+  assert.ok(saved.every((x) => !x.bg || x.bg === 'none'));
+  assert.deepStrictEqual(JSON.parse(store(fid).theme), require('../src/theme').DEFAULTS);
+  assert.strictEqual(store(fid).color, '#6d28d9'); // colour, font and corners stay free
+  // Free templates save untouched.
+  res = await m('POST', `/dashboard/stores/${fid}/design`, { ...proForm, sections: JSON.stringify(PRESETS.restaurant.sections), t_mode: 'light', t_btn: 'solid', t_card: 'plain', t_hfont: 'same', t_ratio: 'portrait' });
+  assert.strictEqual(res.location, `/dashboard/stores/${fid}/design?saved=1`);
+  assert.strictEqual(JSON.parse(store(fid).home_sections).length, PRESETS.restaurant.sections.length);
+  // Custom pages follow the same rule.
+  const pg = Number((await m('POST', `/dashboard/stores/${fid}/pages`, { _csrf: c, title: 'عنا', template: 'blank' })).location.split('/').pop());
+  res = await m('POST', `/dashboard/stores/${fid}/pages/${pg}`, { _csrf: c, title: 'عنا', slug: 'about-us', sections: JSON.stringify([{ type: 'text', title: 'مرحبا', text: 'نص' }, { type: 'pricing', items: [{ name: 'A', price: '1' }] }]) });
+  assert.match(res.location, /saved=1&stripped=1$/);
+  assert.deepStrictEqual(JSON.parse(db.prepare('SELECT sections FROM pages WHERE id = ?').get(pg).sections).map((x) => x.type), ['text']);
+  res = await m('POST', `/dashboard/stores/${fid}/domain`, { _csrf: c, domain: 'myfreeshop.com' });
   assert.match(res.text, /الباقة الاحترافية/);
   setSetting('plans', JSON.stringify(billing.DEFAULT_PLANS.map((p) => (p.key === 'free' ? { ...p, products: 1 } : p))));
   await m('POST', `/dashboard/stores/${fid}/products`, { _csrf: c, name: 'One', price: '10', stock: '5', active: '1' });
@@ -1201,7 +1226,11 @@ test('subscriptions: free plan, trial, request, admin activation, limits, fallba
   assert.strictEqual(s.plan.key, 'pro');
   assert.ok(s.daysLeft >= 88 && s.daysLeft <= 93, String(s.daysLeft));
   assert.ok(s.limits.templates && s.limits.domain);
-  assert.doesNotMatch((await m("GET", `/dashboard/stores/${fid}/design`)).text, /data-preset="electronics" data-locked/);
+  assert.match((await m('GET', `/dashboard/stores/${fid}/design`)).text, /const PRO_LOCKED = false/);
+  res = await m('POST', `/dashboard/stores/${fid}/design`, proForm);
+  assert.strictEqual(res.location, `/dashboard/stores/${fid}/design?saved=1`); // paid: saved as is
+  assert.ok(JSON.parse(store(fid).home_sections).some((x) => x.type === 'pricing'));
+  assert.strictEqual(JSON.parse(store(fid).theme).mode, 'dark');
   assert.ok(db.prepare("SELECT 1 FROM notifications WHERE kind = 'billing' AND title LIKE '%الاحترافية%'").get());
 
   // Early renewal of the same plan adds to the remaining time; the free plan can't be activated.

@@ -1,7 +1,9 @@
 // Section builder for the store homepage and custom pages.
 // Needs: window.SCHEMA, window.CSRF, setupDropzone() from upload.js.
 // Usage: initBuilder({ root, input, data, uploadUrl, presets })
-function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus }) {
+function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus, proLocked = false }) {
+  // proLocked: free plan. Professional sections can be added and previewed, but are only saved on paid plans.
+  const proTag = (def) => (proLocked && def.pro ? h('em', { class: 'b-pro', title: 'متاح في الباقات المدفوعة' }, '💎 احترافي') : null);
   const SCHEMA = window.SCHEMA;
   let sections = JSON.parse(JSON.stringify(data || []));
   const open = new Set(); // indexes of expanded sections
@@ -134,7 +136,7 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus 
         } },
         h('span', { class: 'b-grip', title: 'اسحب لتغيير الترتيب' }, '⋮⋮'),
         h('span', { class: 'b-icon' }, def.icon),
-        h('span', { class: 'b-title' }, h('strong', {}, def.label), h('small', {}, summary)),
+        h('span', { class: 'b-title' }, h('strong', {}, def.label, proTag(def)), h('small', {}, summary)),
         h('span', { class: 'b-tools' },
           ...moveBtns(sections, i, (to, from) => { const a = open.has(from), b = open.has(to); open.delete(from); open.delete(to); if (a) open.add(to); if (b) open.add(from); render(to); }),
           h('button', { type: 'button', class: 'b-ic', title: sec.hidden ? 'إظهار' : 'إخفاء', onclick: () => { sec.hidden = !sec.hidden; touch(); render(); } }, sec.hidden ? '🙈' : '👁️'),
@@ -170,7 +172,7 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus 
         const sec = { type, hidden: false, ...blank(def.fields) };
         if (def.items) sec.items = [];
         sections.push(sec); open.clear(); open.add(sections.length - 1); touch(); render(sections.length - 1); onFocus?.(sections.length - 1);
-      } }, h('span', {}, def.icon), h('strong', {}, def.label), h('small', {}, def.desc))));
+      } }, h('span', {}, def.icon), h('strong', {}, def.label, proTag(def)), h('small', {}, def.desc))));
     root.append(h('details', { class: 'b-add' }, h('summary', { class: 'btn' }, '+ إضافة قسم'), picker));
     if (focus != null) document.getElementById('sec-' + focus)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -212,5 +214,11 @@ function initBuilder({ root, input, data, uploadUrl, presets, onChange, onFocus 
   }, true);
   input.value = JSON.stringify(sections);
   render();
-  return { isDirty: () => dirty, markDirty: () => { dirty = true; }, value: () => JSON.stringify(sections) };
+  // What the current sections use that needs a paid plan.
+  const proUsage = () => {
+    const types = [...new Set(sections.filter((s) => SCHEMA[s.type]?.pro).map((s) => SCHEMA[s.type].label))];
+    const bg = sections.some((s) => s.bg && s.bg !== 'none');
+    return { types, bg, any: types.length > 0 || bg };
+  };
+  return { isDirty: () => dirty, markDirty: () => { dirty = true; }, value: () => JSON.stringify(sections), proUsage };
 }

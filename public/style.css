@@ -1820,3 +1820,8 @@ a.kpi:hover { text-decoration: none; transform: translateY(-2px); box-shadow: 0 
 .dh-empty { text-align: center; padding: 22px 10px; }
 .dh-empty span { font-size: 2rem; }
 @media (max-width: 520px) { .dh-row .badge { display: none; } }
+
+/* Paid-plan markers in the editor */
+.b-pro { font-style: normal; font-size: .66rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: linear-gradient(135deg, #f59e0b, #ec4899); color: #fff; margin-inline-start: 6px; vertical-align: 2px; white-space: nowrap; }
+.pro-note { background: linear-gradient(135deg, #fff7ed, #fdf2f8); border: 1px solid #fbcfe8; color: #831843; border-radius: 12px; padding: 10px 12px; font-size: .85rem; line-height: 1.6; }
+.pro-note a { font-weight: 700; color: #be185d; }

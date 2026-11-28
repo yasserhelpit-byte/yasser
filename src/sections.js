@@ -191,6 +191,17 @@ for (const [type, def] of Object.entries(SCHEMA)) {
   def.fields.push(...STYLE_FIELDS.filter((x) => !(NO_STYLE.has(type) && x.k === 'bg')));
 }
 
+// Sections only paid plans can publish (free plans can still try them in the editor preview).
+const PRO_TYPES = new Set(['marquee', 'promo_grid', 'steps', 'pricing', 'before_after', 'logos', 'contact_form', 'map']);
+for (const t of PRO_TYPES) SCHEMA[t].pro = true;
+// What in a sections list needs a paid plan: professional section types and coloured section backgrounds.
+function proUsage(list) {
+  const types = [...new Set(list.filter((s) => PRO_TYPES.has(s.type)).map((s) => SCHEMA[s.type].label))];
+  const bg = list.some((s) => s.bg && s.bg !== 'none');
+  return { types, bg, any: types.length > 0 || bg };
+}
+const stripPro = (list) => list.filter((s) => !PRO_TYPES.has(s.type)).map((s) => (s.bg && s.bg !== 'none' ? { ...s, bg: 'none' } : s));
+
 const MAX_SECTIONS = 30;
 
 function cleanLink(v) {
@@ -485,4 +496,4 @@ function youtubeId(url) {
   return m ? m[1] : '';
 }
 
-module.exports = { SCHEMA, PRESETS, GROUPS, DEFAULT_HOME, sanitize, cleanLink, youtubeId };
+module.exports = { SCHEMA, PRESETS, GROUPS, PRO_TYPES, proUsage, stripPro, DEFAULT_HOME, sanitize, cleanLink, youtubeId };

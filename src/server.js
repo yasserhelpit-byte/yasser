@@ -820,7 +820,7 @@ const storeHome = (store) => {
   return store.home_sections ? list : sections.DEFAULT_HOME;
 };
 dash.get('/stores/:storeId/design', ownStore, (req, res) => {
-  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id), theme: themeLib.sanitize(req.store.theme), groups: sections.GROUPS, proTemplates: billing.statusOf(req.store).limits.templates });
+  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id), theme: themeLib.sanitize(req.store.theme), groups: sections.GROUPS, proTemplates: billing.statusOf(req.store).limits.templates, stripped: !!req.query.stripped, themeDefaults: themeLib.DEFAULTS });
 });
 // Live preview for the design editor: renders the storefront home with unsaved changes.
 dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {
@@ -839,14 +839,22 @@ dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {
 });
 
 dash.post('/stores/:storeId/design', ownStore, (req, res) => {
-  const list = sections.sanitize(req.body.sections);
+  let list = sections.sanitize(req.body.sections);
+  let theme = themeLib.sanitize(req.body);
+  // Free plans can try everything in the preview, but only the free features are saved.
+  let stripped = false;
+  if (!billing.statusOf(req.store).limits.templates) {
+    stripped = sections.proUsage(list).any || themeLib.proChanges(theme).length > 0;
+    list = sections.stripPro(list);
+    theme = { ...themeLib.DEFAULTS };
+  }
   const font = FONTS[req.body.font] ? req.body.font : 'tajawal';
   const radius = RADII[req.body.radius] ? req.body.radius : 'soft';
   const header = HEADERS[req.body.header_style] ? req.body.header_style : 'classic';
   const color = /^#[0-9a-fA-F]{6}$/.test(req.body.color) ? req.body.color : req.store.color;
   db.prepare('UPDATE stores SET home_sections = ?, font = ?, radius = ?, header_style = ?, color = ?, theme = ? WHERE id = ?')
-    .run(JSON.stringify(list), font, radius, header, color, JSON.stringify(themeLib.sanitize(req.body)), req.store.id);
-  res.redirect(`/dashboard/stores/${req.store.id}/design?saved=1`);
+    .run(JSON.stringify(list), font, radius, header, color, JSON.stringify(theme), req.store.id);
+  res.redirect(`/dashboard/stores/${req.store.id}/design?saved=1${stripped ? '&stripped=1' : ''}`);
 });
 
 // ----- Inbox (storefront chat) -----
@@ -1096,19 +1104,23 @@ function ownPage(req, res, next) {
   next();
 }
 dash.get('/stores/:storeId/pages/:pageId', ownStore, ownPage, (req, res) => {
-  res.render('dashboard/page-edit', { page: req.page, sectionsData: sections.sanitize(req.page.sections), error: null, saved: !!req.query.saved, productChoices: productChoices(req.store.id) });
+  res.render('dashboard/page-edit', { page: req.page, sectionsData: sections.sanitize(req.page.sections), error: null, saved: !!req.query.saved, stripped: !!req.query.stripped,
+    proLocked: !billing.statusOf(req.store).limits.templates, productChoices: productChoices(req.store.id) });
 });
 dash.post('/stores/:storeId/pages/:pageId', ownStore, ownPage, (req, res) => {
   const title = str(req.body.title, 80);
   const slug = pageSlug(req.body.slug || title);
-  const list = sections.sanitize(req.body.sections);
+  const pro = billing.statusOf(req.store).limits.templates;
+  const raw = sections.sanitize(req.body.sections);
+  const stripped = !pro && sections.proUsage(raw).any;
+  const list = pro ? raw : sections.stripPro(raw);
   const render = (error) => res.status(400).render('dashboard/page-edit', { page: { ...req.page, title, slug }, sectionsData: list, error, saved: false, productChoices: productChoices(req.store.id) });
   if (!title) return render('عنوان الصفحة مطلوب.');
   if (!slug || RESERVED.has(slug)) return render('رابط الصفحة غير صالح.');
   if (db.prepare('SELECT 1 FROM pages WHERE store_id = ? AND slug = ? AND id != ?').get(req.store.id, slug, req.page.id)) return render('هذا الرابط مستخدم في صفحة أخرى.');
   db.prepare('UPDATE pages SET title = ?, slug = ?, sections = ?, in_menu = ?, in_footer = ? WHERE id = ?')
     .run(title, slug, JSON.stringify(list), req.body.in_menu ? 1 : 0, req.body.in_footer ? 1 : 0, req.page.id);
-  res.redirect(`/dashboard/stores/${req.store.id}/pages/${req.page.id}?saved=1`);
+  res.redirect(`/dashboard/stores/${req.store.id}/pages/${req.page.id}?saved=1${stripped ? '&stripped=1' : ''}`);
 });
 dash.post('/stores/:storeId/pages/:pageId/move', ownStore, ownPage, (req, res) => {
   const pages = db.prepare('SELECT id FROM pages WHERE store_id = ? ORDER BY position, id').all(req.store.id).map((p) => p.id);

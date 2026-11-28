@@ -36,6 +36,7 @@
       <div class="ed-pane" data-pane="style" hidden>
         <div class="form">
           <% const T = theme; %>
+          <% if (!proTemplates) { %><div class="pro-note">💎 الأساليب الجاهزة وخيارات الأسلوب المتقدمة من مزايا الباقات المدفوعة. جرّبها في المعاينة بحرية، وتُحفظ عند الترقية. <a href="/dashboard/stores/<%= store.id %>/billing" target="_blank">الباقات ↗</a></div><% } %>
           <div>
             <div class="b-label">✨ مظهر جاهز بضغطة</div>
             <div class="kits">
@@ -92,9 +93,9 @@
         <div class="tpl-list">
           <% Object.entries(presets).filter(([, p]) => p.group === g).sort((x, y) => !!y[1].style - !!x[1].style).forEach(([k, p]) => { %>
             <% const locked = p.style && !proTemplates; %>
-            <button type="button" class="tpl-card <%= locked ? 'locked' : '' %>" data-preset="<%= k %>" <%= locked ? 'data-locked' : '' %>>
+            <button type="button" class="tpl-card <%= locked ? 'locked' : '' %>" data-preset="<%= k %>">
               <span class="tpl-ic" <% if (p.style) { %>style="background: <%= p.style.color %>1a"<% } %>><%= p.icon || '✨' %></span>
-              <span class="tpl-txt"><strong><%= p.label %><% if (p.style) { %> <em class="tpl-pro"><%= locked ? '🔒 ' : '' %>احترافي</em><% } %></strong><small><%= p.desc || '' %> · <%= p.sections.length %> أقسام</small></span>
+              <span class="tpl-txt"><strong><%= p.label %><% if (p.style) { %> <em class="tpl-pro"><%= locked ? '💎 ' : '' %>احترافي</em><% } %></strong><small><%= p.desc || '' %> · <%= p.sections.length %> أقسام</small></span>
               <% if (p.style) { %><span class="tpl-swatch" style="background: <%= p.style.color %>" title="مع أسلوب جاهز"></span><% } %>
             </button>
           <% }) %>
@@ -125,6 +126,8 @@
   const status = document.getElementById('ed-status');
   const loading = document.getElementById('pv-loading');
   const presets = <%- js(presets) %>;
+  const PRO_LOCKED = <%- js(!proTemplates) %>;
+  const THEME_DEFAULTS = <%- js(themeDefaults) %>;
   let focusIdx = null, timer = null, seq = 0;
 
   // Re-render the preview with the current (unsaved) design.
@@ -149,7 +152,7 @@
     input: document.getElementById('sections-input'),
     data: <%- js(sectionsData) %>,
     uploadUrl: '/dashboard/stores/<%= store.id %>/uploads',
-    onChange: changed,
+    onChange: changed, proLocked: PRO_LOCKED,
     onFocus: (i) => { focusIdx = i; iframe.contentWindow?.postMessage({ focus: i }, '*'); },
   });
 
@@ -181,16 +184,9 @@
   // Templates: rebuild the builder with the preset's sections.
   document.querySelectorAll('.tpl-card').forEach((b) => b.addEventListener('click', async () => {
     const p = presets[b.dataset.preset];
-    if (b.hasAttribute('data-locked')) {
-      const go = await yChoice('القوالب الاحترافية متاحة في الباقة الاحترافية وباقة الأعمال. القوالب الأساسية متاحة لك مجاناً.', {
-        title: `قالب «${p.label}» احترافي`, icon: '💎',
-        buttons: [{ value: 'up', label: '💎 شاهد الباقات' }, { value: 'stay', label: 'ليس الآن', kind: 'ghost' }],
-      });
-      if (go === 'up') location.href = '/dashboard/stores/<%= store.id %>/billing';
-      return;
-    }
+    const trial = PRO_LOCKED && p.style;
     const okd = await yConfirm(
-      `سيحلّ هذا القالب محل أقسام صفحتك الحالية${p.style ? '، وسيُطبَّق معه أسلوبه (الألوان والخطوط وشكل الأزرار). يمكنك تعديل كل شيء بعدها' : ''}.\nلن يتغير شيء في متجرك حتى تضغط «حفظ».`,
+      `سيحلّ هذا القالب محل أقسام صفحتك الحالية${p.style ? '، وسيُطبَّق معه أسلوبه (الألوان والخطوط وشكل الأزرار)' : ''}.\nلن يتغير شيء في متجرك حتى تضغط «حفظ».${trial ? '\n💎 هذا قالب احترافي: جرّبه وشاهده في المعاينة كما تريد، وحفظه يتطلب باقة مدفوعة.' : ''}`,
       { title: `استعمال قالب «${p.label}»؟`, ok: 'استعمل القالب', cancel: 'ليس الآن', icon: p.icon || '✨' });
     if (!okd) return;
     if (p.style) {
@@ -202,7 +198,7 @@
     document.getElementById('builder').replaceWith(Object.assign(document.createElement('div'), { id: 'builder', className: 'builder' }));
     Object.assign(builder, initBuilder({
       root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: p.sections,
-      uploadUrl: '/dashboard/stores/<%= store.id %>/uploads', onChange: changed,
+      uploadUrl: '/dashboard/stores/<%= store.id %>/uploads', onChange: changed, proLocked: PRO_LOCKED,
       onFocus: (i) => { focusIdx = i; iframe.contentWindow?.postMessage({ focus: i }, '*'); },
     }));
     builder.markDirty(); changed();
@@ -227,7 +223,32 @@
 
   // Ctrl/Cmd+S saves
   addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); form.requestSubmit(); } });
-  form.addEventListener('submit', () => { document.getElementById('save-btn').textContent = 'جارٍ الحفظ…'; });
+  // Free plan: say clearly what won't be saved before saving.
+  form.addEventListener('submit', async (e) => {
+    if (PRO_LOCKED && !form.dataset.proOk) {
+      const use = builder.proUsage();
+      const styleLabels = { mode: 'ألوان الخلفية', hfont: 'خط العناوين', size: 'حجم النص', btn: 'شكل الأزرار', card: 'بطاقة المنتج', ratio: 'شكل صور المنتجات', density: 'المسافة بين الأقسام', head: 'رأس الصفحة' };
+      const style = Object.keys(THEME_DEFAULTS).filter((k) => { const el = form.querySelector(`[name="t_${k}"]:checked`) || form.querySelector(`select[name="t_${k}"]`); return el && el.value !== THEME_DEFAULTS[k]; }).map((k) => styleLabels[k]);
+      const list = [...use.types.map((t) => '• قسم «' + t + '»'), ...(use.bg ? ['• خلفيات الأقسام الملوّنة'] : []), ...(style.length ? ['• خيارات الأسلوب: ' + style.join('، ')] : [])];
+      if (list.length) {
+        e.preventDefault();
+        builder.markDirty(); // not saved yet
+        const c = await yChoice(`تصميمك يستعمل مزايا من الباقات المدفوعة، وستراها في المعاينة فقط:\n${list.join('\n')}\n\nيمكنك الترقية لنشرها، أو حفظ تصميمك بدونها.`, {
+          title: '💎 مزايا احترافية في تصميمك', icon: '💎',
+          buttons: [{ value: 'plans', label: '💎 شاهد الباقات (في نافذة جديدة)' }, { value: 'save', label: 'حفظ بدون المزايا الاحترافية', kind: 'ghost' }, { value: 'back', label: 'رجوع للتعديل', kind: 'ghost' }],
+        });
+        if (c === 'plans') window.open('/dashboard/stores/<%= store.id %>/billing', '_blank');
+        if (c !== 'save') return;
+        form.dataset.proOk = '1';
+        form.requestSubmit(document.getElementById('save-btn'));
+        return;
+      }
+    }
+    document.getElementById('save-btn').textContent = 'جارٍ الحفظ…';
+  });
+  <% if (stripped) { %>
+  addEventListener('load', () => window.yAlert && yAlert('حُفظ تصميمك بالمزايا المجانية. الأقسام والأساليب الاحترافية تُحفظ عند الترقية إلى باقة مدفوعة.', { title: 'تم الحفظ', icon: '✅' }));
+  <% } %>
 
   refresh();
 })();

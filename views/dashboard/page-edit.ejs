@@ -4,9 +4,9 @@
   <h1>📄 <%= page.title || 'صفحة جديدة' %></h1>
   <a href="/s/<%= store.slug %>/page/<%= page.slug %>" target="_blank" class="btn ghost">معاينة ↗</a>
 </div>
-<% if (saved) { %><div class="alert ok">✓ تم حفظ الصفحة.</div><% } %>
+<% if (saved) { %><div class="alert ok">✓ تم حفظ الصفحة.<% if (typeof stripped !== 'undefined' && stripped) { %> الأقسام الاحترافية لم تُحفظ: تتطلب باقة مدفوعة.<% } %></div><% } %>
 <%- include('../partials/errors') %>
-<form method="post" class="design-grid">
+<form method="post" class="design-grid" id="page-form">
   <%- include('../partials/csrf') %>
   <input type="hidden" name="sections" id="sections-input">
   <section class="card">
@@ -29,6 +29,24 @@
 <script src="/upload.js?v=<%= assetV %>"></script>
 <script src="/builder.js?v=<%= assetV %>"></script>
 <script>
-initBuilder({ root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: <%- js(sectionsData) %>, uploadUrl: '/dashboard/stores/<%= store.id %>/uploads' });
+const PRO_LOCKED = <%- js(typeof proLocked !== 'undefined' && proLocked) %>;
+const builder = initBuilder({ root: document.getElementById('builder'), input: document.getElementById('sections-input'), data: <%- js(sectionsData) %>, uploadUrl: '/dashboard/stores/<%= store.id %>/uploads', proLocked: PRO_LOCKED });
+const pageForm = document.getElementById('page-form');
+pageForm.addEventListener('submit', async (e) => {
+  if (!PRO_LOCKED || pageForm.dataset.proOk) return;
+  const use = builder.proUsage();
+  if (!use.any) return;
+  e.preventDefault();
+  builder.markDirty();
+  const list = [...use.types.map((t) => '• قسم «' + t + '»'), ...(use.bg ? ['• خلفيات الأقسام الملوّنة'] : [])];
+  const c = await yChoice(`هذه الصفحة تستعمل مزايا من الباقات المدفوعة:\n${list.join('\n')}\n\nيمكنك الترقية لنشرها، أو حفظ الصفحة بدونها.`, {
+    title: '💎 مزايا احترافية في صفحتك', icon: '💎',
+    buttons: [{ value: 'plans', label: '💎 شاهد الباقات (في نافذة جديدة)' }, { value: 'save', label: 'حفظ بدون المزايا الاحترافية', kind: 'ghost' }, { value: 'back', label: 'رجوع للتعديل', kind: 'ghost' }],
+  });
+  if (c === 'plans') window.open('/dashboard/stores/<%= store.id %>/billing', '_blank');
+  if (c !== 'save') return;
+  pageForm.dataset.proOk = '1';
+  pageForm.requestSubmit();
+});
 </script>
 <%- include('../partials/footer') %>

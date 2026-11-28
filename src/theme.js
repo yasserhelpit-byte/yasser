@@ -38,7 +38,11 @@ function sanitize(input) {
   return out;
 }
 
+// Free plans keep the default look (these options are a paid feature); returns the labels that differ.
+const DEFAULTS = Object.fromEntries(Object.entries(OPTIONS).map(([k, d]) => [k, Object.keys(d.options)[0]]));
+const proChanges = (t) => Object.keys(OPTIONS).filter((k) => t[k] !== DEFAULTS[k]).map((k) => OPTIONS[k].label);
+
 // Classes for the storefront wrapper.
 const classes = (t) => ['mode', 'btn', 'card', 'ratio', 'density', 'head'].map((k) => `t-${k}-${t[k]}`).join(' ');
 
-module.exports = { OPTIONS, KITS, withFonts, sanitize, classes };
+module.exports = { OPTIONS, KITS, DEFAULTS, withFonts, sanitize, classes, proChanges };
