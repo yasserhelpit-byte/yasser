@@ -1,5 +1,5 @@
 <%- include('partials/head', { title: 'أنشئ متجرك الإلكتروني في دقائق' }) %>
-<% const cta = user ? (user.isAdmin ? '/admin' : '/dashboard') : '/signup'; const ctaLabel = user ? 'لوحة التحكم' : 'جرّب مجاناً ' + trialDays + ' يوماً'; %>
+<% const cta = user ? (user.isAdmin ? '/admin' : '/dashboard') : '/signup'; const ctaLabel = user ? 'لوحة التحكم' : 'أنشئ متجرك مجاناً'; %>
 <header class="topbar landing-bar">
   <div class="wrap lp-nav">
     <%- include('partials/logo', { href: '/' }) %>
@@ -61,7 +61,7 @@
 
 <!-- Quick facts -->
 <section class="wrap lp-facts">
-  <div><strong><%= trialDays %> <small>يوماً</small></strong><span>تجربة مجانية كاملة</span></div>
+  <div><strong>0 <small>درهم</small></strong><span>للبدء، مجانية للأبد</span></div>
   <div><strong>5 <small>دقائق</small></strong><span>لإطلاق متجرك</span></div>
   <div><strong><%= SECTION_COUNT %></strong><span>نوع قسم لتصميم متجرك</span></div>
   <div><strong>100%</strong><span>واجهة عربية</span></div>
@@ -160,17 +160,18 @@
 <section id="pricing" class="l-section">
   <div class="l-head">
     <span class="pill">الأسعار</span>
-    <h2>باقات واضحة بدون مفاجآت</h2>
-    <p class="muted">جرّب كل المزايا مجاناً لمدة <%= trialDays %> يوماً، بدون بطاقة بنكية. بعدها اختر باقتك وادفع نقداً أو بالتحويل.</p>
+    <h2>ابدأ مجاناً، وترقَّ عندما تكبر</h2>
+    <p class="muted">الباقة المجانية لك للأبد، بدون بطاقة بنكية.<% if (trialDays > 0) { %> وكل متجر جديد يجرّب المزايا الاحترافية <%= trialDays %> يوماً.<% } %> الباقات المدفوعة تُدفع نقداً أو بالتحويل.</p>
   </div>
   <div class="lp-plans">
     <% plans.forEach(p => { %>
     <div class="card lp-plan <%= p.featured ? 'featured' : '' %>">
       <% if (p.featured) { %><span class="plan-flag">⭐ الأكثر اختياراً</span><% } %>
       <h3><%= p.name %></h3>
-      <div class="amount"><%= Number(p.price).toLocaleString('fr-FR') %> <small>درهم / شهرياً</small></div>
+      <% if (p.free) { %><div class="amount">0 <small>درهم · للأبد</small></div>
+      <% } else { %><div class="amount"><%= Number(p.price).toLocaleString('fr-FR') %> <small>درهم / شهرياً</small></div><% } %>
       <ul class="checks col"><% p.features.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => { %><li>✓ <%= l %></li><% }) %></ul>
-      <a href="<%= cta %>" class="btn big full <%= p.featured ? '' : 'ghost' %>"><%= user ? 'لوحة التحكم' : 'ابدأ التجربة المجانية' %></a>
+      <a href="<%= cta %>" class="btn big full <%= p.featured ? '' : 'ghost' %>"><%= user ? 'لوحة التحكم' : p.free ? 'ابدأ مجاناً' : 'ابدأ مجاناً ثم ترقَّ' %></a>
     </div>
     <% }) %>
   </div>
@@ -186,7 +187,7 @@
   <div class="faq">
     <details><summary>هل أحتاج خبرة في البرمجة أو التصميم؟</summary><p>لا. اختر قالباً جاهزاً، ارفع صورك واكتب نصوصك، وترى النتيجة مباشرة. كل شيء بنقرات.</p></details>
     <details><summary>كيف يدفع العملاء؟</summary><p>أنت تختار: الدفع عند الاستلام، أو التحويل البنكي، أو وكالات التحويل، أو البطاقة البنكية (CMI)، أو PayPal. المال يصل مباشرة إلى حسابك.</p></details>
-    <details><summary>كيف أدفع اشتراكي في YASSER؟</summary><p>بعد التجربة المجانية تختار باقتك من لوحة متجرك، وتدفع نقداً أو بالتحويل، ويُفعَّل اشتراكك فور التأكد من الدفع.</p></details>
+    <details><summary>كيف أدفع اشتراكي في YASSER؟</summary><p>الباقة المجانية لا تحتاج أي دفع. للترقية تختار باقتك من لوحة متجرك، وتدفع نقداً أو بالتحويل، ويُفعَّل اشتراكك فور التأكد من الدفع.</p></details>
     <details><summary>كيف تحمونني من الطلبات الوهمية؟</summary><p>نتحقق من رقم الهاتف، نمنع الطلبات المكررة والروبوتات، ونعرض لك سجلّ كل عميل في متجرك (كم طلباً استلم وكم ألغى) قبل أن تشحن.</p></details>
     <details><summary>هل يمكنني استعمال نطاقي الخاص؟</summary><p>نعم. اربط نطاقاً مثل myshop.com من لوحة متجرك، وسنرشدك خطوة بخطوة لإعداد سجلات DNS.</p></details>
     <details><summary>هل يمكنني إنشاء أكثر من متجر؟</summary><p>نعم، يمكنك إدارة عدة متاجر من حساب واحد، ولكل متجر تصميمه ومنتجاته وطلباته.</p></details>
@@ -196,7 +197,7 @@
 
 <section class="l-cta">
   <h2>جاهز لإطلاق متجرك؟</h2>
-  <p>أنشئ متجرك الآن وجرّب كل المزايا مجاناً لمدة <%= trialDays %> يوماً.</p>
+  <p>أنشئ متجرك الآن مجاناً، وترقَّ إلى الباقة الاحترافية عندما تحتاجها.</p>
   <a href="<%= cta %>" class="btn big light"><%= ctaLabel %> ←</a>
 </section>
 </main>

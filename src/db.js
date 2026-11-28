@@ -244,7 +244,7 @@ addColumn('orders', 'pay_token', "TEXT NOT NULL DEFAULT ''");
 addColumn('orders', 'paid_at', 'TEXT');
 
 // Platform-wide settings (key/value).
-const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '1', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '', trial_days: '14', grace_days: '3', billing_info: '', plans: '' };
+const SETTING_DEFAULTS = { legal_name: '', legal_address: '', legal_updated: '', ai_enabled: '0', ai_per_store_month: '10', ai_cap_usd_month: '20', signups_open: '1', notice: '', notice_level: 'info', support_whatsapp: '', support_email: '', trial_days: '14', grace_days: '3', billing_info: '', plans: '' };
 function getSettings() {
   const out = { ...SETTING_DEFAULTS };
   for (const r of db.prepare('SELECT key, value FROM settings').all()) out[r.key] = r.value;

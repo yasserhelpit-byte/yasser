@@ -1716,3 +1716,12 @@ a.promo-card:hover { transform: translateY(-3px); }
 .lp-plan .checks { flex: 1; }
 .lp-plan.featured { border: 2px solid var(--brand); transform: translateY(-6px); box-shadow: 0 22px 50px -28px color-mix(in srgb, var(--brand) 80%, transparent); }
 .lp-plan .plan-flag { position: absolute; top: -13px; inset-inline-start: 50%; transform: translateX(50%); background: var(--brand); color: #fff; font-size: .78rem; font-weight: 800; padding: 4px 12px; border-radius: 999px; white-space: nowrap; }
+.side-tag.free { background: rgba(148, 163, 184, .18); color: #cbd5e1; }
+
+.sub-card.is-free { cursor: default; }
+.sub-card.is-free .sub-card-in { background: var(--bg); }
+.sub-card.is-free .sub-pick { border-style: dashed; border-color: var(--line); color: var(--muted); font-size: .85rem; }
+
+.tpl-card.locked { opacity: .78; }
+.tpl-card.locked:hover { opacity: 1; }
+.tpl-card.locked .tpl-pro { background: #64748b; }

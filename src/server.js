@@ -755,7 +755,7 @@ dash.post('/stores/:storeId/orders/:orderId/verify', ownStore, async (req, res) 
 dash.get('/stores/:storeId/billing', ownStore, (req, res) => {
   const pending = billing.pendingOf(req.store.id);
   res.render('dashboard/billing', {
-    sub: billing.statusOf(req.store), plans: billing.plans(), pending, ref: pending ? billing.reference(pending) : '',
+    sub: billing.statusOf(req.store), plans: billing.plans(), pending, aiOn: getSettings().ai_enabled === '1', ref: pending ? billing.reference(pending) : '',
     history: billing.historyOf(req.store.id), info: billing.settings().info, sent: !!req.query.sent,
     productCount: db.prepare('SELECT COUNT(*) AS n FROM products WHERE store_id = ?').get(req.store.id).n,
   });
@@ -809,7 +809,7 @@ const storeHome = (store) => {
   return store.home_sections ? list : sections.DEFAULT_HOME;
 };
 dash.get('/stores/:storeId/design', ownStore, (req, res) => {
-  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id), theme: themeLib.sanitize(req.store.theme), groups: sections.GROUPS });
+  res.render('dashboard/design', { sectionsData: storeHome(req.store), presets: sections.PRESETS, saved: !!req.query.saved, wide: true, productChoices: productChoices(req.store.id), theme: themeLib.sanitize(req.store.theme), groups: sections.GROUPS, proTemplates: billing.statusOf(req.store).limits.templates });
 });
 // Live preview for the design editor: renders the storefront home with unsaved changes.
 dash.post('/stores/:storeId/design/preview', ownStore, (req, res) => {
@@ -1263,7 +1263,7 @@ admin.get('/stores/:id', adminStore, (req, res) => {
   ).get(s.id, s.id, s.id, s.id, s.id, s.id, s.id);
   const orders = db.prepare('SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC LIMIT 10').all(s.id);
   const sales = series(`SELECT date(created_at) AS day, SUM(total) AS v FROM orders WHERE store_id = ${Number(s.id)} AND status != 'cancelled' AND created_at >= date('now', '-29 days') GROUP BY day`, lastDays(30));
-  res.render('admin/store', { s, stats, orders, sales, error: null, sub: billing.statusOf(s), plans: billing.plans(), payments: billing.historyOf(s.id), pending: billing.pendingOf(s.id) });
+  res.render('admin/store', { s, stats, orders, sales, error: null, sub: billing.statusOf(s), plans: billing.plans(), paidPlans: billing.paidPlans(), payments: billing.historyOf(s.id), pending: billing.pendingOf(s.id) });
 });
 admin.post('/stores/:id/suspend', adminStore, (req, res) => {
   const on = req.body.suspend === '1' ? 1 : 0;
@@ -1384,7 +1384,7 @@ admin.get('/billing', (req, res) => {
   const stores = db.prepare('SELECT s.*, u.name AS owner_name FROM stores s LEFT JOIN users u ON u.id = s.owner_id ORDER BY s.plan_until').all()
     .map((s) => ({ ...s, sub: billing.statusOf(s) }));
   const monthIncome = db.prepare("SELECT COALESCE(SUM(amount), 0) AS v FROM subscriptions WHERE status = 'approved' AND decided_at >= date('now', 'start of month')").get().v;
-  res.render('admin/billing', { pending, recent, stores, monthIncome, plans: billing.plans(), cfg: billing.settings(), saved: !!req.query.saved, ref: billing.reference });
+  res.render('admin/billing', { pending, recent, stores, monthIncome, plans: billing.plans(), paidPlans: billing.paidPlans(), cfg: billing.settings(), saved: !!req.query.saved, ref: billing.reference });
 });
 admin.post('/billing/:subId/approve', (req, res) => {
   const sub = db.prepare("SELECT * FROM subscriptions WHERE id = ? AND status = 'pending'").get(req.params.subId);
@@ -1405,7 +1405,8 @@ admin.post('/billing/:subId/reject', (req, res) => {
 // Activate a plan directly (the merchant paid in person, by phone…).
 admin.post('/stores/:id/plan', adminStore, (req, res) => {
   const months = parseInt(req.body.months, 10);
-  if (!billing.planByKey(req.body.plan) || !billing.PERIODS[months]) return res.status(400).render('message', { title: 'خطأ', message: 'اختر باقة ومدة صحيحتين.' });
+  const pl = billing.planByKey(req.body.plan);
+  if (!pl || pl.free || !billing.PERIODS[months]) return res.status(400).render('message', { title: 'خطأ', message: 'اختر باقة ومدة صحيحتين.' });
   db.prepare("DELETE FROM subscriptions WHERE store_id = ? AND status = 'pending'").run(req.target.id);
   const r = billing.activate({ storeId: req.target.id, planKey: req.body.plan, months, adminId: req.user.id, method: str(req.body.method, 20), amount: req.body.amount === '' ? null : req.body.amount, reference: str(req.body.reference, 80) });
   tellMerchant(req.target.id, `✅ تم تفعيل باقة ${r.plan.name}`, `اشتراكك فعّال حتى ${r.until.slice(0, 10)}. شكراً لثقتك!`);
@@ -1450,10 +1451,6 @@ shop.use((req, res, next) => {
   const canSee = req.user && (req.user.id === store.owner_id || req.user.isAdmin);
   if (store.suspended && !canSee) return res.status(503).render('message', { title: 'غير متاح', message: 'هذا المتجر غير متاح حالياً.' });
   if (store.suspended && req.method === 'POST') return res.status(503).render('message', { title: 'غير متاح', message: 'هذا المتجر موقوف ولا يستقبل طلبات.' });
-  // Subscription ended (after the grace days): closed to customers until it is renewed.
-  if (!billing.statusOf(store).open && !canSee && !CMI_POST.test(req.baseUrl + req.path)) {
-    return res.status(503).render('message', { title: 'المتجر مغلق مؤقتاً', message: 'هذا المتجر غير متاح حالياً. عُد لاحقاً.' });
-  }
   req.store = store;
   res.locals.store = store;
   res.locals.cartCount = Object.values(req.cart[store.id] || {}).reduce((a, b) => a + b, 0);

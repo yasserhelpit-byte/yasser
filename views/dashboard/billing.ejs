@@ -1,17 +1,17 @@
 <%- include('../partials/header', { title: 'الاشتراك' }) %>
 <%
   const stateText = {
-    trial: `🎁 فترة تجريبية مجانية · بقي ${sub.daysLeft} يوماً`,
+    free: sub.lapsed ? 'انتهى اشتراكك السابق، ومتجرك الآن على الباقة المجانية' : '✓ مجانية للأبد · ترقَّ متى شئت',
+    trial: `🎁 تجربة المزايا الاحترافية · بقي ${sub.daysLeft} يوماً، ثم الباقة المجانية`,
     active: `✅ اشتراك فعّال · بقي ${sub.daysLeft} يوماً`,
     expiring: `⏳ ينتهي اشتراكك بعد ${sub.daysLeft} أيام`,
-    grace: `⚠️ انتهى اشتراكك · سيُغلق متجرك بعد ${sub.graceLeft} يوم`,
-    expired: '⛔ انتهى اشتراكك · متجرك مغلق أمام الزبائن',
+    grace: `⚠️ انتهى اشتراكك · بعد ${sub.graceLeft} يوم ينتقل متجرك إلى الباقة المجانية`,
   }[sub.state];
   const fmt = (n) => Number(n).toLocaleString('fr-FR');
 %>
 <div class="page-head-row"><div>
   <h1>💎 الاشتراك</h1>
-  <p class="muted">اختر الباقة المناسبة لمتجرك. الدفع نقداً أو بالتحويل، ويُفعَّل اشتراكك من فريق YASSER فور التأكد من الدفع.</p>
+  <p class="muted">متجرك مجاني للأبد. وعندما تكبر، ترقَّ إلى باقة مدفوعة: الدفع نقداً أو بالتحويل، ويُفعَّل اشتراكك من فريق YASSER فور التأكد من الدفع.</p>
 </div></div>
 
 <section class="card sub-now sub-<%= sub.state %>">
@@ -23,8 +23,9 @@
   </div>
   <div class="sub-usage">
     <div><span>المنتجات</span><b><%= productCount %> / <%= sub.limits.products || '∞' %></b></div>
-    <div><span>إعلانات الذكاء الاصطناعي</span><b><%= sub.limits.ai %> / شهر</b></div>
-    <div><span>النطاق الخاص</span><b><%= sub.limits.domain ? '✓ متاح' : '—' %></b></div>
+    <div><span>القوالب الاحترافية</span><b><%= sub.limits.templates ? '✓ متاحة' : '🔒' %></b></div>
+    <div><span>النطاق الخاص</span><b><%= sub.limits.domain ? '✓ متاح' : '🔒' %></b></div>
+    <% if (aiOn) { %><div><span>إعلانات الذكاء الاصطناعي</span><b><%= sub.limits.ai %> / شهر</b></div><% } %>
   </div>
 </section>
 
@@ -59,16 +60,21 @@
   </div>
   <div class="sub-plans">
     <% plans.forEach(p => { const current = !sub.trial && sub.plan && sub.plan.key === p.key; %>
-      <label class="sub-card <%= p.featured ? 'featured' : '' %> <%= current ? 'current' : '' %>">
-        <input type="radio" name="plan" value="<%= p.key %>" required <%= p.featured ? 'checked' : '' %>>
+      <label class="sub-card <%= p.featured ? 'featured' : '' %> <%= current ? 'current' : '' %> <%= p.free ? 'is-free' : '' %>">
+        <input type="radio" name="plan" value="<%= p.key %>" required <%= p.featured ? 'checked' : '' %> <%= p.free ? 'disabled' : '' %>>
         <span class="sub-card-in">
           <% if (p.featured) { %><span class="plan-flag">⭐ الأكثر اختياراً</span><% } %>
           <% if (current) { %><span class="plan-flag cur">باقتك الحالية</span><% } %>
           <strong class="sub-name"><%= p.name %></strong>
+          <% if (p.free) { %>
+          <span class="sub-price"><b>0</b> درهم <small class="sub-per">للأبد</small></span>
+          <span class="muted small">بدون اشتراك ولا دفع</span>
+          <% } else { %>
           <span class="sub-price"><b data-price="<%= p.price %>"><%= fmt(p.price) %></b> درهم <small class="sub-per">/ شهر</small></span>
           <span class="sub-total muted small" data-price="<%= p.price %>"></span>
+          <% } %>
           <ul><% p.features.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => { %><li><%= l %></li><% }) %></ul>
-          <span class="sub-pick">اختر هذه الباقة</span>
+          <span class="sub-pick"><%= p.free ? (sub.state === 'free' ? '✓ باقتك الحالية' : 'تنتقل إليها تلقائياً عند انتهاء أي اشتراك') : 'اختر هذه الباقة' %></span>
         </span>
       </label>
     <% }) %>

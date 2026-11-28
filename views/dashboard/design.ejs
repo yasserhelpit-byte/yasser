@@ -91,9 +91,10 @@
         <div class="tpl-group"><%= gLabel %></div>
         <div class="tpl-list">
           <% Object.entries(presets).filter(([, p]) => p.group === g).sort((x, y) => !!y[1].style - !!x[1].style).forEach(([k, p]) => { %>
-            <button type="button" class="tpl-card" data-preset="<%= k %>">
+            <% const locked = p.style && !proTemplates; %>
+            <button type="button" class="tpl-card <%= locked ? 'locked' : '' %>" data-preset="<%= k %>" <%= locked ? 'data-locked' : '' %>>
               <span class="tpl-ic" <% if (p.style) { %>style="background: <%= p.style.color %>1a"<% } %>><%= p.icon || '✨' %></span>
-              <span class="tpl-txt"><strong><%= p.label %><% if (p.style) { %> <em class="tpl-pro">احترافي</em><% } %></strong><small><%= p.desc || '' %> · <%= p.sections.length %> أقسام</small></span>
+              <span class="tpl-txt"><strong><%= p.label %><% if (p.style) { %> <em class="tpl-pro"><%= locked ? '🔒 ' : '' %>احترافي</em><% } %></strong><small><%= p.desc || '' %> · <%= p.sections.length %> أقسام</small></span>
               <% if (p.style) { %><span class="tpl-swatch" style="background: <%= p.style.color %>" title="مع أسلوب جاهز"></span><% } %>
             </button>
           <% }) %>
@@ -180,6 +181,14 @@
   // Templates: rebuild the builder with the preset's sections.
   document.querySelectorAll('.tpl-card').forEach((b) => b.addEventListener('click', async () => {
     const p = presets[b.dataset.preset];
+    if (b.hasAttribute('data-locked')) {
+      const go = await yChoice('القوالب الاحترافية متاحة في الباقة الاحترافية وباقة الأعمال. القوالب الأساسية متاحة لك مجاناً.', {
+        title: `قالب «${p.label}» احترافي`, icon: '💎',
+        buttons: [{ value: 'up', label: '💎 شاهد الباقات' }, { value: 'stay', label: 'ليس الآن', kind: 'ghost' }],
+      });
+      if (go === 'up') location.href = '/dashboard/stores/<%= store.id %>/billing';
+      return;
+    }
     const okd = await yConfirm(
       `سيحلّ هذا القالب محل أقسام صفحتك الحالية${p.style ? '، وسيُطبَّق معه أسلوبه (الألوان والخطوط وشكل الأزرار). يمكنك تعديل كل شيء بعدها' : ''}.\nلن يتغير شيء في متجرك حتى تضغط «حفظ».`,
       { title: `استعمال قالب «${p.label}»؟`, ok: 'استعمل القالب', cancel: 'ليس الآن', icon: p.icon || '✨' });

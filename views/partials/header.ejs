@@ -29,14 +29,14 @@
       <a href="<%= sb %>" class="<%= on(sb, true) %>"><span>📊</span>نظرة عامة</a>
       <a href="<%= sb %>/orders" class="<%= on(sb + '/orders') %>"><span>🧾</span>الطلبات</a>
       <a href="<%= sb %>/products" class="<%= on(sb + '/products') %>"><span>📦</span>المنتجات</a>
-      <a href="<%= sb %>/ads" class="<%= on(sb + '/ads') %>"><span>📣</span>الإعلانات</a>
+      <% if (platform.ai_enabled === '1') { %><a href="<%= sb %>/ads" class="<%= on(sb + '/ads') %>"><span>📣</span>الإعلانات</a><% } %>
       <a href="<%= sb %>/inbox" class="<%= on(sb + '/inbox') %>"><span>💬</span>الرسائل<b class="pending" id="chat-unread" <%= typeof unreadChats !== 'undefined' && unreadChats ? '' : 'hidden' %>><%= typeof unreadChats !== 'undefined' ? unreadChats : '' %></b></a>
       <div class="side-label">المتجر</div>
       <a href="<%= sb %>/design" class="<%= on(sb + '/design') %>"><span>🎨</span>التصميم</a>
       <a href="<%= sb %>/pages" class="<%= on(sb + '/pages') %>"><span>📄</span>الصفحات</a>
       <a href="<%= sb %>/payments" class="<%= on(sb + '/payments') %>"><span>💳</span>الدفع</a>
       <% const curSub = billingOf(cur); %>
-      <a href="<%= sb %>/billing" class="<%= on(sb + '/billing') %>"><span>💎</span>الاشتراك<% if (['expiring', 'grace', 'expired'].includes(curSub.state)) { %> <b class="pending" title="<%= curSub.state === 'expiring' ? 'ينتهي قريباً' : 'منتهٍ' %>">!</b><% } else if (curSub.state === 'trial') { %> <small class="side-tag">تجربة</small><% } %></a>
+      <a href="<%= sb %>/billing" class="<%= on(sb + '/billing') %>"><span>💎</span>الاشتراك<% if (['expiring', 'grace'].includes(curSub.state)) { %> <b class="pending" title="<%= curSub.state === 'expiring' ? 'ينتهي قريباً' : 'انتهى' %>">!</b><% } else if (curSub.state === 'trial') { %> <small class="side-tag">تجربة</small><% } else if (curSub.state === 'free') { %> <small class="side-tag free">مجانية</small><% } %></a>
       <a href="<%= sb %>/settings" class="<%= on(sb + '/settings') %>"><span>⚙️</span>الإعدادات</a>
       <a href="<%= sb %>/domain" class="<%= on(sb + '/domain') %>"><span>🌐</span>النطاق<% if (cur.custom_domain && !cur.domain_verified) { %> <b class="pending" title="بانتظار التحقق">!</b><% } %></a>
       <a href="/s/<%= cur.slug %>" target="_blank"><span>↗</span>عرض المتجر</a>
@@ -84,14 +84,13 @@
     </div>
     <script>(function () { const b = document.getElementById('notice-bar'); let seen = ''; try { seen = localStorage.getItem('yasser:notice') } catch {} b.hidden = seen === b.dataset.key; })();</script>
     <% } %>
-    <% if (cur && !path.endsWith('/billing')) { const bs = billingOf(cur); const showIt = bs.state === 'trial' ? bs.daysLeft <= 7 : bs.state !== 'active'; %>
+    <% if (cur && !path.endsWith('/billing')) { const bs = billingOf(cur); const showIt = bs.state === 'trial' ? bs.daysLeft <= 7 : ['expiring', 'grace'].includes(bs.state); %>
     <% if (showIt) { %>
     <div class="sub-bar sb-<%= bs.state %>">
       <span><%= {
-        trial: `🎁 بقي ${bs.daysLeft} ${bs.daysLeft === 1 ? 'يوم' : 'أيام'} على نهاية الفترة التجريبية لمتجر «${cur.name}».`,
+        trial: `🎁 بقي ${bs.daysLeft} ${bs.daysLeft === 1 ? 'يوم' : 'أيام'} على نهاية تجربة المزايا الاحترافية لمتجر «${cur.name}»، ثم ينتقل إلى الباقة المجانية.`,
         expiring: `⏳ ينتهي اشتراك «${cur.name}» بعد ${bs.daysLeft} ${bs.daysLeft === 1 ? 'يوم' : 'أيام'}.`,
-        grace: `⚠️ انتهى اشتراك «${cur.name}». سيُغلق المتجر أمام الزبائن بعد ${bs.graceLeft} ${bs.graceLeft === 1 ? 'يوم' : 'أيام'}.`,
-        expired: `⛔ متجر «${cur.name}» مغلق أمام الزبائن لانتهاء الاشتراك.`,
+        grace: `⚠️ انتهى اشتراك «${cur.name}». بعد ${bs.graceLeft} ${bs.graceLeft === 1 ? 'يوم' : 'أيام'} ينتقل إلى الباقة المجانية وتتوقف المزايا المدفوعة.`,
       }[bs.state] %></span>
       <a href="/dashboard/stores/<%= cur.id %>/billing" class="btn small"><%= bs.state === 'trial' ? 'اختر باقتك' : 'جدّد الآن' %></a>
     </div>

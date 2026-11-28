@@ -2,12 +2,12 @@
 <%
   const fmt = (n) => Number(n).toLocaleString('fr-FR');
   const planName = (k) => k === 'trial' ? 'تجريبية' : (plans.find(p => p.key === k) || { name: k }).name;
-  const stateBadge = { trial: ['s-new', 'تجريبي'], active: ['s-delivered', 'فعّال'], expiring: ['s-confirmed', 'ينتهي قريباً'], grace: ['s-shipped', 'مهلة'], expired: ['s-cancelled', 'مغلق'] };
+  const stateBadge = { free: ['s-cancelled', 'مجانية'], trial: ['s-new', 'تجريبي'], active: ['s-delivered', 'فعّال'], expiring: ['s-confirmed', 'ينتهي قريباً'], grace: ['s-shipped', 'مهلة'] };
   const counts = stores.reduce((a, s) => (a[s.sub.state] = (a[s.sub.state] || 0) + 1, a), {});
 %>
 <div class="page-head-row"><div>
   <h1>💎 الاشتراكات</h1>
-  <p class="muted">فعّل باقات التجار بعد التأكد من الدفع. التفعيل يمدّد الاشتراك من تاريخ انتهائه إذا جدّد التاجر نفس الباقة مبكراً.</p>
+  <p class="muted">فعّل باقات التجار بعد التأكد من الدفع. التفعيل يمدّد الاشتراك من تاريخ انتهائه إذا جدّد التاجر نفس الباقة مبكراً. عند انتهاء أي اشتراك يرجع المتجر تلقائياً إلى الباقة المجانية.</p>
 </div></div>
 <% if (saved) { %><div class="alert ok">✓ تم حفظ إعدادات الباقات.</div><% } %>
 
@@ -15,7 +15,7 @@
   <div class="card stat"><span class="icon">🕓</span><span class="muted">طلبات بانتظارك</span><strong><%= pending.length %></strong></div>
   <div class="card stat"><span class="icon">💰</span><span class="muted">مداخيل هذا الشهر</span><strong><%= fmt(monthIncome) %> درهم</strong></div>
   <div class="card stat"><span class="icon">✅</span><span class="muted">متاجر مشتركة</span><strong><%= (counts.active || 0) + (counts.expiring || 0) %></strong></div>
-  <div class="card stat"><span class="icon">🎁</span><span class="muted">في التجربة / منتهية</span><strong><%= counts.trial || 0 %> / <%= (counts.grace || 0) + (counts.expired || 0) %></strong></div>
+  <div class="card stat"><span class="icon">🎁</span><span class="muted">مجانية / في التجربة</span><strong><%= counts.free || 0 %> / <%= counts.trial || 0 %></strong></div>
 </section>
 
 <h2>🕓 طلبات بانتظار التفعيل</h2>
@@ -35,7 +35,7 @@
   <div class="sub-req-actions">
     <form method="post" action="/admin/billing/<%= b.id %>/approve" class="sub-approve" data-confirm="سيُفعَّل اشتراك «<%= b.store_name %>» ويصل للتاجر إشعار. تأكد أن المبلغ وصلك." data-confirm-title="تفعيل الباقة؟" data-confirm-ok="✓ تفعيل" data-confirm-icon="💎">
       <%- include('../partials/csrf') %>
-      <select name="plan" aria-label="الباقة"><% plans.forEach(p => { %><option value="<%= p.key %>" <%= p.key === b.plan ? 'selected' : '' %>><%= p.name %></option><% }) %></select>
+      <select name="plan" aria-label="الباقة"><% paidPlans.forEach(p => { %><option value="<%= p.key %>" <%= p.key === b.plan ? 'selected' : '' %>><%= p.name %></option><% }) %></select>
       <select name="months" aria-label="المدة"><% Object.entries(PLAN_PERIODS).forEach(([m, p]) => { %><option value="<%= m %>" <%= Number(m) === b.months ? 'selected' : '' %>><%= p.label %></option><% }) %></select>
       <input name="amount" type="number" min="0" step="1" value="<%= b.amount %>" aria-label="المبلغ المستلم" title="المبلغ المستلم">
       <input name="reference" maxlength="80" placeholder="رقم الوصل (اختياري)" dir="auto">
@@ -55,13 +55,13 @@
   <tr>
     <td><a href="/admin/stores/<%= s.id %>"><%= s.name %></a></td>
     <td><%= s.owner_name %></td>
-    <td><%= planName(s.plan) %></td>
+    <td><%= s.sub.label %></td>
     <td><span class="badge <%= cls %>"><%= lbl %></span></td>
-    <td><%= s.plan_until ? s.plan_until.slice(0, 10) : '—' %></td>
+    <td><%= s.sub.until ? s.sub.until.slice(0, 10) : '—' %></td>
     <td>
       <form method="post" action="/admin/stores/<%= s.id %>/plan" class="sub-quick" data-confirm="سيُفعَّل الاشتراك لمتجر «<%= s.name %>» ويصل للتاجر إشعار." data-confirm-title="تفعيل الباقة؟" data-confirm-ok="✓ تفعيل" data-confirm-icon="💎">
         <%- include('../partials/csrf') %>
-        <select name="plan"><% plans.forEach(p => { %><option value="<%= p.key %>" <%= p.key === s.plan ? 'selected' : '' %>><%= p.name %></option><% }) %></select>
+        <select name="plan"><% paidPlans.forEach(p => { %><option value="<%= p.key %>" <%= p.key === s.plan ? 'selected' : '' %>><%= p.name %></option><% }) %></select>
         <select name="months"><% Object.entries(PLAN_PERIODS).forEach(([m, p]) => { %><option value="<%= m %>"><%= p.label %></option><% }) %></select>
         <input type="hidden" name="method" value="cash"><input type="hidden" name="amount" value="">
         <button class="btn small">تفعيل</button>
@@ -89,20 +89,22 @@
   <div class="grid three sub-edit">
     <% plans.forEach((p, i) => { %>
     <fieldset class="sub-edit-card">
-      <legend><%= ['🥉', '🥈', '🥇'][i] %> الباقة <%= i + 1 %></legend>
+      <legend><%= ['🆓', '🥈', '🥇'][i] %> <%= p.free ? 'الباقة المجانية' : 'الباقة ' + (i + 1) %></legend>
       <label>الاسم<input name="plan<%= i %>_name" value="<%= p.name %>" maxlength="40" required></label>
-      <label>السعر الشهري (درهم)<input name="plan<%= i %>_price" type="number" min="0" value="<%= p.price %>" required></label>
+      <% if (p.free) { %><p class="muted small">💡 هذه هي الباقة المجانية: سعرها 0 دائماً، ويعود إليها أي متجر انتهى اشتراكه.</p>
+      <% } else { %><label>السعر الشهري (درهم)<input name="plan<%= i %>_price" type="number" min="0" value="<%= p.price %>" required></label><% } %>
       <label>عدد المنتجات (0 = غير محدود)<input name="plan<%= i %>_products" type="number" min="0" value="<%= p.products %>"></label>
-      <label>إعلانات الذكاء الاصطناعي شهرياً<input name="plan<%= i %>_ai" type="number" min="0" value="<%= p.ai %>"></label>
+      <label>إعلانات الذكاء الاصطناعي شهرياً <small class="muted">(عند تفعيلها)</small><input name="plan<%= i %>_ai" type="number" min="0" value="<%= p.ai %>"></label>
       <label class="switch"><input type="checkbox" name="plan<%= i %>_domain" value="1" <%= p.domain ? 'checked' : '' %>><span class="slider"></span> نطاق خاص</label>
+      <label class="switch"><input type="checkbox" name="plan<%= i %>_templates" value="1" <%= p.templates ? 'checked' : '' %>><span class="slider"></span> القوالب الاحترافية</label>
       <label class="switch"><input type="radio" name="featured" value="<%= p.key %>" <%= p.featured ? 'checked' : '' %>><span class="slider"></span> «الأكثر اختياراً»</label>
       <label>المميزات (كل ميزة في سطر)<textarea name="plan<%= i %>_features" rows="6"><%= p.features %></textarea></label>
     </fieldset>
     <% }) %>
   </div>
   <div class="grid three">
-    <label>أيام التجربة المجانية للمتاجر الجديدة<input name="trial_days" type="number" min="0" max="365" value="<%= cfg.trialDays %>"></label>
-    <label>أيام المهلة بعد انتهاء الاشتراك<input name="grace_days" type="number" min="0" max="60" value="<%= cfg.graceDays %>"></label>
+    <label>أيام تجربة المزايا الاحترافية للمتاجر الجديدة (0 = بدون تجربة)<input name="trial_days" type="number" min="0" max="365" value="<%= cfg.trialDays %>"></label>
+    <label>أيام المهلة قبل الرجوع إلى المجانية<input name="grace_days" type="number" min="0" max="60" value="<%= cfg.graceDays %>"></label>
   </div>
   <label>تعليمات الدفع للتجار (رقم الحساب، اسم المستفيد، العنوان…)
     <textarea name="billing_info" rows="5" placeholder="البنك: …&#10;صاحب الحساب: …&#10;RIB: …&#10;أو الدفع نقداً في مكتبنا: …"><%= cfg.info %></textarea>
